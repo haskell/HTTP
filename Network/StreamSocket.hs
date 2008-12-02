@@ -33,11 +33,11 @@ import Network.Socket
    )
 
 import Control.Monad (liftM)
-import Control.Exception as Exception (catchJust, IOException, ioErrors)
+import Control.Exception as Exception (IOException)
 import System.IO.Error (catch, isEOFError)
 
 catchIO :: IO a -> (IOException -> IO a) -> IO a
-catchIO a h = Exception.catchJust Exception.ioErrors a h
+catchIO a h = Prelude.catch a h
 
 -- | Exception handler for socket operations.
 handleSocketError :: Socket -> IOException -> IO (Result a)
