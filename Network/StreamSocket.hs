@@ -33,11 +33,11 @@ import Network.Socket
    )
 
 import Control.Monad (liftM)
-import Control.Exception as Exception (catch, throw, IOException)
+import Control.Exception as Exception (catch, throw, Exception)
 import System.IO.Error (catch, isEOFError)
 
 -- | Exception handler for socket operations.
-handleSocketError :: Socket -> IOException -> IO (Result a)
+handleSocketError :: Socket -> Exception -> IO (Result a)
 handleSocketError sk e =
     do se <- getSocketOption sk SoError
        case se of

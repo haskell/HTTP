@@ -55,7 +55,7 @@ import Network.BufferType
 
 import Network.Socket ( socketToHandle )
 
-import Control.Exception as Exception (catch, throw, IOException)
+import Control.Exception as Exception (catch, throw, Exception)
 import Data.Char  ( toLower )
 import Data.Maybe ( fromMaybe )
 import Data.Word  ( Word8 )
@@ -67,7 +67,7 @@ import System.IO.Error ( isEOFError )
 import qualified Data.ByteString      as Strict
 import qualified Data.ByteString.Lazy as Lazy
 
-catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO :: IO a -> (Exception -> IO a) -> IO a
 catchIO = Exception.catch
 
 -----------------------------------------------------------------
