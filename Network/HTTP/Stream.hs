@@ -117,7 +117,7 @@ import Network.HTTP.Base
 import Network.HTTP.Headers
 import Network.HTTP.Utils ( trim )
 
-import Control.Exception as Exception (catch, throw, Exception)
+import Control.Exception as Exception (catchJust, ioErrors, IOException)
 import Data.Char     (toLower)
 import Data.Maybe    (fromMaybe)
 import Control.Monad (when)
@@ -131,8 +131,8 @@ debug = False
 httpLogFile :: String
 httpLogFile = "http-debug.log"
 
-catchIO :: IO a -> (Exception -> IO a) -> IO a
-catchIO = Exception.catch
+catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO a h = Exception.catchJust Exception.ioErrors a h
 
 -----------------------------------------------------------------
 ------------------ Misc -----------------------------------------
@@ -171,7 +171,7 @@ sendHTTP :: Stream s => s -> Request -> IO (Result Response)
 sendHTTP conn rq = 
     do { let a_rq = normalizeHostHeader rq
        ; rsp <- catchIO (main a_rq)
-                        (\e -> do { close conn; throw e })
+                        (\e -> do { close conn; ioError e })
        ; let fn list = when (or $ map findConnClose list)
                             (close conn)
        ; either (\_ -> fn [rqHeaders rq])
