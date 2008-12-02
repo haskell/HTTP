@@ -33,15 +33,18 @@ import Network.Socket
    )
 
 import Control.Monad (liftM)
-import Control.Exception as Exception (catch, throw, Exception)
+import Control.Exception as Exception (catchJust, IOException, ioErrors)
 import System.IO.Error (catch, isEOFError)
 
+catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO a h = Exception.catchJust Exception.ioErrors a h
+
 -- | Exception handler for socket operations.
-handleSocketError :: Socket -> Exception -> IO (Result a)
+handleSocketError :: Socket -> IOException -> IO (Result a)
 handleSocketError sk e =
     do se <- getSocketOption sk SoError
        case se of
-          0     -> throw e
+          0     -> ioError e
           10054 -> return $ Left ErrorReset  -- reset
           _     -> return $ Left $ ErrorMisc $ show se
 
@@ -58,7 +61,7 @@ instance Stream Socket where
       -- This slams closed the connection (which is considered rude for TCP\/IP)
 
 readBlockSocket :: Socket -> Int -> IO (Result String)
-readBlockSocket sk n = (liftM Right $ fn n) `Exception.catch` (handleSocketError sk)
+readBlockSocket sk n = (liftM Right $ fn n) `catchIO` (handleSocketError sk)
   where
    fn x = do { str <- myrecv sk x
              ; let len = length str
@@ -72,7 +75,7 @@ readBlockSocket sk n = (liftM Right $ fn n) `Exception.catch` (handleSocketError
 -- which causes many calls to the kernel recv()
 -- hence causes many context switches.
 readLineSocket :: Socket -> IO (Result String)
-readLineSocket sk = (liftM Right $ fn "") `Exception.catch` (handleSocketError sk)
+readLineSocket sk = (liftM Right $ fn "") `catchIO` (handleSocketError sk)
   where
    fn str = do
      c <- myrecv sk 1 -- like eating through a straw.
@@ -81,7 +84,7 @@ readLineSocket sk = (liftM Right $ fn "") `Exception.catch` (handleSocketError s
       else fn (head c:str)
     
 writeBlockSocket :: Socket -> String -> IO (Result ())
-writeBlockSocket sk str = (liftM Right $ fn str) `Exception.catch` (handleSocketError sk)
+writeBlockSocket sk str = (liftM Right $ fn str) `catchIO` (handleSocketError sk)
   where
    fn [] = return ()
    fn x  = send sk x >>= \i -> fn (drop i x)

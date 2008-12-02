@@ -55,7 +55,7 @@ import Network.BufferType
 
 import Network.Socket ( socketToHandle )
 
-import Control.Exception as Exception (catch, throw, Exception)
+import Control.Exception as Exception (catchJust, ioErrors, IOException)
 import Data.Char  ( toLower )
 import Data.Maybe ( fromMaybe )
 import Data.Word  ( Word8 )
@@ -67,8 +67,8 @@ import System.IO.Error ( isEOFError )
 import qualified Data.ByteString      as Strict
 import qualified Data.ByteString.Lazy as Lazy
 
-catchIO :: IO a -> (Exception -> IO a) -> IO a
-catchIO = Exception.catch
+catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO a h = Exception.catchJust Exception.ioErrors a h
 
 -----------------------------------------------------------------
 ------------------ TCP Connections ------------------------------
@@ -186,7 +186,7 @@ openTCPConnection_ uri port stashInput =
                                 [] -> return (error "no addresses in host entry")
                                 (h:_) -> return h)
        ; let a = SockAddrInet (toEnum port) host
-       ; catchIO (connect s a) (\e -> sClose s >> throw e)
+       ; catchIO (connect s a) (\e -> sClose s >> ioError e)
        ; h <- socketToHandle s ReadWriteMode
        ; mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
        ; let conn = 
