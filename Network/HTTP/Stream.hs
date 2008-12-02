@@ -117,7 +117,7 @@ import Network.HTTP.Base
 import Network.HTTP.Headers
 import Network.HTTP.Utils ( trim )
 
-import Control.Exception as Exception (catchJust, ioErrors, IOException)
+import Control.Exception as Exception (IOException)
 import Data.Char     (toLower)
 import Data.Maybe    (fromMaybe)
 import Control.Monad (when)
@@ -132,7 +132,7 @@ httpLogFile :: String
 httpLogFile = "http-debug.log"
 
 catchIO :: IO a -> (IOException -> IO a) -> IO a
-catchIO a h = Exception.catchJust Exception.ioErrors a h
+catchIO a h = Prelude.catch a h
 
 -----------------------------------------------------------------
 ------------------ Misc -----------------------------------------
