@@ -57,6 +57,9 @@ module Network.HTTP.Base
        , uglyDeathTransfer
        , readTillEmpty1
        , readTillEmpty2
+       
+       , catchIO
+       , catchIO_
        ) where
 
 import Network.URI
@@ -80,6 +83,7 @@ import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
    ( ReadP, readP_to_S, char, (<++), look, munch )
 
+import Control.Exception as Exception (IOException)
 
 -----------------------------------------------------------------
 ------------------ URI Authority parsing ------------------------
@@ -523,3 +527,16 @@ readTillEmpty2 bufOps readL list =
 	        if buf_isLineTerm bufOps s || buf_isEmpty bufOps s
                  then return (Right $ reverse (s:list))
                  else readTillEmpty2 bufOps readL (s:list))
+
+--
+-- Misc
+--
+
+-- | @catchIO a h@ handles IO action exceptions throughout codebase; version-specific
+-- tweaks better go here.
+catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO a h = Prelude.catch a h
+
+catchIO_ :: IO a -> IO a -> IO a
+catchIO_ a h = Prelude.catch a (const h)
+
