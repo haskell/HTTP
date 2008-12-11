@@ -76,7 +76,7 @@ module Network.Browser (
 
 import Network.URI
    ( URI(uriAuthority, uriScheme, uriPath, uriQuery)
-   , URIAuth(URIAuth, uriPort, uriRegName)
+   , URIAuth(..)
    , parseURI, parseURIReference, relativeTo
    )
 import Network.StreamDebugger (debugByteStream)
@@ -111,7 +111,7 @@ type Octet = Word8
 
 word, quotedstring :: Parser String
 quotedstring =
-    do { char '"'
+    do { char '"' -- "
        ; str <- many (satisfy $ not . (=='"'))
        ; char '"'
        ; return str
@@ -536,7 +536,7 @@ withAuthority :: Authority -> HTTPRequest ty -> String
 withAuthority a rq = case a of
         AuthBasic{}  -> "Basic " ++ base64encode (auUsername a ++ ':' : auPassword a)
         AuthDigest{} ->
-            "Digest username=\"" ++ auUsername a 
+            "Digest username=\"" ++ auUsername a -- "
               ++ "\",realm=\"" ++ auRealm a
               ++ "\",nonce=\"" ++ auNonce a
               ++ "\",uri=\"" ++ digesturi
@@ -690,217 +690,229 @@ setDebugLog v = alterBS (\b -> b {bsDebug=v})
 
 
 -- Page control
-type RequestState = ( Int    -- number of 401 responses so far
-                    , Int    -- number of redirects so far
-                    , Int    -- number of retrys so far
-                    , Bool   -- whether to pre-empt 401 response
-                    )
+data RequestState 
+  = RequestState
+      { reqDenies     :: Int   -- ^ number of 401 responses so far
+      , reqRedirects  :: Int   -- ^ number of redirects so far
+      , reqRetries    :: Int   -- ^ number of retrys so far
+      , reqStopOnDeny :: Bool  -- ^ whether to pre-empt 401 response
+      }
 
+nullRequestState :: RequestState
+nullRequestState = RequestState
+      { reqDenies     = 0
+      , reqRedirects  = 0
+      , reqRetries    = 0
+      , reqStopOnDeny = True
+      }
 
+-- limits we are willing to not go beyond for method retries and number of auth deny responses.
+maxRetries :: Int
+maxRetries = 4
+
+maxDenies :: Int
+maxDenies = 2
 
 -- Surely the most important bit:
 request :: HStream ty
         => HTTPRequest ty
 	-> BrowserAction (HandleStream ty) (URI,HTTPResponse ty)
-request req = res
-    where
-        res = request' nullVal initialState req
-
-        initialState = (0,0,0,True)
-	nullVal = buf_empty bufferOps
-
--- type hacking accomplice..
---toTy :: ByteStream (TCPConnection ty) ty => BrowserAction (TCPConnection ty) a -> TCPConnection ty
---toTy = undefined
+request req = request' nullVal initialState req
+  where
+   initialState = nullRequestState
+   nullVal      = buf_empty bufferOps
 
 request' :: HStream ty
          => ty
 	 -> RequestState
 	 -> HTTPRequest ty
 	 -> BrowserAction (HandleStream ty) (URI,HTTPResponse ty)
-request' nullVal (denycount,redirectcount,retrycount,preempt) rq =
-    do -- add cookies to request
-       let uri = rqURI rq
-       cookies <- getCookiesFor (uriToAuthorityString uri) (uriPath uri)
-       
-       when (not $ null cookies) 
-            (out $ "Adding cookies to request.  Cookie names: " 
-                 ++ foldl spaceappend "" (map ckName cookies))
-       
-       -- add credentials to request
-       rq' <- if not preempt then return rq else
-              do { auth <- anticipateChallenge rq
-                 ; case auth of
-                     Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
-                     Nothing -> return rq
-                 }
+request' nullVal rqState rq = do
+     -- add cookies to request
+   let uri = rqURI rq
+   cookies <- getCookiesFor (uriToAuthorityString uri) (uriPath uri)
+   when (not $ null cookies) 
+        (out $ "Adding cookies to request.  Cookie names: "  ++
+               foldl spaceappend "" (map ckName cookies))
+    -- add credentials to request
+   rq' <- 
+    if not (reqStopOnDeny rqState) 
+     then return rq 
+     else do 
+       auth <- anticipateChallenge rq
+       case auth of
+         Nothing -> return rq
+         Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
+   let rq'' = insertHeaders (map cookieToHeader cookies) rq'
+   p <- getProxy
+
+   out ("Sending:\n" ++ show rq'') 
+   e_rsp <- 
+     case p of
+       NoProxy       -> dorequest (uriAuth $ rqURI rq'') rq''
+       Proxy str ath -> do
+          let rq''' = maybe rq'' 
+	                   (\x -> insertHeader HdrProxyAuthorization (withAuthority x rq'') rq'')
+		           ath
+          let notURI 
+	       | null pt || null hst = 
+	         URIAuth{ uriUserInfo = ""
+	                , uriRegName  = str
+			, uriPort     = ""
+			}
+	       | otherwise = 
+	         URIAuth{ uriUserInfo = ""
+	                , uriRegName  = hst
+			, uriPort     = pt
+			}
+                  -- If the ':' is dropped from port below, dorequest will assume port 80. Leave it!
+                 where (hst, pt) = span (':'/=) str
+           -- Proxy can take multiple forms - look for http://host:port first,
+           -- then host:port. Fall back to just the string given (probably a host name).
+          let proxyURIAuth =
+                maybe notURI
+                      (\parsed -> maybe notURI id (uriAuthority parsed))
+                      (parseURI str)
+
+          out $ "proxy uri host: " ++ uriRegName proxyURIAuth ++ ", port: " ++ uriPort proxyURIAuth
+          dorequest proxyURIAuth rq'''
+   case e_rsp of
+    Left v 
+     | (reqRetries rqState < maxRetries) && (v == ErrorReset || v == ErrorClosed) ->
+       request' nullVal rqState{reqRetries=reqRetries rqState + 1} rq
+     | otherwise -> error ("Exception raised in request: " ++ show v)
+    Right rsp -> do 
+     out ("Received:\n" ++ show rsp)
+      -- add new cookies to browser state
+     let cookieheaders = retrieveHeaders HdrSetCookie rsp
+     let newcookies = concat (map (headerToCookies $ uriToAuthorityString uri) cookieheaders)
+
+     when (not $ null newcookies)
+          (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newcookies)
                
-       let rq'' = insertHeaders (map cookieToHeader cookies) rq'
+     filterfn <- getCookieFilter
+     newcookies' <- ioAction (filterM (filterfn uri) newcookies)
+     foldM (\_ -> addCookie) () newcookies'
 
-       p <- getProxy
-
-       out ("Sending:\n" ++ show rq'') 
-       e_rsp <- case p of
-            NoProxy -> dorequest (uriAuth $ rqURI rq'') rq''
-            Proxy str ath ->
-                let rq''' = case ath of 
-                                Nothing -> rq''
-                                Just x  -> insertHeader HdrProxyAuthorization (withAuthority x rq'') rq''
-                    -- Proxy can take multiple forms - look for http://host:port first,
-                    -- then host:port. Fall back to just the string given (probably a host name).
-                    proxyURIAuth =
-                      maybe notURI
-                            (\parsed -> maybe notURI
-                                         id (uriAuthority parsed))
-                            (parseURI str)
-                    notURI =
-                      -- If the ':' is dropped from port below, dorequest will assume port 80. Leave it!
-                      let (hst, pt) = span (':'/=) str
-                      in
-                        if null pt || null hst
-                          then URIAuth "" str ""
-                          else URIAuth "" hst pt
-                in
-                  do
-                    out $ "proxy uri host: " ++ uriRegName proxyURIAuth ++ ", port: " ++ uriPort proxyURIAuth
-                    dorequest proxyURIAuth rq'''
-       case e_rsp of
-           Left v -> if (retrycount < 4) && (v == ErrorReset || v == ErrorClosed)
-               then request' nullVal (denycount,redirectcount,retrycount+1,preempt) rq
-               else error ("Exception raised in request: " ++ show v)
-           Right rsp -> do 
-               out ("Received:\n" ++ show rsp)
-
-               -- add new cookies to browser state
-               let cookieheaders = retrieveHeaders HdrSetCookie rsp
-               let newcookies = concat (map (headerToCookies $ uriToAuthorityString uri) cookieheaders)
-
-               when (not $ null newcookies)
-                    (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newcookies)
-               
-               filterfn <- getCookieFilter
-               newcookies' <- ioAction (filterM (filterfn uri) newcookies)
-               foldM (\_ -> addCookie) () newcookies'
-
-               when (not $ null newcookies)
-                    (out $ "Accepting cookies with names: " ++ foldl spaceappend "" (map ckName newcookies'))
+     when (not $ null newcookies)
+          (out $ "Accepting cookies with names: " ++ foldl spaceappend "" (map ckName newcookies'))
        
-               case rspCode rsp of
-                   (4,0,1) ->  -- Credentials not sent or refused.
-                       out "401 - credentials not sent or refused" >>
-                       if denycount > 2 then return (uri,rsp) else
-                       do { let hdrs = retrieveHeaders HdrWWWAuthenticate rsp
-                          ; case pickChallenge (catMaybes $ map (headerToChallenge uri) hdrs) of
-                                Just x  ->
-                                    do { au <- challengeToAuthority uri x
-                                       ; case au of
-                                            Just au' ->
-                                                out "Retrying request with new credentials" >>
-                                                request' nullVal
-						         (denycount+1,redirectcount,retrycount,False)
-                                                         (insertHeader HdrAuthorization (withAuthority au' rq) rq)
-                                            Nothing  -> return (uri,rsp)   {- do nothing -}
-                                       }
-                                          
-                                Nothing -> return (uri,rsp)   {- do nothing -}
-                          }
-                   
+     case rspCode rsp of
+      (4,0,1) -- Credentials not sent or refused.
+        | reqDenies rqState > maxDenies -> do
+          out "401 - credentials again refused; exceeded retry count (2)"
+	  return (uri,rsp)
+	| otherwise -> do
+          out "401 - credentials not supplied or refused; retrying.."
+          let hdrs = retrieveHeaders HdrWWWAuthenticate rsp
+          case pickChallenge (catMaybes $ map (headerToChallenge uri) hdrs) of
+            Nothing -> return (uri,rsp)   {- do nothing -}
+            Just x  -> do
+              au <- challengeToAuthority uri x
+              case au of
+                Nothing  -> return (uri,rsp)   {- do nothing -}
+                Just au' -> do
+                  out "Retrying request with new credentials"
+		  request' nullVal
+			   rqState{reqDenies=reqDenies rqState + 1, reqStopOnDeny=False}
+                           (insertHeader HdrAuthorization (withAuthority au' rq) rq)
 
-                   (4,0,7) ->  -- Proxy Authentication required
-                       out "407 - proxy authentication required" >>
-                       if denycount > 2 then return (uri,rsp) else
-                       do { let hdrs = retrieveHeaders HdrProxyAuthenticate rsp
-                          ; case pickChallenge (catMaybes $ map (headerToChallenge uri) hdrs) of
-                                Just x  ->
-                                    do { au <- challengeToAuthority uri x
-                                       ; case au of
-                                            Just au' ->
-                                                do { pxy <- getBS bsProxy
-                                                   ; case pxy of
-                                                        NoProxy ->
-                                                            do { err "Proxy authentication required without proxy!"
-                                                               ; return (uri,rsp)
-                                                               }
-                                                        Proxy px _ ->
-                                                            do { out "Retrying with proxy authentication"
-                                                               ; setProxy (Proxy px (Just au'))
-                                                               ; request' nullVal
-							                  (denycount+1,redirectcount,retrycount,False) 
-									  rq
-                                                               }
-                                                   }                                                      
-                                            Nothing  -> return (uri,rsp)   {- do nothing -}
-                                       }
-                                          
-                                Nothing -> return (uri,rsp)   {- do nothing -}
-                          }
+      (4,0,7)  -- Proxy Authentication required
+        | reqDenies rqState > maxDenies -> do
+          out "407 - proxy authentication required; max deny count exceeeded (2)"
+          return (uri,rsp)
+        | otherwise -> do
+          out "407 - proxy authentication required"
+          let hdrs = retrieveHeaders HdrProxyAuthenticate rsp
+          case pickChallenge (catMaybes $ map (headerToChallenge uri) hdrs) of
+            Nothing -> return (uri,rsp)   {- do nothing -}
+            Just x  -> do
+              au <- challengeToAuthority uri x
+              case au of
+               Nothing  -> return (uri,rsp)   {- do nothing -}
+               Just au' -> do
+                 pxy <- getBS bsProxy
+                 case pxy of
+                   NoProxy -> do
+                     err "Proxy authentication required without proxy!"
+                     return (uri,rsp)
+                   Proxy px _ -> do
+                     out "Retrying with proxy authentication"
+                     setProxy (Proxy px (Just au'))
+                     request' nullVal
+			      rqState{reqDenies=reqDenies rqState + 1, reqStopOnDeny=False}
+			      rq
 
+      (3,0,x) | x == 3 || x == 2 ->  do -- Redirect using GET request method.
+        out ("30" ++ show x ++  " - redirect using GET")
+        rd <- getAllowRedirects
+        if not rd || reqRedirects rqState > maxRetries 
+	 then return (uri,rsp)
+	 else 
+          case retrieveHeaders HdrLocation rsp of
+           [] -> do 
+	     err "No Location header in redirect response"
+             return (uri,rsp)
+           (Header _ u:_) -> 
+	     case parseURIReference u of
+               Nothing -> do
+                 err ("Parse of Location header in a redirect response failed: " ++ u)
+                 return (uri,rsp)
+               Just newuri -> do
+	         out ("Redirecting to " ++ show newuri' ++ " ...") 
+		 let rq1 = rq { rqMethod=GET, rqURI=newuri', rqBody=nullVal }
+                 request' nullVal
+			  rqState{reqDenies=0, reqRedirects=reqRedirects rqState + 1, reqStopOnDeny=True}
+                          (replaceHeader HdrContentLength "0" rq1)
+                where
+                  newuri' = maybe newuri id (newuri `relativeTo` uri)
 
-                   (3,0,3) ->  -- Redirect using GET request method.
-                       do { out "303 - redirect using GET"
-                          ; rd <- getAllowRedirects
-                          ; if not rd || redirectcount > 4 then return (uri,rsp) else
-                            case retrieveHeaders HdrLocation rsp of
-                                (Header _ u:_) -> case parseURIReference u of
-                                    Just newuri ->
-                                        let newuri' = case newuri `relativeTo` uri of
-                                                        Nothing -> newuri
-                                                        Just x  -> x
-                                        in do { out ("Redirecting to " ++ show newuri' ++ " ...") 
-                                              ; let rq1 = rq { rqMethod=GET, rqURI=newuri', rqBody=nullVal }
-                                              ; request' nullVal
-					                 (0,redirectcount+1,retrycount,True)
-                                                         (replaceHeader HdrContentLength "0" rq1)
-                                              }
-                                    Nothing ->
-                                        do { err ("Parse of Location header in a redirect response failed: " ++ u)
-                                           ; return (uri,rsp)
-                                           }
-                                [] -> do { err "No Location header in redirect response"
-                                         ; return (uri,rsp)
-                                         }
-                          }
-                        
-                   (3,0,5) ->
-                        case retrieveHeaders HdrLocation rsp of
-                            (Header _ u:_) -> case parseURIReference u of
-                                Just newuri ->
-                                    do { out ("Retrying with proxy " ++ show newuri ++ "...")
-                                       ; setProxy (Proxy (uriToAuthorityString newuri) Nothing)
-                                       ; request' nullVal (0,0,retrycount+1,True) rq
-                                       }
-                                Nothing ->
-                                    do { err ("Parse of Location header in a proxy redirect response failed: " ++ u)
-                                       ; return (uri,rsp)
-                                       }
-                            [] -> do { err "No Location header in proxy redirect response."
-                                     ; return (uri,rsp)
-                                     }
-                   
+      (3,0,5) ->
+        case retrieveHeaders HdrLocation rsp of
+         [] -> do 
+	   err "No Location header in proxy redirect response."
+           return (uri,rsp)
+         (Header _ u:_) -> 
+	   case parseURIReference u of
+            Nothing -> do
+             err ("Parse of Location header in a proxy redirect response failed: " ++ u)
+             return (uri,rsp)
+            Just newuri -> do
+             out ("Retrying with proxy " ++ show newuri ++ "...")
+             setProxy (Proxy (uriToAuthorityString newuri) Nothing)
+             request' nullVal rqState{ reqDenies=0
+	                             , reqRedirects=0
+				     , reqRetries=reqRetries rqState + 1
+				     , reqStopOnDeny=True
+				     }
+				     rq
+      (3,_,_) ->  redirect uri rsp
+      _       -> return (uri,rsp)
 
-                   (3,_,_) ->  redirect uri rsp
-                   _       -> return (uri,rsp)
+   where      
+     redirect uri rsp = do
+       rd <- getAllowRedirects
+       if not rd || reqRedirects rqState > maxRetries
+        then return (uri,rsp) 
+	else do
+         case retrieveHeaders HdrLocation rsp of
+          [] -> do 
+	    err "No Location header in redirect response."
+            return (uri,rsp)
+          (Header _ u:_) -> 
+	    case parseURIReference u of
+              Just newuri -> do
+                let newuri' = maybe newuri id (newuri `relativeTo` uri)
+                out ("Redirecting to " ++ show newuri' ++ " ...") 
+                request' nullVal
+		         rqState{reqDenies=0, reqRedirects=reqRedirects rqState + 1, reqStopOnDeny=True}
+		         rq{rqURI=newuri'}
+              Nothing -> do
+                err ("Parse of Location header in a redirect response failed: " ++ u)
+                return (uri,rsp)
 
-    where      
-        spaceappend :: String -> String -> String
-        spaceappend x y = x ++ ' ' : y
-
-        redirect uri rsp = do
-            rd <- getAllowRedirects
-            if not rd || redirectcount > 4 then return (uri,rsp) else do
-            case retrieveHeaders HdrLocation rsp of
-              (Header _ u:_) -> case parseURIReference u of
-                                  Just newuri -> do
-                                      let newuri' = case newuri `relativeTo` uri of
-                                                      Nothing -> newuri
-                                                      Just x  -> x
-                                      out ("Redirecting to " ++ show newuri' ++ " ...") 
-                                      request' nullVal (0,redirectcount+1,retrycount,True) (rq { rqURI=newuri' }) 
-                                  Nothing -> do
-                                      err ("Parse of Location header in a redirect response failed: " ++ u)
-                                      return (uri,rsp)
-              [] -> do err "No Location header in redirect response."
-                       return (uri,rsp)
+spaceappend :: String -> String -> String
+spaceappend x y = x ++ ' ' : y
 
 
 dorequest :: (HStream ty)
@@ -948,7 +960,6 @@ uriAuth x = case uriAuthority x of
 ------------------------------------------------------------------
 ------------------ Request Building ------------------------------
 ------------------------------------------------------------------
-
 
 libUA :: String
 libUA = "haskell-libwww/0.1"
