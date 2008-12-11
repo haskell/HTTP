@@ -15,7 +15,15 @@ Copyright:
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Sigbjorn Finne <sigbjorn.finne@gmail.com>
 Homepage: http://www.haskell.org/http/
-Description: A library for client-side HTTP
+Description: 
+
+ A library for client-side HTTP, version 2. Rewrite of existing HTTP
+ package to allow overloaded representation of HTTP request bodies
+ and responses. Provides three such instances: lazy and strict 'ByteString',
+ along with the good old @String@.
+
+ Inspired in part by Jonas \\197dahl et al's work on ByteString'ifying HTTP
+ a couple of years ago.
 
 Flag old-base
   description: Old, monolithic base
