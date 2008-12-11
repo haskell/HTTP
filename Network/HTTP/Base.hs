@@ -43,6 +43,7 @@ module Network.HTTP.Base
        , ResponseNextStep(..)
        , matchResponse
        , ResponseData
+       , ResponseCode
        , RequestData
        
        , getAuth
@@ -203,8 +204,17 @@ instance HasHeaders (HTTPRequest a) where
     getHeaders = rqHeaders
     setHeaders rq hdrs = rq { rqHeaders=hdrs }
 
+-- | For easy pattern matching, HTTP response codes @xyz@ are
+-- represented as @(x,y,z)@.
 type ResponseCode  = (Int,Int,Int)
+
+-- | @ResponseData@ contains the head of a response payload;
+-- HTTP response code, accompanying text description + header
+-- fields.
 type ResponseData  = (ResponseCode,String,[Header])
+
+-- | @RequestData@ contains the head of a HTTP request; method,
+-- its URL along with the auxillary/supporting header data.
 type RequestData   = (RequestMethod,URI,[Header])
 
 -- | An HTTP Response.
