@@ -101,7 +101,7 @@ import qualified System.IO
    , BufferMode(NoBuffering, LineBuffering)
    )
 import Data.Word (Word8)
-
+import Debug.Trace
 
 type Octet = Word8
 
@@ -200,7 +200,7 @@ cookieToHeader ck = Header HdrCookie text
 headerToCookies :: String -> Header -> [Cookie]
 headerToCookies dom (Header HdrSetCookie val) = 
     case parse cookies "" val of
-        Left e  -> error ("Cookie parse failure on: " ++ val ++ " " ++ show e)
+        Left e  -> error ("Cookie parse failure on: " ++ val ++ " " ++ show e) 
         Right x  -> x
     where
         cookies :: Parser [Cookie]
@@ -221,7 +221,7 @@ headerToCookies dom (Header HdrSetCookie val) =
         
         spaces_l = many (satisfy isSpace)
 
-        cvalue = quotedstring <|> many1 (satisfy $ not . (==';'))
+        cvalue = quotedstring <|> many1 (satisfy $ not . (==';')) <|> return ""
        
         -- all keys in the result list MUST be in lower case
         cdetail :: Parser [(String,String)]
@@ -483,7 +483,7 @@ pickChallenge = listToMaybe
 anticipateChallenge :: HTTPRequest ty -> BrowserAction t (Maybe Authority)
 anticipateChallenge rq =
     let uri = rqURI rq in
-    do { authlist <- getAuthFor (uriToAuthorityString uri) (uriPath uri)
+    do { authlist <- getAuthFor (uriAuthToString $ reqURIAuth rq) (uriPath uri)
        ; return (listToMaybe authlist)
        }
 
@@ -730,7 +730,7 @@ request' :: HStream ty
 request' nullVal rqState rq = do
      -- add cookies to request
    let uri = rqURI rq
-   cookies <- getCookiesFor (uriToAuthorityString uri) (uriPath uri)
+   cookies <- getCookiesFor (uriAuthToString $ reqURIAuth rq) (uriPath uri)
    when (not $ null cookies) 
         (out $ "Adding cookies to request.  Cookie names: "  ++
                foldl spaceappend "" (map ckName cookies))
@@ -749,7 +749,7 @@ request' nullVal rqState rq = do
    out ("Sending:\n" ++ show rq'') 
    e_rsp <- 
      case p of
-       NoProxy       -> dorequest (uriAuth $ rqURI rq'') rq''
+       NoProxy       -> dorequest (reqURIAuth rq'') rq''
        Proxy str ath -> do
           let rq''' = maybe rq'' 
 	                   (\x -> insertHeader HdrProxyAuthorization (withAuthority x rq'') rq'')
@@ -785,7 +785,7 @@ request' nullVal rqState rq = do
      out ("Received:\n" ++ show rsp)
       -- add new cookies to browser state
      let cookieheaders = retrieveHeaders HdrSetCookie rsp
-     let newcookies = concat (map (headerToCookies $ uriToAuthorityString uri) cookieheaders)
+     let newcookies = concat (map (headerToCookies $ uriAuthToString $ reqURIAuth rq) cookieheaders)
 
      when (not $ null newcookies)
           (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newcookies)
@@ -951,11 +951,16 @@ dorequest hst rqst =
 	   c' <- debugByteStream (f++'-': uriAuthToString hst) c
 	   sendHTTP c' r
  
-uriAuth :: URI -> URIAuth
-uriAuth x = case uriAuthority x of
-              Just ua -> ua
-              _       -> error ("No uri authority for: "++show x)
-
+reqURIAuth :: HTTPRequest ty -> URIAuth
+reqURIAuth req = 
+  case uriAuthority (rqURI req) of
+    Just ua -> ua
+    _ -> case lookupHeader HdrHost (rqHeaders req) of
+           Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
+	   Just h  -> URIAuth { uriUserInfo = ""
+	                      , uriRegName  = h
+			      , uriPort     = ""
+			      }
 
 ------------------------------------------------------------------
 ------------------ Request Building ------------------------------
