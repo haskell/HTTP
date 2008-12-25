@@ -1,5 +1,5 @@
 Name: HTTP
-Version: 4000.0.0
+Version: 4000.0.1
 Cabal-Version: >= 1.2
 Build-type: Simple
 License: BSD3
@@ -21,9 +21,11 @@ Description:
  package to allow overloaded representation of HTTP request bodies
  and responses. Provides three such instances: lazy and strict 'ByteString',
  along with the good old @String@.
-
- Inspired in part by Jonas \\197dahl et al's work on ByteString'ifying HTTP
+ .
+ Inspired in part by Jonas Aadahl et al's work on ByteString'ifying HTTP
  a couple of years ago.
+ .
+ Git repository available at <http://code.galois.com/HTTPbis.git>
 
 Flag old-base
   description: Old, monolithic base
