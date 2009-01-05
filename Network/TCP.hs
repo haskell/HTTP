@@ -50,6 +50,7 @@ import qualified Network.Stream as Stream
 import Network.Stream
    ( ConnError(..)
    , Result
+   , failWith
    )
 import Network.BufferType
 
@@ -57,7 +58,6 @@ import Network.HTTP.Base ( catchIO )
 import Network.Socket ( socketToHandle )
 
 import Data.Char  ( toLower )
-import Data.Maybe ( fromMaybe )
 import Data.Word  ( Word8 )
 import Control.Concurrent
 import Control.Monad ( liftM )
@@ -247,86 +247,74 @@ isTCPConnectedTo conn name = do
 
 
 readBlockBS :: HandleStream a -> Int -> IO (Result a)
-readBlockBS ref n = do
-   conn <- readMVar (getRef ref)
-   x <- 
-    case conn of
-     ConnClosed -> return (Left ErrorClosed)
-     MkConn{}   -> bufferGetBlock ref n -- (connBuffer conn) (connInput conn) (connHandle conn) n
-   fromMaybe (return ()) (fmap (\ h -> hook_readBlock h (buf_toStr $ connBuffer conn) n x) (connHooks' conn))
+readBlockBS ref n = onNonClosedDo ref $ \ conn -> do
+   x <- bufferGetBlock ref n
+   maybe (return ())
+         (\ h -> hook_readBlock h (buf_toStr $ connBuffer conn) n x)
+	 (connHooks' conn)
    return x
 
 -- This function uses a buffer, at this time the buffer is just 1000 characters.
 -- (however many bytes this is is left to the user to decypher)
 readLineBS :: HandleStream a -> IO (Result a)
-readLineBS ref = do
-   conn <- readMVar (getRef ref)
-   x <- 
-    case conn of
-     ConnClosed -> return (Left ErrorClosed)
-     MkConn{}   -> bufferReadLine ref -- (connBuffer conn) (connHandle conn) (connInput conn)
-   fromMaybe (return ()) (fmap (\ h -> hook_readLine h (buf_toStr $ connBuffer conn) x) (connHooks' conn))
+readLineBS ref = onNonClosedDo ref $ \ conn -> do
+   x <- bufferReadLine ref
+   maybe (return ())
+         (\ h -> hook_readLine h (buf_toStr $ connBuffer conn) x)
+	 (connHooks' conn)
    return x
 
 -- The 'Connection' object allows no outward buffering, 
 -- since in general messages are serialised in their entirety.
 writeBlockBS :: HandleStream a -> a -> IO (Result ())
-writeBlockBS ref b = do
-  conn <- readMVar (getRef ref)
-  x    <- 
-   case conn of
-    ConnClosed -> return (Left ErrorClosed)
-    MkConn{} -> bufferPutBlock (connBuffer conn) (connHandle conn) b
-  fromMaybe (return ()) (fmap (\ h -> hook_writeBlock h (buf_toStr $ connBuffer conn) b x) (connHooks' conn))
+writeBlockBS ref b = onNonClosedDo ref $ \ conn -> do
+  x    <- bufferPutBlock (connBuffer conn) (connHandle conn) b
+  maybe (return ())
+        (\ h -> hook_writeBlock h (buf_toStr $ connBuffer conn) b x)
+	(connHooks' conn)
   return x
 
 closeIt :: HandleStream ty -> (ty -> Bool) -> IO ()
 closeIt c p = do
   closeConnection c (readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True})
   conn <- readMVar (getRef c)
-  fromMaybe (return ()) (fmap (\ h -> hook_close h) (connHooks' conn))
-
+  maybe (return ())
+        (hook_close)
+	(connHooks' conn)
 
 bufferGetBlock :: HandleStream a -> Int -> IO (Result a)
-bufferGetBlock ref n = do
-   conn <- readMVar (getRef ref)
-   case conn of
-     ConnClosed -> return (Left ErrorClosed)
-     MkConn{} -> do
-       case connInput conn of
-         Just c -> do
-	   let (a,b) = buf_splitAt (connBuffer conn) n c
-	   modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b})
-	   return (Right a)
-         _ -> do
-	   Prelude.catch (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.Right)
-                         (\ e -> if isEOFError e 
-			          then return (Right (buf_empty (connBuffer conn)))
-				  else return (Left (ErrorMisc (show e))))
+bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
+   case connInput conn of
+    Just c -> do
+      let (a,b) = buf_splitAt (connBuffer conn) n c
+      modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b})
+      return (return a)
+    _ -> do
+      Prelude.catch (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.return)
+                    (\ e -> if isEOFError e 
+			     then return (return (buf_empty (connBuffer conn)))
+			     else return (fail (show e)))
 
 bufferPutBlock :: BufferOp a -> Handle -> a -> IO (Result ())
 bufferPutBlock ops h b = 
-  Prelude.catch (buf_hPut ops h b >> hFlush h >> return (Right ()))
-                (\ e -> return (Left (ErrorMisc (show e))))
+  Prelude.catch (buf_hPut ops h b >> hFlush h >> return (return ()))
+                (\ e -> return (fail (show e)))
 
 bufferReadLine :: HandleStream a -> IO (Result a) -- BufferOp a -> Handle -> IO (Result a)
-bufferReadLine ref = do
-  conn <- readMVar (getRef ref)
-  case conn of
-    ConnClosed -> return (Left ErrorClosed)
-    MkConn{} -> do
-      case connInput conn of
-        Just c -> do
-	  let (a,b0)  = buf_span (connBuffer conn) (/='\n') c
-	  let (newl,b1) = buf_splitAt (connBuffer conn) 1 b0
-	  modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b1})
-	  return (Right (buf_append (connBuffer conn) a newl))
-	_ -> Prelude.catch 
-              (buf_hGetLine (connBuffer conn) (connHandle conn) >>= return . Right . appendNL (connBuffer conn))
+bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
+  case connInput conn of
+   Just c -> do
+    let (a,b0)  = buf_span (connBuffer conn) (/='\n') c
+    let (newl,b1) = buf_splitAt (connBuffer conn) 1 b0
+    modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b1})
+    return (return (buf_append (connBuffer conn) a newl))
+   _ -> Prelude.catch 
+              (buf_hGetLine (connBuffer conn) (connHandle conn) >>= 
+	            return . return . appendNL (connBuffer conn))
               (\ e -> 
                  if isEOFError e
-                  then return (Right (buf_empty (connBuffer conn)))
-                  else return (Left (ErrorMisc (show e))))
+                  then return (return   (buf_empty (connBuffer conn)))
+                  else return (fail (show e)))
  where
    -- yes, this s**ks.. _may_ have to be addressed if perf
    -- suggests worthiness.
@@ -334,3 +322,11 @@ bufferReadLine ref = do
   
   nl :: Word8
   nl = fromIntegral (fromEnum '\n')
+
+onNonClosedDo :: HandleStream a -> (Conn a -> IO (Result b)) -> IO (Result b)
+onNonClosedDo h act = do
+  x <- readMVar (getRef h)
+  case x of
+    ConnClosed{} -> return (failWith ErrorClosed)
+    c -> act c
+    
