@@ -61,6 +61,7 @@ module Network.HTTP.Base
        
        , catchIO
        , catchIO_
+       , responseParseError
        ) where
 
 import Network.URI
@@ -70,6 +71,7 @@ import Network.URI
    )
 
 import Control.Monad ( guard )
+import Control.Monad.Error
 import Data.Char     ( ord, digitToInt, intToDigit, toLower )
 import Data.List     ( partition )
 import Data.Maybe    ( listToMaybe )
@@ -246,46 +248,46 @@ instance HasHeaders (HTTPResponse a) where
 
 -- Parsing a request
 parseRequestHead :: [String] -> Result RequestData
-parseRequestHead [] = Left ErrorClosed
-parseRequestHead (com:hdrs) =
-    requestCommand com `bindE` \(_version,rqm,uri) ->
-    parseHeaders hdrs `bindE` \hdrs' ->
-    Right (rqm,uri,hdrs')
-    where
-        requestCommand line =
-	  case words line of
-            _yes@(rqm:uri:version) -> 
-	     case (parseURIReference uri, lookup rqm rqMethodMap) of
-  	       (Just u, Just r) -> Right (version,r,u)
-	       _                -> Left parse_err
-	    _no 
-	     | null line -> Left ErrorClosed
-	     | otherwise -> Left parse_err
-          where
-	   parse_err = ErrorParse ("Request command line parse failure: " ++ line)
+parseRequestHead         [] = Left ErrorClosed
+parseRequestHead (com:hdrs) = do
+  (_version,rqm,uri) <- requestCommand com (words com)
+  hdrs'              <- parseHeaders hdrs
+  return (rqm,uri,hdrs')
+ where
+  requestCommand l _yes@(rqm:uri:version) =
+    case (parseURIReference uri, lookup rqm rqMethodMap) of
+     (Just u, Just r) -> return (version,r,u)
+     _                -> parse_err l
+  requestCommand l _
+   | null l    = failWith ErrorClosed
+   | otherwise = parse_err l
+
+  parse_err l = responseParseError "parseRequestHead"
+                   ("Request command line parse failure: " ++ l)
 
 -- Parsing a response
 parseResponseHead :: [String] -> Result ResponseData
-parseResponseHead [] = Left ErrorClosed
-parseResponseHead (sts:hdrs) = 
-    responseStatus sts `bindE` \(_version,code,reason) ->
-    parseHeaders hdrs `bindE` \hdrs' ->
-    Right (code,reason,hdrs')
-    where
-        responseStatus line =
-          case words line of
-            _yes@(version:code:reason) -> 
-	     Right (version,match code,concatMap (++" ") reason)
-            _no
-	     | null line -> Left ErrorClosed  -- an assumption
-	     | otherwise -> Left parse_err
-          where
-	   parse_err = (ErrorParse $ "Response status line parse failure: " ++ line)
+parseResponseHead []         = failWith ErrorClosed
+parseResponseHead (sts:hdrs) = do
+  (_version,code,reason) <- responseStatus sts (words sts)
+  hdrs'                  <- parseHeaders hdrs
+  return (code,reason,hdrs')
+ where
+  responseStatus _l _yes@(version:code:reason) =
+    return (version,match code,concatMap (++" ") reason)
+  responseStatus l _no 
+    | null l    = failWith ErrorClosed  -- an assumption
+    | otherwise = parse_err l
 
-        match [a,b,c] = (digitToInt a,
-                         digitToInt b,
-                         digitToInt c)
-        match _ = (-1,-1,-1)  -- will create appropriate behaviour
+  parse_err l = 
+    responseParseError 
+        "parseResponseHead"
+        ("Response status line parse failure: " ++ l)
+
+  match [a,b,c] = (digitToInt a,
+                   digitToInt b,
+                   digitToInt c)
+  match _ = (-1,-1,-1)  -- will create appropriate behaviour
 
 
         
@@ -438,9 +440,7 @@ findConnClose hdrs =
 
 -- | Used when we know exactly how many bytes to expect.
 linearTransfer :: (Int -> IO (Result a)) -> Int -> IO (Result ([Header],a))
-linearTransfer readBlk n
-    = do info <- readBlk n
-         return $ info `bindE` \str -> Right ([],str)
+linearTransfer readBlk n = fmapE (\str -> Right ([],str)) (readBlk n)
 
 -- | Used when nothing about data is known,
 --   Unfortunately waiting for a socket closure
@@ -464,11 +464,11 @@ chunkedTransfer :: BufferOp a
 		-> IO (Result a)
                 -> (Int -> IO (Result a))
                 -> IO (Result ([Header], a))
-chunkedTransfer bufOps readL readBlk = do
-    v <- chunkedTransferC bufOps readL readBlk 0
-    return $ v `bindE` \(ftrs,count,info) ->
-             let myftrs = Header HdrContentLength (show count) : ftrs              
-             in Right (myftrs,info)
+chunkedTransfer bufOps readL readBlk = 
+  fmapE (\ (ftrs,count,info) ->
+           let myftrs = Header HdrContentLength (show count) : ftrs              
+           in Right (myftrs,info))
+	(chunkedTransferC bufOps readL readBlk 0)
 
 chunkedTransferC :: BufferOp a
                  -> IO (Result a)
@@ -480,20 +480,20 @@ chunkedTransferC bufOps readL readBlk n = do
   case v of
     Left e -> return (Left e)
     Right line 
-     | size == 0 -> do
-         rs <- readTillEmpty2 bufOps readL []
-         return $
-           rs `bindE` \strs ->
-           parseHeaders (map (buf_toStr bufOps) strs) `bindE` \ftrs ->
-           Right (ftrs,n,buf_empty bufOps)
+     | size == 0 -> 
+        fmapE (\ strs -> do
+	         ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
+                 return (ftrs,n,buf_empty bufOps))
+	      (readTillEmpty2 bufOps readL [])
+
      | otherwise -> do
          some <- readBlk size
          readL
-         more <- chunkedTransferC bufOps {-nullVal isNull isLineEnd toStr append -} readL readBlk (n+size)
-         return $ 
-           some `bindE` \cdata ->
-           more `bindE` \(ftrs,m,mdata) -> 
-           Right (ftrs,m,buf_append bufOps cdata mdata) 
+         more <- chunkedTransferC bufOps readL readBlk (n+size)
+         return $ do
+           cdata          <- some
+	   (ftrs,m,mdata) <- more
+           return (ftrs,m,buf_append bufOps cdata mdata) 
      where
       size 
        | buf_isEmpty bufOps line = 0
@@ -505,9 +505,8 @@ chunkedTransferC bufOps readL readBlk n = do
 -- | Maybe in the future we will have a sensible thing
 --   to do here, at that time we might want to change
 --   the name.
-uglyDeathTransfer :: IO (Result ([Header],a))
-uglyDeathTransfer 
-    = return $ Left $ ErrorParse "Unknown Transfer-Encoding"
+uglyDeathTransfer :: String -> IO (Result ([Header],a))
+uglyDeathTransfer loc = return (responseParseError loc "Unknown Transfer-Encoding")
 
 -- | Remove leading crlfs then call readTillEmpty2 (not required by RFC)
 readTillEmpty1 :: BufferOp a
@@ -550,3 +549,5 @@ catchIO a h = Prelude.catch a h
 catchIO_ :: IO a -> IO a -> IO a
 catchIO_ a h = Prelude.catch a (const h)
 
+responseParseError :: String -> String -> Result a
+responseParseError loc v = failWith (ErrorParse (loc ++ ' ':v))
