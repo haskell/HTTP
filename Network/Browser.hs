@@ -38,6 +38,9 @@ module Network.Browser (
     browse,             -- BrowserAction a -> IO a
     request,            -- Request -> BrowserAction Response
     
+    getBrowserState,
+    withBrowserState,
+    
     setAllowRedirects,
     getAllowRedirects,
     
@@ -101,7 +104,6 @@ import qualified System.IO
    , BufferMode(NoBuffering, LineBuffering)
    )
 import Data.Word (Word8)
-import Debug.Trace
 
 type Octet = Word8
 
@@ -111,7 +113,7 @@ type Octet = Word8
 
 word, quotedstring :: Parser String
 quotedstring =
-    do { char '"' -- "
+    do { char '"' 
        ; str <- many (satisfy $ not . (=='"'))
        ; char '"'
        ; return str
@@ -125,15 +127,10 @@ word = many1 (satisfy (\x -> isAlphaNum x || x=='_' || x=='.' || x=='-' || x==':
 -- If second argument is not sufficient context for
 -- determining a full URI then anarchy reins.
 uriDefaultTo :: URI -> URI -> URI
-uriDefaultTo a b =
-    case a `relativeTo` b of
-        Nothing -> a
-        Just x  -> x
-
+uriDefaultTo a b = maybe a id (a `relativeTo` b)
 
 uriTrimHost :: URI -> URI
 uriTrimHost uri = uri { uriScheme="", uriAuthority=Nothing }
-
 
 ------------------------------------------------------------------
 ----------------------- Cookie Stuff -----------------------------
@@ -142,13 +139,15 @@ uriTrimHost uri = uri { uriScheme="", uriAuthority=Nothing }
 -- Some conventions: 
 --     assume ckDomain is lowercase
 --
-data Cookie = MkCookie { ckDomain
-                       , ckName
-                       , ckValue :: String
-                       , ckPath
-                       , ckComment
-                       , ckVersion :: Maybe String
-                       }
+data Cookie 
+ = MkCookie 
+    { ckDomain  :: String
+    , ckName    :: String
+    , ckValue   :: String
+    , ckPath    :: Maybe String
+    , ckComment :: Maybe String
+    , ckVersion :: Maybe String
+    }
     deriving(Show,Read)
 
 
@@ -168,10 +167,8 @@ userCookieFilter url cky =
        case ckComment cky of
           Nothing -> return ()
           Just x  -> putStrLn ("Cookie Comment:\n" ++ x)
-       putStrLn ("Domain/Path: " ++ ckDomain cky ++ 
-            case ckPath cky of
-                Nothing -> ""
-                Just x  -> "/" ++ x)
+       let pth = maybe "" ('/':) (ckPath cky)
+       putStrLn ("Domain/Path: " ++ ckDomain cky ++ pth)
        putStrLn (ckName cky ++ '=' : ckValue cky)
        System.IO.hSetBuffering System.IO.stdout System.IO.NoBuffering
        System.IO.hSetBuffering System.IO.stdin System.IO.NoBuffering
@@ -187,13 +184,13 @@ userCookieFilter url cky =
 cookieToHeader :: Cookie -> Header
 cookieToHeader ck = Header HdrCookie text
     where
+        path = maybe "" (";$Path="++) (ckPath ck)
         text = "$Version=" ++ fromMaybe "0" (ckVersion ck)
-             ++ ';' : ckName ck ++ "=" ++ ckValue ck
+             ++ ';' : ckName ck ++ "=" ++ ckValue ck ++ path
              ++ (case ckPath ck of
                      Nothing -> ""
                      Just x  -> ";$Path=" ++ x)
              ++ ";$Domain=" ++ ckDomain ck
-
 
 
 {- replace "error" call with [] in final version? -}
@@ -201,7 +198,7 @@ headerToCookies :: String -> Header -> [Cookie]
 headerToCookies dom (Header HdrSetCookie val) = 
     case parse cookies "" val of
         Left e  -> error ("Cookie parse failure on: " ++ val ++ " " ++ show e) 
-        Right x  -> x
+        Right x -> x
     where
         cookies :: Parser [Cookie]
         cookies = sepBy1 cookie (char ',')
@@ -634,12 +631,15 @@ browse act = do x <- lift act defaultBrowserState
                 return (snd x)
 
 defaultBrowserState :: BrowserState t
-defaultBrowserState = 
-  BS { bsErr              = putStrLn
+defaultBrowserState = res
+ where
+   res = BS
+     { bsErr              = putStrLn
      , bsOut              = putStrLn
      , bsCookies          = []
      , bsCookieFilter     = defaultCookieFilter
-     , bsAuthorityGen     = (error "bsAuthGen wanted")
+     , bsAuthorityGen     = \ _uri _realm -> 
+          (bsErr res) ("No action for prompting/generating user+password credentials provided (use: setAuthorityGen); returning Nothing") >> return Nothing
      , bsAuthorities      = []
      , bsAllowRedirects   = True
      , bsAllowBasicAuth   = False
@@ -654,6 +654,12 @@ alterBS f = BA (\b -> return (f b,()))
 
 getBS :: (BrowserState t -> a) -> BrowserAction t a
 getBS f = BA (\b -> return (b,f b))
+
+getBrowserState :: BrowserAction t (BrowserState t)
+getBrowserState = getBS id
+
+withBrowserState :: BrowserState t -> BrowserAction t a -> BrowserAction t a
+withBrowserState bs act = BA $ \ _ -> lift act bs
 
 -- | Do an io action
 ioAction :: IO a -> BrowserAction t a
