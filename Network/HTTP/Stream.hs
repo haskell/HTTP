@@ -202,7 +202,7 @@ sendHTTP conn rq =
         getResponseHead :: IO (Result ResponseData)
         getResponseHead =
             do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
-               ; return $ lor `bindE` parseResponseHead
+               ; return $ lor >>= parseResponseHead
                }
 
         -- Hmmm, this could go bad if we keep getting "100 Continue"
@@ -248,7 +248,7 @@ sendHTTP conn rq =
                     return (Right $ Response cd rn hdrs "")
 
                 DieHorribly str ->
-                    return $ Left $ ErrorParse ("Invalid response: " ++ str)
+                    return $ responseParseError "sendHTTP" ("Invalid response: " ++ str)
 
                 ExpectEntity ->
                     let tc = lookupHeader HdrTransferEncoding hdrs
@@ -263,8 +263,10 @@ sendHTTP conn rq =
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
 				                               (readLine conn) (readBlock conn)
-                                  _         -> uglyDeathTransfer
-                       ; return $ rslt `bindE` \(ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy) 
+                                  _         -> uglyDeathTransfer "sendHTTP"
+                       ; return $ do
+		            (ftrs,bdy) <- rslt
+			    return (Response cd rn (hdrs++ftrs) bdy)
                        }
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
@@ -276,7 +278,7 @@ receiveHTTP conn = getRequestHead >>= processRequest
         getRequestHead :: IO (Result RequestData)
         getRequestHead =
             do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
-               ; return $ lor `bindE` parseRequestHead
+               ; return $ lor >>= parseRequestHead
                }
 	
         processRequest (Left e) = return $ Left e
@@ -293,10 +295,11 @@ receiveHTTP conn = getRequestHead >>= processRequest
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
 				                               (readLine conn) (readBlock conn)
-                                  _         -> uglyDeathTransfer
+                                  _         -> uglyDeathTransfer "receiveHTTP"
                
-               return $ rslt `bindE` \(ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)
-
+               return $ do
+	          (ftrs,bdy) <- rslt
+		  return (Request uri rm (hdrs++ftrs) bdy)
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
