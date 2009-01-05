@@ -60,14 +60,15 @@ module Network.HTTP.Headers
    ) where
 
 import Data.Char (toLower)
-import Network.Stream (Result, ConnError(ErrorParse))
+import Data.Either ( rights )
+import Network.Stream (Result, failParse)
 import Network.HTTP.Utils ( trim, split, crlf )
 
 -- | The @Header@ data type pairs header names & values.
 data Header = Header HeaderName String
 
 instance Show Header where
-    show (Header key value) = show key ++ ": " ++ value ++ crlf
+    show (Header key value) = shows key (':':' ':value ++ crlf)
 
 -- | HTTP Header Name type:
 --  Why include this at all?  I have some reasons
@@ -257,8 +258,8 @@ lookupHeader _ _  =  Nothing
 parseHeader :: String -> Result Header
 parseHeader str =
     case split ':' str of
-        Nothing -> Left (ErrorParse $ "Unable to parse header: " ++ str)
-        Just (k,v) -> Right $ Header (fn k) (trim $ drop 1 v)
+        Nothing -> failParse ("Unable to parse header: " ++ str)
+        Just (k,v) -> return $ Header (fn k) (trim $ drop 1 v)
     where
         fn k = case map snd $ filter (match k . fst) headerMap of
                  [] -> (HdrCustom k)
@@ -269,26 +270,24 @@ parseHeader str =
     
 parseHeaders :: [String] -> Result [Header]
 parseHeaders =
-   catRslts [] . map (parseHeader . clean) . joinExtended ""
+   catRslts . map (parseHeader . clean) . joinExtended ""
    where
         -- Joins consecutive lines where the second line
         -- begins with ' ' or '\t'.
+        joinExtended old      [] = [old]
         joinExtended old (h : t)
-            | not (null h) && (head h == ' ' || head h == '\t')
-                = joinExtended (old ++ ' ' : tail h) t
-            | otherwise = old : joinExtended h t
-        joinExtended old [] = [old]
+	  | isLineExtension h    = joinExtended (old ++ ' ' : tail h) t
+          | otherwise            = old : joinExtended h t
+	
+	isLineExtension (x:_) = x == ' ' || x == '\t'
+	isLineExtension _ = False
 
         clean [] = []
         clean (h:t) | h `elem` "\t\r\n" = ' ' : clean t
                     | otherwise = h : clean t
 
-        -- tollerant of errors?  should parse
+        -- tolerant of errors?  should parse
         -- errors here be reported or ignored?
         -- currently ignored.
-        catRslts :: [a] -> [Result a] -> Result [a]
-        catRslts list (h:t) = 
-            case h of
-                Left _ -> catRslts list t
-                Right v -> catRslts (v:list) t
-        catRslts list [] = Right $ reverse list            
+        catRslts :: [Result a] -> Result [a]
+	catRslts rs = Right (rights rs)
