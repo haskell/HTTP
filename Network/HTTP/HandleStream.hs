@@ -26,7 +26,7 @@ module Network.HTTP.HandleStream
 -----------------------------------------------------------------
 
 import Network.BufferType
-import Network.Stream ( ConnError(..), bindE, Result )
+import Network.Stream ( ConnError(..), fmapE, Result )
 import Network.StreamDebugger ( debugByteStream )
 import Network.TCP (HStream(..), HandleStream )
 
@@ -91,7 +91,10 @@ sendHTTP conn rq = do
 -- for an indefinite period before sending the request body.'
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
-sendMain :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
+sendMain :: HStream ty
+         => HandleStream ty
+	 -> HTTPRequest ty
+	 -> IO (Result (HTTPResponse ty))
 sendMain conn rqst = do
       --let str = if null (rqBody rqst)
       --              then show rqst
@@ -141,24 +144,18 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                      
      Done -> return (Right $ Response cd rn hdrs (buf_empty bufferOps))
 
-     DieHorribly str -> return $ Left $ ErrorParse ("Invalid response: " ++ str)
-
-     ExpectEntity -> do
-       rslt <- 
-        case tc of
-          Nothing -> 
-            case cl of
-              Nothing -> hopefulTransfer bo (readLine conn) []
-              Just x  -> 
-	        case reads x of
-		  ((v,_):_) ->  linearTransfer (readBlock conn) v
-		  _ -> return (Left (ErrorParse ("unrecognized content-length value " ++ x)))
-          Just x  -> 
-            case map toLower (trim x) of
-              "chunked" -> chunkedTransfer bo (readLine conn) (readBlock conn)
-              _         -> uglyDeathTransfer
-       return $ rslt `bindE` \(ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)
-
+     DieHorribly str -> return (responseParseError "Invalid response:" str)
+     ExpectEntity -> 
+       fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
+        maybe (maybe (hopefulTransfer bo (readLine conn) [])
+	             (\ x -> 
+		        readsOne (linearTransfer (readBlock conn))
+		                 (return$responseParseError "unrecognized content-length value" x)
+				 x)
+		     cl)
+	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+	                 (uglyDeathTransfer "sendHTTP"))
+              tc
       where
        tc = lookupHeader HdrTransferEncoding hdrs
        cl = lookupHeader HdrContentLength hdrs
@@ -166,43 +163,38 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                     
 -- reads and parses headers
 getResponseHead :: HStream ty => HandleStream ty -> IO (Result ResponseData)
-getResponseHead conn = do
-   lor <- readTillEmpty1 bufferOps (readLine conn)
-   return $ lor `bindE` \es -> parseResponseHead (map (buf_toStr bufferOps) es)
+getResponseHead conn = 
+   fmapE (\es -> parseResponseHead (map (buf_toStr bufferOps) es))
+         (readTillEmpty1 bufferOps (readLine conn))
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
 --   for server side interactions.
 receiveHTTP :: HStream bufTy => HandleStream bufTy -> IO (Result (HTTPRequest bufTy))
 receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
-    where
-        -- reads and parses headers
-        getRequestHead :: IO (Result RequestData)
-        getRequestHead =
-            do { lor <- readTillEmpty1 bufferOps (readLine conn)
-               ; return $ lor `bindE` \es -> parseRequestHead (map (buf_toStr bufferOps) es)
-               }
+  where
+    -- reads and parses headers
+   getRequestHead :: IO (Result RequestData)
+   getRequestHead = do
+      fmapE (\es -> parseRequestHead (map (buf_toStr bufferOps) es))
+            (readTillEmpty1 bufferOps (readLine conn))
 	
-	processRequest (rm,uri,hdrs) = do
-           rslt <- 
-	     case tc of
-               Nothing ->
-                 case cl of
-                   Nothing -> return (Right ([], buf_empty bo)) -- hopefulTransfer ""
-                   Just x  -> 
-		     case reads x of
-		       ((v,_):_) -> linearTransfer (readBlock conn) v
-		       _ -> return (Left (ErrorParse ("unrecognized content-length value " ++ x)))
-               Just x  ->
-                 case map toLower (trim x) of
-                   "chunked" -> chunkedTransfer bo (readLine conn) (readBlock conn)
-                   _         -> uglyDeathTransfer
-               
-           return $ rslt `bindE` \(ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)
-	  where
-	     -- FIXME : Also handle 100-continue.
-            tc = lookupHeader HdrTransferEncoding hdrs
-            cl = lookupHeader HdrContentLength hdrs
-	    bo = bufferOps
+   processRequest (rm,uri,hdrs) =
+      fmapE (\ (ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)) $
+	     maybe 
+	      (maybe (return (Right ([], buf_empty bo))) -- hopefulTransfer ""
+	             (\ x -> readsOne (linearTransfer (readBlock conn))
+			              (return$responseParseError "unrecognized Content-Length value" x)
+				      x)
+				      
+		     cl)
+  	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+	                 (uglyDeathTransfer "receiveHTTP"))
+              tc
+    where
+     -- FIXME : Also handle 100-continue.
+     tc = lookupHeader HdrTransferEncoding hdrs
+     cl = lookupHeader HdrContentLength hdrs
+     bo = bufferOps
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
@@ -212,3 +204,21 @@ respondHTTP conn rsp = do
    -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rspBody rsp)
   return ()
+
+------------------------------------------------------------------------------
+
+readsOne :: Read a => (a -> b) -> b -> String -> b
+readsOne f n str = 
+ case reads str of
+   ((v,_):_) -> f v
+   _ -> n
+
+headerName :: String -> String
+headerName x = map toLower (trim x)
+
+ifChunked :: a -> a -> String -> a
+ifChunked a b s = 
+  case headerName s of
+    "chunked" -> a
+    _ -> b
+
