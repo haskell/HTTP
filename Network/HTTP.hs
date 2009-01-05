@@ -8,39 +8,18 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- An easy HTTP interface enjoy.
+-- An easy HTTP interface, toplevel module.
 --
--- * Changes by Robin Bate Boerop <robin@bateboerop.name>:
---      - Made dependencies explicit in import statements.
---      - Removed false dependencies in import statements.
---      - Added missing type signatures.
---      - Moved Header-related code to Network.HTTP.Headers module.
+-- The 'Network.HTTP' module provides functionality for sending
+-- HTTP requests and processing their responses, along with a supporting
+-- cast of types and utility functions.
 --
--- * Changes by Simon Foster:
---      - Split module up into to sepearate Network.[Stream,TCP,HTTP] modules
---      - Created functions receiveHTTP and responseHTTP to allow server side interactions
---        (although 100-continue is unsupported and I haven't checked for standard compliancy).
---      - Pulled the transfer functions from sendHTTP to global scope to allow access by
---        above functions.
---
--- * Changes by Graham Klyne:
---      - export httpVersion
---      - use new URI module (similar to old, but uses revised URI datatype)
---
--- * Changes by Bjorn Bringert:
---
---      - handle URIs with a port number
---      - added debugging toggle
---      - disabled 100-continue transfers to get HTTP\/1.0 compatibility
---      - change 'ioError' to 'throw'
---      - Added simpleHTTP_, which takes a stream argument.
---
--- * Changes from 0.1
---      - change 'openHTTP' to 'openTCP', removed 'closeTCP' - use 'close' from 'Stream' class.
---      - added use of inet_addr to openHTTP, allowing use of IP "dot" notation addresses.
---      - reworking of the use of Stream, including alterations to make 'sendHTTP' generic
---        and the addition of a debugging stream.
---      - simplified error handling.
+-- The actual functionality is implemented by modules in the @Network.HTTP.*@
+-- namespace, allowing the user to either use the default implementation 
+-- by importing @Network.HTTP@ or, for more fine-grained control, selectively
+-- import the modules in @Network.HTTP.*@. To wit, more than one kind of
+-- representation of the bulk data that flows across a HTTP connection is 
+-- supported. Now selectable by importing @Network.HTTP.HandleStream@ (say.)
 -- 
 -- * TODO
 --     - request pipelining
@@ -98,7 +77,8 @@ module Network.HTTP
        , module Network.HTTP.Base
        , module Network.HTTP.Headers
 
-{-
+{- the functionality that Network.HTTP.HandleStream and Network.HTTP.Stream
+   exposes:
        , simpleHTTP     -- :: Request -> IO (Result Response)
        , simpleHTTP_    -- :: Stream s => s -> Request -> IO (Result Response)
        , sendHTTP       -- :: Stream s => s -> Request -> IO (Result Response)
@@ -106,7 +86,6 @@ module Network.HTTP
        , respondHTTP    -- :: Stream s => s -> Response -> IO ()
 -}
        , module Network.TCP
-
        ) where
 
 -----------------------------------------------------------------
