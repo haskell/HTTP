@@ -17,12 +17,14 @@ module Network.HTTP.Base
          httpVersion
 
           -- ** HTTP
-       , Request
-       , Response
+       , Request(..)
+       , Response(..)
        , RequestMethod(..)
        
-       , HTTPRequest(..)
-       , HTTPResponse(..)
+       , Request_String
+       , Response_String
+       , HTTPRequest
+       , HTTPResponse
        
           -- ** URL Encoding
        , urlEncode
@@ -166,13 +168,23 @@ rqMethodMap = [("HEAD",    HEAD),
 	       ("OPTIONS", OPTIONS),
 	       ("TRACE",   TRACE)]
 
-type Request  = HTTPRequest  String
-type Response = HTTPResponse String
+-- 
+-- for backwards-ish compatibility; suggest
+-- migrating to new Req/Resp by adding type param.
+-- 
+type Request_String  = Request String
+type Response_String = Response String
+
+-- Hmm..I really want to use these for the record
+-- type, but it will upset codebases wanting to
+-- migrate (and live with using pre-HTTPbis versions.)
+type HTTPRequest a  = Request  a
+type HTTPResponse a = Response a
 
 -- | An HTTP Request.
 -- The 'Show' instance of this type is used for message serialisation,
 -- which means no body data is output.
-data HTTPRequest a =
+data Request a =
      Request { rqURI       :: URI   -- ^ might need changing in future
                                     --  1) to support '*' uri in OPTIONS request
                                     --  2) transparent support for both relative
@@ -193,7 +205,7 @@ sp   = " "
 -- this show function is used to serialise
 -- a request for the transport link, we send
 -- the body separately where possible.
-instance Show (HTTPRequest a) where
+instance Show (Request a) where
     show (Request u m h _) =
         show m ++ sp ++ alt_uri ++ sp ++ httpVersion ++ crlf
         ++ foldr (++) [] (map show h) ++ crlf
@@ -202,7 +214,7 @@ instance Show (HTTPRequest a) where
                         then u { uriPath = '/' : uriPath u } 
                         else u
 
-instance HasHeaders (HTTPRequest a) where
+instance HasHeaders (Request a) where
     getHeaders = rqHeaders
     setHeaders rq hdrs = rq { rqHeaders=hdrs }
 
@@ -224,7 +236,7 @@ type RequestData   = (RequestMethod,URI,[Header])
 -- which means no body data is output, additionally the output will
 -- show an HTTP version of 1.1 instead of the actual version returned
 -- by a server.
-data HTTPResponse a =
+data Response a =
     Response { rspCode     :: ResponseCode
              , rspReason   :: String
              , rspHeaders  :: [Header]
@@ -233,12 +245,12 @@ data HTTPResponse a =
                    
 -- This is an invalid representation of a received response, 
 -- since we have made the assumption that all responses are HTTP/1.1
-instance Show (HTTPResponse a) where
+instance Show (Response a) where
     show (Response (a,b,c) reason headers _) =
         httpVersion ++ ' ' : map intToDigit [a,b,c] ++ ' ' : reason ++ crlf
         ++ foldr (++) [] (map show headers) ++ crlf
 
-instance HasHeaders (HTTPResponse a) where
+instance HasHeaders (Response a) where
     getHeaders = rspHeaders
     setHeaders rsp hdrs = rsp { rspHeaders=hdrs }
 
@@ -392,7 +404,7 @@ urlEncodeVars [] = []
 
 -- | @getAuth req@ fishes out the authority portion of the URL in a request's @Host@
 -- header.
-getAuth :: Monad m => HTTPRequest ty -> m URIAuthority
+getAuth :: Monad m => Request ty -> m URIAuthority
 getAuth r = 
    -- ToDo: verify that Network.URI functionality doesn't take care of this (now.)
   case parseURIAuthority auth of
@@ -414,8 +426,8 @@ getAuth r =
   -- the Host header if there is one, otherwise from the request-URI.
   -- Then we make the request-URI an abs_path and make sure that there
   -- is a Host header.
-normalizeRequestURI :: URIAuthority -> HTTPRequest ty -> HTTPRequest ty
-normalizeRequestURI URIAuthority{host=h} r = 
+normalizeRequestURI :: {-URI-}String -> Request ty -> Request ty
+normalizeRequestURI h r = 
   replaceHeader HdrConnection "close" $
   insertHeaderIfMissing HdrHost h $
     r { rqURI = (rqURI r){ uriScheme = ""
@@ -423,7 +435,7 @@ normalizeRequestURI URIAuthority{host=h} r =
 			 }}
 
 -- Adds a Host header if one is NOT ALREADY PRESENT
-normalizeHostHeader :: HTTPRequest ty -> HTTPRequest ty
+normalizeHostHeader :: Request ty -> Request ty
 normalizeHostHeader rq = 
   insertHeaderIfMissing HdrHost
                         (uriToAuthorityString $ rqURI rq)

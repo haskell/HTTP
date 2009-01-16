@@ -60,7 +60,6 @@ module Network.HTTP.Headers
    ) where
 
 import Data.Char (toLower)
-import Data.Either ( rights )
 import Network.Stream (Result, failParse)
 import Network.HTTP.Utils ( trim, split, crlf )
 
@@ -270,7 +269,7 @@ parseHeader str =
     
 parseHeaders :: [String] -> Result [Header]
 parseHeaders =
-   catRslts . map (parseHeader . clean) . joinExtended ""
+   catRslts [] . map (parseHeader . clean) . joinExtended ""
    where
         -- Joins consecutive lines where the second line
         -- begins with ' ' or '\t'.
@@ -289,5 +288,9 @@ parseHeaders =
         -- tolerant of errors?  should parse
         -- errors here be reported or ignored?
         -- currently ignored.
-        catRslts :: [Result a] -> Result [a]
-	catRslts rs = Right (rights rs)
+        catRslts :: [a] -> [Result a] -> Result [a]
+        catRslts list (h:t) = 
+            case h of
+                Left _ -> catRslts list t
+                Right v -> catRslts (v:list) t
+        catRslts list [] = Right $ reverse list            

@@ -12,13 +12,13 @@
 --
 -----------------------------------------------------------------------------
 module Network.HTTP.HandleStream 
-       ( simpleHTTP     -- :: HTTPRequest ty -> IO (Result (HTTPResponse ty))
-       , simpleHTTP_    -- :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
-       , sendHTTP       -- :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTResponse ty))
-       , receiveHTTP    -- :: HStream ty => HandleStream ty -> IO (Result (HTTPRequest ty))
-       , respondHTTP    -- :: HStream ty => HandleStream ty -> HTTPResponse ty -> IO ()
+       ( simpleHTTP     -- :: Request ty -> IO (Result (Response ty))
+       , simpleHTTP_    -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+       , sendHTTP       -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+       , receiveHTTP    -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
+       , respondHTTP    -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
        
-       , simpleHTTP_debug -- :: FilePath -> HTTPRequest DebugString -> IO (HTTPResponse DebugString)
+       , simpleHTTP_debug -- :: FilePath -> Request DebugString -> IO (Response DebugString)
        ) where
 
 -----------------------------------------------------------------
@@ -48,13 +48,13 @@ import Control.Monad (when)
 --              requires a Host header.
 --  Connection  Where no allowance is made for persistant connections
 --              the Connection header will be set to "close"
-simpleHTTP :: HStream ty => HTTPRequest ty -> IO (Result (HTTPResponse ty))
+simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do 
   auth <- getAuth r
   c <- openStream (host auth) (fromMaybe 80 (port auth))
   simpleHTTP_ c r
 
-simpleHTTP_debug :: HStream ty => FilePath -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
+simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
 simpleHTTP_debug httpLogFile r = do 
   auth <- getAuth r
   c0 <- openStream (host auth) (fromMaybe 80 (port auth))
@@ -62,14 +62,14 @@ simpleHTTP_debug httpLogFile r = do
   simpleHTTP_ c r
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
-simpleHTTP_ :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
+simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 simpleHTTP_ s r = do 
   auth <- getAuth r
-  let r' = normalizeRequestURI auth r 
+  let r' = normalizeRequestURI (host auth) r 
   rsp <- sendHTTP s r'
   return rsp
 
-sendHTTP :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
+sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 sendHTTP conn rq = do
   let a_rq = normalizeHostHeader rq
   rsp <- catchIO (sendMain conn a_rq)
@@ -93,8 +93,8 @@ sendHTTP conn rq = do
 -- Since we would wait forever, I have disabled use of 100-continue for now.
 sendMain :: HStream ty
          => HandleStream ty
-	 -> HTTPRequest ty
-	 -> IO (Result (HTTPResponse ty))
+	 -> Request ty
+	 -> IO (Result (Response ty))
 sendMain conn rqst = do
       --let str = if null (rqBody rqst)
       --              then show rqst
@@ -114,8 +114,8 @@ switchResponse :: HStream ty
 	       -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
-               -> HTTPRequest ty
-               -> IO (Result (HTTPResponse ty))
+               -> Request ty
+               -> IO (Result (Response ty))
 switchResponse _ _ _ (Left e) _ = return (Left e)
                 -- retry on connreset?
                 -- if we attempt to use the same socket then there is an excellent
@@ -169,7 +169,7 @@ getResponseHead conn =
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
 --   for server side interactions.
-receiveHTTP :: HStream bufTy => HandleStream bufTy -> IO (Result (HTTPRequest bufTy))
+receiveHTTP :: HStream bufTy => HandleStream bufTy -> IO (Result (Request bufTy))
 receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
   where
     -- reads and parses headers
@@ -198,7 +198,7 @@ receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
-respondHTTP :: HStream ty => HandleStream ty -> HTTPResponse ty -> IO ()
+respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
 respondHTTP conn rsp = do 
   writeBlock conn (buf_fromStr bufferOps $ show rsp)
    -- write body immediately, don't wait for 100 CONTINUE
