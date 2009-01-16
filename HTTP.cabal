@@ -16,9 +16,11 @@ Copyright:
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Sigbjorn Finne <sigbjorn.finne@gmail.com>
 Homepage: http://www.haskell.org/http/
+Category: Network
+Synopsis: A library for client-side HTTP
 Description: 
 
- A library for client-side HTTP, version 2. Rewrite of existing HTTP
+ A library for client-side HTTP, version 4. Rewrite of existing HTTP
  package to allow overloaded representation of HTTP request bodies
  and responses. Provides three such instances: lazy and strict 'ByteString',
  along with the good old @String@.
