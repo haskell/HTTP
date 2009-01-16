@@ -96,11 +96,11 @@
 module Network.HTTP.Stream 
        ( module Network.Stream
 
-       , simpleHTTP     -- :: Request -> IO (Result Response)
-       , simpleHTTP_    -- :: Stream s => s -> Request -> IO (Result Response)
-       , sendHTTP       -- :: Stream s => s -> Request -> IO (Result Response)
-       , receiveHTTP    -- :: Stream s => s -> IO (Result Request)
-       , respondHTTP    -- :: Stream s => s -> Response -> IO ()
+       , simpleHTTP     -- :: Request_String -> IO (Result Response_String)
+       , simpleHTTP_    -- :: Stream s => s -> Request_String -> IO (Result Response_String)
+       , sendHTTP       -- :: Stream s => s -> Request_String -> IO (Result Response_String)
+       , receiveHTTP    -- :: Stream s => s -> IO (Result Request_String)
+       , respondHTTP    -- :: Stream s => s -> Response_String -> IO ()
        
        ) where
 
@@ -141,7 +141,7 @@ httpLogFile = "http-debug.log"
 --              requires a Host header.
 --  Connection  Where no allowance is made for persistant connections
 --              the Connection header will be set to "close"
-simpleHTTP :: Request -> IO (Result Response)
+simpleHTTP :: Request_String -> IO (Result Response_String)
 simpleHTTP r = 
     do 
        auth <- getAuth r
@@ -149,11 +149,11 @@ simpleHTTP r =
        simpleHTTP_ c r
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
-simpleHTTP_ :: Stream s => s -> Request -> IO (Result Response)
+simpleHTTP_ :: Stream s => s -> Request_String -> IO (Result Response_String)
 simpleHTTP_ s r =
     do 
        auth <- getAuth r
-       let r' = normalizeRequestURI auth r 
+       let r' = normalizeRequestURI (host auth) r 
        rsp <- if debug then do
 	        s' <- debugStream httpLogFile s
 	        sendHTTP s' r'
@@ -163,7 +163,7 @@ simpleHTTP_ s r =
        --; close s 
        return rsp
 
-sendHTTP :: Stream s => s -> Request -> IO (Result Response)
+sendHTTP :: Stream s => s -> Request_String -> IO (Result Response_String)
 sendHTTP conn rq = 
     do { let a_rq = normalizeHostHeader rq
        ; rsp <- catchIO (main a_rq)
@@ -186,7 +186,7 @@ sendHTTP conn rq =
 -- for an indefinite period before sending the request body.'
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
-        main :: Request -> IO (Result Response)
+        main :: Request_String -> IO (Result Response_String)
         main rqst =
             do 
 	       --let str = if null (rqBody rqst)
@@ -211,8 +211,8 @@ sendHTTP conn rq =
         switchResponse :: Bool {- allow retry? -}
                        -> Bool {- is body sent? -}
                        -> Result ResponseData
-                       -> Request
-                       -> IO (Result Response)
+                       -> Request_String
+                       -> IO (Result Response_String)
             
         switchResponse _ _ (Left e) _ = return (Left e)
                 -- retry on connreset?
@@ -271,7 +271,7 @@ sendHTTP conn rq =
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
 --   for server side interactions.
-receiveHTTP :: Stream s => s -> IO (Result Request)
+receiveHTTP :: Stream s => s -> IO (Result Request_String)
 receiveHTTP conn = getRequestHead >>= processRequest
     where
         -- reads and parses headers
@@ -303,7 +303,7 @@ receiveHTTP conn = getRequestHead >>= processRequest
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
-respondHTTP :: Stream s => s -> Response -> IO ()
+respondHTTP :: Stream s => s -> Response_String -> IO ()
 respondHTTP conn rsp = do writeBlock conn (show rsp)
                           -- write body immediately, don't wait for 100 CONTINUE
                           writeBlock conn (rspBody rsp)

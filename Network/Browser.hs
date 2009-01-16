@@ -72,6 +72,7 @@ module Network.Browser (
     ioAction,           -- :: IO a -> BrowserAction a
 
     defaultGETRequest,
+    defaultGETRequest_,
     formToRequest,
     uriDefaultTo,
     uriTrimHost
@@ -86,7 +87,7 @@ import Network.StreamDebugger (debugByteStream)
 import Network.HTTP
 import qualified Network.HTTP.MD5 as MD5 (hash)
 import qualified Network.HTTP.Base64 as Base64 (encode)
-import Network.Stream ( ConnError(..) )
+import Network.Stream ( ConnError(..), Result )
 import Network.BufferType
 
 import Network.HTTP.Utils ( trim, splitBy )
@@ -477,7 +478,7 @@ pickChallenge = listToMaybe
 
 
 -- | Retrieve a likely looking authority for a Request.
-anticipateChallenge :: HTTPRequest ty -> BrowserAction t (Maybe Authority)
+anticipateChallenge :: Request ty -> BrowserAction t (Maybe Authority)
 anticipateChallenge rq =
     let uri = rqURI rq in
     do { authlist <- getAuthFor (uriAuthToString $ reqURIAuth rq) (uriPath uri)
@@ -529,7 +530,7 @@ challengeToAuthority uri ch =
 -- the context of a specific request.  If a client nonce
 -- was to be used then this function might need to
 -- be of type ... -> BrowserAction String
-withAuthority :: Authority -> HTTPRequest ty -> String
+withAuthority :: Authority -> Request ty -> String
 withAuthority a rq = case a of
         AuthBasic{}  -> "Basic " ++ base64encode (auUsername a ++ ':' : auPassword a)
         AuthDigest{} ->
@@ -721,8 +722,8 @@ maxDenies = 2
 
 -- Surely the most important bit:
 request :: HStream ty
-        => HTTPRequest ty
-	-> BrowserAction (HandleStream ty) (URI,HTTPResponse ty)
+        => Request ty
+	-> BrowserAction (HandleStream ty) (URI,Response ty)
 request req = request' nullVal initialState req
   where
    initialState = nullRequestState
@@ -731,8 +732,8 @@ request req = request' nullVal initialState req
 request' :: HStream ty
          => ty
 	 -> RequestState
-	 -> HTTPRequest ty
-	 -> BrowserAction (HandleStream ty) (URI,HTTPResponse ty)
+	 -> Request ty
+	 -> BrowserAction (HandleStream ty) (URI,Response ty)
 request' nullVal rqState rq = do
      -- add cookies to request
    let uri = rqURI rq
@@ -751,14 +752,16 @@ request' nullVal rqState rq = do
          Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
    let rq'' = insertHeaders (map cookieToHeader cookies) rq'
    p <- getProxy
-
-   out ("Sending:\n" ++ show rq'') 
+   let rq_to_go = normalizeRequestURI (uriToAuthorityString $ rqURI rq'') rq''
+   out ("Sending:\n" ++ show rq_to_go) 
    e_rsp <- 
      case p of
-       NoProxy       -> dorequest (reqURIAuth rq'') rq''
+       NoProxy       -> dorequest (reqURIAuth rq'') rq_to_go
        Proxy str ath -> do
-          let rq''' = maybe rq'' 
-	                   (\x -> insertHeader HdrProxyAuthorization (withAuthority x rq'') rq'')
+            -- note: don't split off the authority for proxies..
+          let rq_to_go' = maybe rq''
+	                    (\x -> insertHeader HdrProxyAuthorization
+			                        (withAuthority x rq'') rq'')
 		           ath
           let notURI 
 	       | null pt || null hst = 
@@ -781,7 +784,7 @@ request' nullVal rqState rq = do
                       (parseURI str)
 
           out $ "proxy uri host: " ++ uriRegName proxyURIAuth ++ ", port: " ++ uriPort proxyURIAuth
-          dorequest proxyURIAuth rq'''
+          dorequest proxyURIAuth rq_to_go'
    case e_rsp of
     Left v 
      | (reqRetries rqState < maxRetries) && (v == ErrorReset || v == ErrorClosed) ->
@@ -922,21 +925,26 @@ spaceappend x y = x ++ ' ' : y
 
 
 dorequest :: (HStream ty)
-          => URIAuth -> HTTPRequest ty -> BrowserAction (HandleStream ty) (Either ConnError (HTTPResponse ty))
+          => URIAuth
+	  -> Request ty
+	  -> BrowserAction (HandleStream ty)
+	                   (Result (Response ty))
 dorequest hst rqst = 
             do { pool <- getBS bsConnectionPool
                ; conn <- ioAction $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
                ; rsp <- case conn of
                     [] -> do { out ("Creating new connection to " ++ uriAuthToString hst)
                              ; let aport = case uriPort hst of
-                                            (':':s) -> read s
+                                            (':':s) -> 
+					      case reads s of { ((v,_):_) -> v ; _ -> 80}
                                             _       -> 80
                              ; c <- ioAction $ openStream (uriRegName hst) aport
-                             ; let pool' = if length pool > 5
-                                           then init pool
-                                           else pool
-                             ; when (length pool > 5)
+			     ; let len_pool = length pool
+                             ; when (len_pool > 5)
                                     (ioAction $ close (last pool))
+                             ; let pool' 
+			            | len_pool > 5 = init pool
+				    | otherwise    = pool
                              ; alterBS (\b -> b { bsConnectionPool=c:pool' })
                              ; dorequest2 c rqst
                              }
@@ -957,7 +965,7 @@ dorequest hst rqst =
 	   c' <- debugByteStream (f++'-': uriAuthToString hst) c
 	   sendHTTP c' r
  
-reqURIAuth :: HTTPRequest ty -> URIAuth
+reqURIAuth :: Request ty -> URIAuth
 reqURIAuth req = 
   case uriAuthority (rqURI req) of
     Just ua -> ua
@@ -973,17 +981,28 @@ reqURIAuth req =
 ------------------------------------------------------------------
 
 libUA :: String
-libUA = "haskell-libwww/0.1"
+libUA = "hs-HTTP/4.0.3"
 
-defaultGETRequest :: URI -> Request
-defaultGETRequest uri = 
+defaultGETRequest :: URI -> Request_String
+defaultGETRequest uri = defaultGETRequest_ uri
+
+
+defaultGETRequest_ :: BufferType a => URI -> Request a
+defaultGETRequest_ uri = req
+ where
+  empty = buf_empty (toBufOps req)
+  
+  req = 
     Request { rqURI=uri
-            , rqBody=""
+            , rqBody=empty
             , rqHeaders=[ Header HdrContentLength "0"
                         , Header HdrUserAgent libUA
                         ]
             , rqMethod=GET
             }
+
+  toBufOps :: BufferType a => Request a -> BufferOp a
+  toBufOps _ = bufferOps
 
 -- This form junk is completely untested...
 
@@ -992,7 +1011,7 @@ type FormVar = (String,String)
 data Form = Form RequestMethod URI [FormVar]
 
 
-formToRequest :: Form -> Request
+formToRequest :: Form -> Request_String
 formToRequest (Form m u vs) =
     let enc = urlEncodeVars vs
     in case m of
