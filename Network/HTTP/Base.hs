@@ -426,9 +426,9 @@ getAuth r =
   -- the Host header if there is one, otherwise from the request-URI.
   -- Then we make the request-URI an abs_path and make sure that there
   -- is a Host header.
-normalizeRequestURI :: {-URI-}String -> Request ty -> Request ty
-normalizeRequestURI h r = 
-  replaceHeader HdrConnection "close" $
+normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
+normalizeRequestURI doClose h r = 
+  (if doClose then replaceHeader HdrConnection "close" else id) $
   insertHeaderIfMissing HdrHost h $
     r { rqURI = (rqURI r){ uriScheme = ""
                          , uriAuthority = Nothing
