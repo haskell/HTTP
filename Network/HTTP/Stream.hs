@@ -153,7 +153,7 @@ simpleHTTP_ :: Stream s => s -> Request_String -> IO (Result Response_String)
 simpleHTTP_ s r =
     do 
        auth <- getAuth r
-       let r' = normalizeRequestURI (host auth) r 
+       let r' = normalizeRequestURI True{-do close-} (host auth) r 
        rsp <- if debug then do
 	        s' <- debugStream httpLogFile s
 	        sendHTTP s' r'

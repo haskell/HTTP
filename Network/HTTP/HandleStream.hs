@@ -65,7 +65,7 @@ simpleHTTP_debug httpLogFile r = do
 simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 simpleHTTP_ s r = do 
   auth <- getAuth r
-  let r' = normalizeRequestURI (host auth) r 
+  let r' = normalizeRequestURI True{-do close-} (host auth) r 
   rsp <- sendHTTP s r'
   return rsp
 

@@ -752,7 +752,9 @@ request' nullVal rqState rq = do
          Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
    let rq'' = insertHeaders (map cookieToHeader cookies) rq'
    p <- getProxy
-   let rq_to_go = normalizeRequestURI (uriToAuthorityString $ rqURI rq'') rq''
+   let rq_to_go = normalizeRequestURI False{-no close-}
+                                      (uriToAuthorityString $ rqURI rq'')
+				      rq''
    out ("Sending:\n" ++ show rq_to_go) 
    e_rsp <- 
      case p of
