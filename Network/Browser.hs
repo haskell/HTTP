@@ -4,7 +4,7 @@
 -- Copyright   :  (c) Warrick Gray 2002
 -- License     :  BSD
 -- 
--- Maintainer  :  bjorn@bringert.net
+-- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
@@ -60,8 +60,14 @@ module Network.Browser (
     setCookies,
     addCookie,
 
-    setErrHandler,
-    setOutHandler,
+    setErrHandler,         -- :: (String -> IO ()) -> BrowserAction t ()
+    setOutHandler,         -- :: (String -> IO ()) -> BrowserAction t ()
+    
+    setEventHandler,         -- :: (BrowserEvent t -> BrowserAction t ()) -> BrowserAction t ()
+    
+    BrowserEvent(..),
+    BrowserEventType(..),
+    RequestID,
 
     setProxy,
 
@@ -104,6 +110,8 @@ import qualified System.IO
    ( hSetBuffering, hPutStr, stdout, stdin, hGetChar
    , BufferMode(NoBuffering, LineBuffering)
    )
+import System.Time ( ClockTime, getClockTime )
+
 import Data.Word (Word8)
 
 type Octet = Word8
@@ -114,7 +122,7 @@ type Octet = Word8
 
 word, quotedstring :: Parser String
 quotedstring =
-    do { char '"' 
+    do { char '"'  -- "
        ; str <- many (satisfy $ not . (=='"'))
        ; char '"'
        ; return str
@@ -606,6 +614,8 @@ data BrowserState connection
       , bsConnectionPool :: [connection]
       , bsProxy          :: Proxy
       , bsDebug          :: Maybe String
+      , bsEvent          :: Maybe (BrowserEvent connection -> BrowserAction connection ())
+      , bsRequestID      :: RequestID
       }
 
 instance Show (BrowserState t) where
@@ -647,6 +657,8 @@ defaultBrowserState = res
      , bsConnectionPool   = []
      , bsProxy            = NoProxy
      , bsDebug            = Nothing 
+     , bsEvent            = Nothing
+     , bsRequestID        = 0
      }
 
 -- | Alter browser state
@@ -661,6 +673,16 @@ getBrowserState = getBS id
 
 withBrowserState :: BrowserState t -> BrowserAction t a -> BrowserAction t a
 withBrowserState bs act = BA $ \ _ -> lift act bs
+
+newRequest :: BrowserAction t a -> BrowserAction t a
+newRequest act = do
+  let updReqID st = 
+       let 
+        rid = 1 + bsRequestID st
+       in
+       rid `seq` st{bsRequestID=rid}
+  alterBS updReqID
+  act
 
 -- | Do an io action
 ioAction :: IO a -> BrowserAction t a
@@ -705,6 +727,8 @@ data RequestState
       , reqStopOnDeny :: Bool  -- ^ whether to pre-empt 401 response
       }
 
+type RequestID = Int -- yeah, it will wrap around.
+
 nullRequestState :: RequestState
 nullRequestState = RequestState
       { reqDenies     = 0
@@ -712,6 +736,53 @@ nullRequestState = RequestState
       , reqRetries    = 0
       , reqStopOnDeny = True
       }
+
+-- | 'BrowserEvent' is the event record type that a user-defined handler, set
+-- via 'setEventHandler', will be passed. It indicates various state changes
+-- in the processing of a given Request ID.
+data BrowserEvent ty
+ = BrowserEvent
+      { browserTimestamp  :: ClockTime
+      , browserRequestID  :: RequestID
+      , browserRequestURI :: {-URI-}String
+      , browserEventType  :: BrowserEventType ty
+      }
+
+-- | 'BrowserEventType' is the enumerated list of events that the browser
+-- internals will report to a user-defined event handler.
+data BrowserEventType ty
+ = OpenConnection
+ | ReuseConnection
+ | RequestSent
+{- not yet, you will have to determine these via the ResponseEnd event.
+ | Redirect
+ | AuthChallenge
+ | AuthResponse
+-}
+ | ResponseEnd ResponseData
+ | ResponseFinish
+ 
+setEventHandler :: (BrowserEvent ty -> BrowserAction ty ()) -> BrowserAction ty ()
+setEventHandler h = alterBS (\b -> b { bsEvent=Just h})
+
+buildBrowserEvent :: BrowserEventType t -> {-URI-}String -> RequestID -> IO (BrowserEvent t)
+buildBrowserEvent bt uri reqID = do
+  ct <- getClockTime
+  return BrowserEvent 
+      { browserTimestamp  = ct
+      , browserRequestID  = reqID
+      , browserRequestURI = uri
+      , browserEventType  = bt
+      }
+
+reportEvent :: BrowserEventType t -> {-URI-}String -> BrowserAction t ()
+reportEvent bt uri = do
+  st <- getBrowserState
+  case bsEvent st of
+    Nothing -> return ()
+    Just evH -> do
+       evt <- ioAction $ buildBrowserEvent bt uri (bsRequestID st)
+       evH evt -- if it fails, we fail.
 
 -- limits we are willing to not go beyond for method retries and number of auth deny responses.
 maxRetries :: Int
@@ -724,7 +795,10 @@ maxDenies = 2
 request :: HStream ty
         => Request ty
 	-> BrowserAction (HandleStream ty) (URI,Response ty)
-request req = request' nullVal initialState req
+request req = newRequest $ do
+                 res <- request' nullVal initialState req
+		 reportEvent ResponseFinish (show (rqURI req))
+		 return res
   where
    initialState = nullRequestState
    nullVal      = buf_empty bufferOps
@@ -940,6 +1014,7 @@ dorequest hst rqst =
                                             (':':s) -> 
 					      case reads s of { ((v,_):_) -> v ; _ -> 80}
                                             _       -> 80
+		             ; reportEvent OpenConnection (show (rqURI rqst))
                              ; c <- ioAction $ openStream (uriRegName hst) aport
 			     ; let len_pool = length pool
                              ; when (len_pool > 5)
@@ -952,21 +1027,32 @@ dorequest hst rqst =
                              }
                     (c:_) ->
                         do { out ("Recovering connection to " ++ uriAuthToString hst)
+			   ; reportEvent ReuseConnection (show (rqURI rqst))
                            ; dorequest2 c rqst
                            }
                ; 
+	       ; case rsp of { Right (Response a b c _) -> reportEvent (ResponseEnd (a,b,c)) (show (rqURI rqst)) ; _ -> return ()}
                ; return rsp
                }
   where
    dorequest2 c r = do
      dbg <- getBS bsDebug
+     st  <- getBrowserState
+     onSendComplete <- 
+        case bsEvent st of
+	  Nothing  -> return (return ())
+	  Just evh -> return $ do
+	               x <- buildBrowserEvent RequestSent (show (rqURI r)) (bsRequestID st)
+		       (lift (evh x)) st
+		       return ()
      ioAction $ 
        case dbg of
-         Nothing -> sendHTTP c r
+         Nothing -> sendHTTP_notify c r onSendComplete
          Just f  -> do
 	   c' <- debugByteStream (f++'-': uriAuthToString hst) c
-	   sendHTTP c' r
- 
+	   sendHTTP_notify c' r onSendComplete
+
+
 reqURIAuth :: Request ty -> URIAuth
 reqURIAuth req = 
   case uriAuthority (rqURI req) of
