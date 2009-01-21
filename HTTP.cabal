@@ -1,5 +1,5 @@
 Name: HTTP
-Version: 4000.0.3
+Version: 4000.0.4
 Cabal-Version: >= 1.2
 Build-type: Simple
 License: BSD3
@@ -15,7 +15,7 @@ Copyright:
   Copyright 2008-2009 Sigbjorn Finne
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Sigbjorn Finne <sigbjorn.finne@gmail.com>
-Homepage: http://www.haskell.org/http/
+Homepage: http://projects.haskell.org/http/
 Category: Network
 Synopsis: A library for client-side HTTP
 Description: 
@@ -28,7 +28,7 @@ Description:
  Inspired in part by Jonas Aadahl et al's work on ByteString'ifying HTTP
  a couple of years ago.
  .
- Git repository available at <http://code.galois.com/HTTPbis.git>
+ Git repository available at <git://code.galois.com/HTTPbis.git>
 
 Flag old-base
   description: Old, monolithic base
@@ -60,4 +60,4 @@ Library
   else
     Build-depends: base >= 3
     
-  Build-depends: array
+  Build-depends: array, old-time
