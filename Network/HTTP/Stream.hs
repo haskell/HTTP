@@ -96,11 +96,12 @@
 module Network.HTTP.Stream 
        ( module Network.Stream
 
-       , simpleHTTP     -- :: Request_String -> IO (Result Response_String)
-       , simpleHTTP_    -- :: Stream s => s -> Request_String -> IO (Result Response_String)
-       , sendHTTP       -- :: Stream s => s -> Request_String -> IO (Result Response_String)
-       , receiveHTTP    -- :: Stream s => s -> IO (Result Request_String)
-       , respondHTTP    -- :: Stream s => s -> Response_String -> IO ()
+       , simpleHTTP      -- :: Request_String -> IO (Result Response_String)
+       , simpleHTTP_     -- :: Stream s => s -> Request_String -> IO (Result Response_String)
+       , sendHTTP        -- :: Stream s => s -> Request_String -> IO (Result Response_String)
+       , sendHTTP_notify -- :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+       , receiveHTTP     -- :: Stream s => s -> IO (Result Request_String)
+       , respondHTTP     -- :: Stream s => s -> Response_String -> IO ()
        
        ) where
 
@@ -166,7 +167,7 @@ simpleHTTP_ s r =
 sendHTTP :: Stream s => s -> Request_String -> IO (Result Response_String)
 sendHTTP conn rq = 
     do { let a_rq = normalizeHostHeader rq
-       ; rsp <- catchIO (main a_rq)
+       ; rsp <- catchIO (sendMain conn a_rq (return ()))
                         (\e -> do { close conn; ioError e })
        ; let fn list = when (or $ map findConnClose list)
                             (close conn)
@@ -175,7 +176,20 @@ sendHTTP conn rq =
                 rsp
        ; return rsp
        }
-    where       
+
+sendHTTP_notify :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+sendHTTP_notify conn rq onSendComplete = 
+    do { let a_rq = normalizeHostHeader rq
+       ; rsp <- catchIO (sendMain conn a_rq onSendComplete)
+                        (\e -> do { close conn; ioError e })
+       ; let fn list = when (or $ map findConnClose list)
+                            (close conn)
+       ; either (\_ -> fn [rqHeaders rq])
+                (\r -> fn [rqHeaders rq,rspHeaders r])
+                rsp
+       ; return rsp
+       }
+
 -- From RFC 2616, section 8.2.3:
 -- 'Because of the presence of older implementations, the protocol allows
 -- ambiguous situations in which a client may send "Expect: 100-
@@ -186,40 +200,39 @@ sendHTTP conn rq =
 -- for an indefinite period before sending the request body.'
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
-        main :: Request_String -> IO (Result Response_String)
-        main rqst =
-            do 
-	       --let str = if null (rqBody rqst)
-               --              then show rqst
-               --              else show (insertHeader HdrExpect "100-continue" rqst)
-               writeBlock conn (show rqst)
-	       -- write body immediately, don't wait for 100 CONTINUE
-	       writeBlock conn (rqBody rqst)
-               rsp <- getResponseHead               
-               switchResponse True False rsp rqst
+sendMain :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+sendMain conn rqst onSendComplete =  do 
+   --let str = if null (rqBody rqst)
+   --              then show rqst
+   --              else show (insertHeader HdrExpect "100-continue" rqst)
+  writeBlock conn (show rqst)
+  -- write body immediately, don't wait for 100 CONTINUE
+  writeBlock conn (rqBody rqst)
+  onSendComplete
+  rsp <- getResponseHead conn
+  switchResponse conn True False rsp rqst
         
-        -- reads and parses headers
-        getResponseHead :: IO (Result ResponseData)
-        getResponseHead =
-            do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
-               ; return $ lor >>= parseResponseHead
-               }
+-- reads and parses headers
+getResponseHead :: Stream s => s -> IO (Result ResponseData)
+getResponseHead conn = do
+  lor <- readTillEmpty1 stringBufferOp (readLine conn)
+  return $ lor >>= parseResponseHead
 
-        -- Hmmm, this could go bad if we keep getting "100 Continue"
-        -- responses...  Except this should never happen according
-        -- to the RFC.
-        switchResponse :: Bool {- allow retry? -}
-                       -> Bool {- is body sent? -}
-                       -> Result ResponseData
-                       -> Request_String
-                       -> IO (Result Response_String)
-            
-        switchResponse _ _ (Left e) _ = return (Left e)
-                -- retry on connreset?
-                -- if we attempt to use the same socket then there is an excellent
-                -- chance that the socket is not in a completely closed state.
-
-        switchResponse allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
+-- Hmmm, this could go bad if we keep getting "100 Continue"
+-- responses...  Except this should never happen according
+-- to the RFC.
+switchResponse :: Stream s
+               => s
+	       -> Bool {- allow retry? -}
+               -> Bool {- is body sent? -}
+               -> Result ResponseData
+               -> Request_String
+               -> IO (Result Response_String)
+switchResponse _ _ _ (Left e) _ = return (Left e)
+        -- retry on connreset?
+        -- if we attempt to use the same socket then there is an excellent
+        -- chance that the socket is not in a completely closed state.
+switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
             case matchResponse (rqMethod rqst) cd of
                 Continue
                     | not bdy_sent -> {- Time to send the body -}
@@ -227,21 +240,21 @@ sendHTTP conn rq =
                            ; case val of
                                 Left e -> return (Left e)
                                 Right _ ->
-                                    do { rsp <- getResponseHead
-                                       ; switchResponse allow_retry True rsp rqst
+                                    do { rsp <- getResponseHead conn
+                                       ; switchResponse conn allow_retry True rsp rqst
                                        }
                            }
                     | otherwise -> {- keep waiting -}
-                        do { rsp <- getResponseHead
-                           ; switchResponse allow_retry bdy_sent rsp rqst                           
+                        do { rsp <- getResponseHead conn
+                           ; switchResponse conn allow_retry bdy_sent rsp rqst                           
                            }
 
                 Retry -> {- Request with "Expect" header failed.
                                 Trouble is the request contains Expects
                                 other than "100-Continue" -}
                     do { writeBlock conn (show rqst ++ rqBody rqst)
-                       ; rsp <- getResponseHead
-                       ; switchResponse False bdy_sent rsp rqst
+                       ; rsp <- getResponseHead conn
+                       ; switchResponse conn False bdy_sent rsp rqst
                        }   
                      
                 Done ->

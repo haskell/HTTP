@@ -79,11 +79,12 @@ module Network.HTTP
 
 {- the functionality that Network.HTTP.HandleStream and Network.HTTP.Stream
    exposes:
-       , simpleHTTP     -- :: Request -> IO (Result Response)
-       , simpleHTTP_    -- :: Stream s => s -> Request -> IO (Result Response)
-       , sendHTTP       -- :: Stream s => s -> Request -> IO (Result Response)
-       , receiveHTTP    -- :: Stream s => s -> IO (Result Request)
-       , respondHTTP    -- :: Stream s => s -> Response -> IO ()
+       , simpleHTTP      -- :: Request -> IO (Result Response)
+       , simpleHTTP_     -- :: Stream s => s -> Request -> IO (Result Response)
+       , sendHTTP        -- :: Stream s => s -> Request -> IO (Result Response)
+       , sendHTTP_notify -- :: Stream s => s -> Request -> IO () -> IO (Result Response)
+       , receiveHTTP     -- :: Stream s => s -> IO (Result Request)
+       , respondHTTP     -- :: Stream s => s -> Response -> IO ()
 -}
        , module Network.TCP
        ) where
