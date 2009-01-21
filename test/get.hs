@@ -5,6 +5,7 @@
 
 import Data.Char (intToDigit)
 import Network.HTTP
+import Network.Stream
 import Network.URI
 import System.Environment (getArgs)
 import System.Exit (exitFailure)
@@ -38,7 +39,7 @@ get uri =
     showRspCode (a,b,c) = map intToDigit [a,b,c]
     httpError resp = showRspCode (rspCode resp) ++ " " ++ rspReason resp
 
-request :: URI -> Request
+request :: URI -> Request_String
 request uri = Request{ rqURI = uri,
                        rqMethod = GET,
                        rqHeaders = [],
