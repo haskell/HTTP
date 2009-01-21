@@ -12,11 +12,12 @@
 --
 -----------------------------------------------------------------------------
 module Network.HTTP.HandleStream 
-       ( simpleHTTP     -- :: Request ty -> IO (Result (Response ty))
-       , simpleHTTP_    -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-       , sendHTTP       -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-       , receiveHTTP    -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
-       , respondHTTP    -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
+       ( simpleHTTP      -- :: Request ty -> IO (Result (Response ty))
+       , simpleHTTP_     -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+       , sendHTTP        -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+       , sendHTTP_notify -- :: HStream ty => HandleStream ty -> Request ty -> IO () -> IO (Result (Response ty))
+       , receiveHTTP     -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
+       , respondHTTP     -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
        
        , simpleHTTP_debug -- :: FilePath -> Request DebugString -> IO (Response DebugString)
        ) where
@@ -72,7 +73,7 @@ simpleHTTP_ s r = do
 sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 sendHTTP conn rq = do
   let a_rq = normalizeHostHeader rq
-  rsp <- catchIO (sendMain conn a_rq)
+  rsp <- catchIO (sendMain conn a_rq (return ()))
                  (\e -> do { close conn; ioError e })
   let fn list = when (or $ map findConnClose list)
                      (close conn)
@@ -80,6 +81,24 @@ sendHTTP conn rq = do
          (\r -> fn [rqHeaders rq,rspHeaders r])
          rsp
   return rsp
+
+sendHTTP_notify :: HStream ty
+                => HandleStream ty
+		-> Request ty
+		-> IO ()
+		-> IO (Result (Response ty))
+sendHTTP_notify conn rq onSendComplete = do
+  let a_rq = normalizeHostHeader rq
+  rsp <- catchIO (sendMain conn a_rq onSendComplete)
+                 (\e -> do { close conn; ioError e })
+  let fn list = when (or $ map findConnClose list)
+                     (close conn)
+  either (\_ -> fn [rqHeaders rq])
+         (\r -> fn [rqHeaders rq,rspHeaders r])
+         rsp
+  return rsp
+
+
 
 -- From RFC 2616, section 8.2.3:
 -- 'Because of the presence of older implementations, the protocol allows
@@ -94,14 +113,16 @@ sendHTTP conn rq = do
 sendMain :: HStream ty
          => HandleStream ty
 	 -> Request ty
+	 -> (IO ())
 	 -> IO (Result (Response ty))
-sendMain conn rqst = do
+sendMain conn rqst onSendComplete = do
       --let str = if null (rqBody rqst)
       --              then show rqst
       --              else show (insertHeader HdrExpect "100-continue" rqst)
   writeBlock conn (buf_fromStr bufferOps $ show rqst)
     -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rqBody rqst)
+  onSendComplete
   rsp <- getResponseHead conn
   switchResponse conn True False rsp rqst
 
