@@ -1,5 +1,5 @@
 Name: HTTP
-Version: 4000.0.4
+Version: 4000.0.5
 Cabal-Version: >= 1.2
 Build-type: Simple
 License: BSD3
@@ -29,6 +29,8 @@ Description:
  a couple of years ago.
  .
  Git repository available at <git://code.galois.com/HTTPbis.git>
+
+Extra-Source-Files: CHANGES
 
 Flag old-base
   description: Old, monolithic base
