@@ -1,0 +1,17 @@
+Version 4004.0.5: release 2009-01-xx; changes from 4004.0.4
+
+ * RequestMethod now supports custom verbs; use the (Custom String) constructor
+ * Beef up Network.HTTP.Base's support for normalizing requests and URIs:
+ 
+    * added splitRequestURI which divides a URI into two; the Authority portion
+      (as a String) and the input URI sans the authority portion. Useful when
+      wanting to split up a request's URI into its Host: and abs_path pieces.
+    * added normalizeRequest :: Bool -> Request ty -> Request ty, which 
+      fixes up a requests URI path and Host: info depending on whether it is
+      destined for a proxy or not (controlled by the Bool.)
+    * moved defaultRequest, defaultRequest_, libUA from Network.Browser
+      to Network.HTTP.Base
+    * added mkRequest :: RequestMethod -> URI -> Bool -> Request ty
+      for constructing normalized&sane Request bases on top of which
+      you can add custom headers, body payload etc.
+
