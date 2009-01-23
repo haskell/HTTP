@@ -52,6 +52,8 @@ module Network.HTTP.Base
        , normalizeRequestURI
        , normalizeHostHeader
        , findConnClose
+       , splitRequestURI
+       , normalizeRequest
 
          -- internal export (for the use by Network.HTTP.{Stream,ByteStream} )
        , linearTransfer
@@ -61,6 +63,11 @@ module Network.HTTP.Base
        , readTillEmpty1
        , readTillEmpty2
        
+       , libUA
+       , defaultGETRequest
+       , defaultGETRequest_
+       , mkRequest
+       
        , catchIO
        , catchIO_
        , responseParseError
@@ -68,7 +75,7 @@ module Network.HTTP.Base
 
 import Network.URI
    ( URI(uriAuthority, uriPath, uriScheme)
-   , URIAuth(uriUserInfo, uriRegName, uriPort)
+   , URIAuth(URIAuth, uriUserInfo, uriRegName, uriPort)
    , parseURIReference
    )
 
@@ -80,7 +87,7 @@ import Data.Maybe    ( listToMaybe )
 import Numeric       ( showHex, readHex )
 
 import Network.Stream
-import Network.BufferType ( BufferOp(..) )
+import Network.BufferType ( BufferOp(..), BufferType(..) )
 import Network.HTTP.Headers
 import Network.HTTP.Utils ( trim )
 
@@ -207,8 +214,6 @@ data Request a =
              , rqBody      :: a
              }
 
-
-
 crlf, sp :: String
 crlf = "\r\n"
 sp   = " "
@@ -265,6 +270,53 @@ instance Show (Response a) where
 instance HasHeaders (Response a) where
     getHeaders = rspHeaders
     setHeaders rsp hdrs = rsp { rspHeaders=hdrs }
+
+
+------------------------------------------------------------------
+------------------ Request Building ------------------------------
+------------------------------------------------------------------
+libUA :: String
+libUA = "hs-HTTP/4.0.3"
+
+defaultGETRequest :: URI -> Request_String
+defaultGETRequest uri = defaultGETRequest_ uri
+
+defaultGETRequest_ :: BufferType a => URI -> Request a
+defaultGETRequest_ uri = mkRequest GET uri False
+
+-- | 'mkRequest method uri forProxy' constructs a well formed
+-- request for the given HTTP method and URI. The 'forProxy'
+-- flag controls the normalization of the URI. If @False@, then
+-- the URI is split up into a path and a Host: header. If @True@,
+-- the URI is kept as is. You would insist on doing that when interacting
+-- with proxies.
+mkRequest :: BufferType a => RequestMethod -> URI -> Bool -> (Request a)
+mkRequest meth uri forProxy = req
+ where
+  empty = buf_empty (toBufOps req)
+  
+  withHost = 
+    case uriToAuthorityString uri of
+      "" -> id
+      h  -> ((Header HdrHost h):)
+
+  uri_req 
+   | forProxy  = uri
+   | otherwise = snd (splitRequestURI uri)
+
+  req = 
+    Request { rqURI      = uri_req
+            , rqBody     = empty
+            , rqHeaders  = withHost $
+	                     [ Header HdrContentLength "0"
+                             , Header HdrUserAgent     libUA
+                             ]
+            , rqMethod   = meth
+            }
+
+toBufOps :: BufferType a => Request a -> BufferOp a
+toBufOps _ = bufferOps
+  
 
 -----------------------------------------------------------------
 ------------------ Parsing --------------------------------------
@@ -446,6 +498,31 @@ normalizeRequestURI doClose h r =
     r { rqURI = (rqURI r){ uriScheme = ""
                          , uriAuthority = Nothing
 			 }}
+
+-- | 'normalizeRequest forProxy req' is the entry point to use to normalize your
+-- request prior to transmission (or other use.) It currently makes
+-- sure that the method's URI is in the expected state, i.e., if it
+-- is destined for proxy usage
+normalizeRequest :: Bool -> Request ty -> Request ty
+normalizeRequest forProxy req = 
+  let uri = rqURI req in 
+  case splitRequestURI uri of
+    ("",_uri_abs)
+      | forProxy -> 
+         case findHeader HdrHost req of
+	   Nothing -> req -- no host/authority in sight..not much we can do.
+	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=port}
+	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
+				   }}
+            where (hst,port) = span (/=':') h
+
+      | otherwise -> req
+    (h,uri_abs) 
+      | forProxy  -> req
+      | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs}
+
+splitRequestURI :: URI -> ({-authority-}String, URI)
+splitRequestURI uri = (uriToAuthorityString uri, uri{uriScheme="", uriAuthority=Nothing})
 
 -- Adds a Host header if one is NOT ALREADY PRESENT
 normalizeHostHeader :: Request ty -> Request ty

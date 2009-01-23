@@ -1064,34 +1064,6 @@ reqURIAuth req =
 			      , uriPort     = ""
 			      }
 
-------------------------------------------------------------------
------------------- Request Building ------------------------------
-------------------------------------------------------------------
-
-libUA :: String
-libUA = "hs-HTTP/4.0.3"
-
-defaultGETRequest :: URI -> Request_String
-defaultGETRequest uri = defaultGETRequest_ uri
-
-
-defaultGETRequest_ :: BufferType a => URI -> Request a
-defaultGETRequest_ uri = req
- where
-  empty = buf_empty (toBufOps req)
-  
-  req = 
-    Request { rqURI=uri
-            , rqBody=empty
-            , rqHeaders=[ Header HdrContentLength "0"
-                        , Header HdrUserAgent libUA
-                        ]
-            , rqMethod=GET
-            }
-
-  toBufOps :: BufferType a => Request a -> BufferOp a
-  toBufOps _ = bufferOps
-
 -- This form junk is completely untested...
 
 type FormVar = (String,String)
