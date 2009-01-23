@@ -156,8 +156,20 @@ httpVersion = "HTTP/1.1"
 -- | The HTTP request method, to be used in the 'Request' object.
 -- We are missing a few of the stranger methods, but these are
 -- not really necessary until we add full TLS.
-data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE
-    deriving(Show,Eq)
+data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE | Custom String
+    deriving(Eq)
+
+instance Show RequestMethod where
+  show x = 
+    case x of
+      HEAD     -> "HEAD"
+      PUT      -> "PUT"
+      GET      -> "GET"
+      POST     -> "POST"
+      DELETE   -> "DELETE"
+      OPTIONS  -> "OPTIONS"
+      TRACE    -> "TRACE"
+      Custom x -> x
 
 rqMethodMap :: [(String, RequestMethod)]
 rqMethodMap = [("HEAD",    HEAD),
@@ -269,6 +281,7 @@ parseRequestHead (com:hdrs) = do
   requestCommand l _yes@(rqm:uri:version) =
     case (parseURIReference uri, lookup rqm rqMethodMap) of
      (Just u, Just r) -> return (version,r,u)
+     (Just u, Nothing) -> return (version,Custom rqm,u)
      _                -> parse_err l
   requestCommand l _
    | null l    = failWith ErrorClosed
