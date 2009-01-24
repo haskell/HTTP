@@ -30,6 +30,8 @@ import qualified Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack, span )
 import System.IO ( Handle )
 import Data.Word ( Word8 )
 
+import Network.HTTP.Utils ( crlf )
+
 -- | The @BufferType@ class encodes, in a mixed-mode way, the interface
 -- that the library requires to operate over data embedded in HTTP
 -- requests and responses. That is, we use explicit dictionaries
@@ -84,11 +86,11 @@ strictBufferOp =
       , buf_splitAt      = Strict.splitAt
       , buf_span         = Strict.span
       , buf_empty        = Strict.empty
-      , buf_isLineTerm   = \ b -> Strict.length b == 2 && crlf == b
+      , buf_isLineTerm   = \ b -> Strict.length b == 2 && p_crlf == b
       , buf_isEmpty      = Strict.null 
       }
    where
-    crlf = Strict.pack "\r\n"
+    p_crlf = Strict.pack crlf
 
 lazyBufferOp :: BufferOp Lazy.ByteString
 lazyBufferOp = 
@@ -104,11 +106,11 @@ lazyBufferOp =
       , buf_splitAt      = \ i x -> Lazy.splitAt (fromIntegral i) x
       , buf_span         = Lazy.span
       , buf_empty        = Lazy.empty
-      , buf_isLineTerm   = \ b -> Lazy.length b == 2 && crlf == b
+      , buf_isLineTerm   = \ b -> Lazy.length b == 2 && p_crlf == b
       , buf_isEmpty      = Lazy.null 
       }
    where
-    crlf = Lazy.pack "\r\n"
+    p_crlf = Lazy.pack crlf
 
 stringBufferOp :: BufferOp String
 stringBufferOp =BufferOp 
@@ -128,5 +130,4 @@ stringBufferOp =BufferOp
       , buf_isLineTerm   = \ b -> b == crlf
       , buf_isEmpty      = null 
       }
-   where
-    crlf = "\r\n"
+
