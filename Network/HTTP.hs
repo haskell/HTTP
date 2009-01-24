@@ -73,19 +73,17 @@
 --
 -----------------------------------------------------------------------------
 module Network.HTTP 
-       ( module Network.HTTP.HandleStream
-       , module Network.HTTP.Base
+       ( module Network.HTTP.Base
        , module Network.HTTP.Headers
 
-{- the functionality that Network.HTTP.HandleStream and Network.HTTP.Stream
-   exposes:
+{- the functionality that Network.HTTP.HandleStream and Network.HTTP.Stream   exposes: -}
        , simpleHTTP      -- :: Request -> IO (Result Response)
        , simpleHTTP_     -- :: Stream s => s -> Request -> IO (Result Response)
        , sendHTTP        -- :: Stream s => s -> Request -> IO (Result Response)
        , sendHTTP_notify -- :: Stream s => s -> Request -> IO () -> IO (Result Response)
        , receiveHTTP     -- :: Stream s => s -> IO (Result Request)
        , respondHTTP     -- :: Stream s => s -> Response -> IO ()
--}
+
        , module Network.TCP
        ) where
 
@@ -96,8 +94,55 @@ module Network.HTTP
 import Network.HTTP.Headers
 import Network.HTTP.Base
 --import Network.HTTP.Stream
-import Network.HTTP.HandleStream
+import qualified Network.HTTP.HandleStream as S
 import Network.TCP
+import Network.Stream ( Result )
 
+import Data.Maybe ( fromMaybe )
 
+{-
+ Note: if you switch over/back to using Network.HTTP.Stream here, you'll
+ have to wrap the results from 'openStream' as Connections via 'hstreamToConnection'
+ prior to delegating to the Network.HTTP.Stream functions.
+-}
 
+{-
+ The exported send/receive functionality from this module handles any defaulting
+ and normalization of the 'Request' and 'Response' types. Such as normalizing the
+ request path and Host: header. i.e., if you do not want these payloads to be
+ altered in any way, drop down one level and use Network.HTTP.{HandleStream,Stream}
+-}
+
+simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
+simpleHTTP r = do
+  auth <- getAuth r
+  c <- openStream (host auth) (fromMaybe 80 (port auth))
+  let r' = normalizeRequestURI True{-do close-} (host auth) r 
+  simpleHTTP_ c r'
+   
+-- | Like 'simpleHTTP', but acting on an already opened stream.
+simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+simpleHTTP_ s r = do 
+  auth <- getAuth r
+  let r' = normalizeRequestURI True{-do close-} (host auth) r 
+  S.sendHTTP s r'
+
+sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+sendHTTP conn rq = do
+  let a_rq = normalizeHostHeader rq
+  S.sendHTTP conn a_rq
+
+sendHTTP_notify :: HStream ty
+                => HandleStream ty
+		-> Request ty
+		-> IO ()
+		-> IO (Result (Response ty))
+sendHTTP_notify conn rq onSendComplete = do
+  let a_rq = normalizeHostHeader rq
+  S.sendHTTP_notify conn a_rq onSendComplete
+
+receiveHTTP :: HStream ty => HandleStream ty -> IO (Result (Request ty))
+receiveHTTP conn = S.receiveHTTP conn
+
+respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
+respondHTTP conn rsp = S.respondHTTP conn rsp
