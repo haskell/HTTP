@@ -36,8 +36,6 @@ module Network.HTTP.Base
        , parseURIAuthority
        
           -- internal
-       , crlf
-       , sp
        , uriToAuthorityString   -- :: URI    -> String
        , uriAuthToString        -- :: URIAuth -> String
        , parseResponseHead
@@ -89,7 +87,7 @@ import Numeric       ( showHex, readHex )
 import Network.Stream
 import Network.BufferType ( BufferOp(..), BufferType(..) )
 import Network.HTTP.Headers
-import Network.HTTP.Utils ( trim )
+import Network.HTTP.Utils ( trim, crlf, sp )
 
 import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
@@ -213,10 +211,6 @@ data Request a =
              , rqHeaders   :: [Header]
              , rqBody      :: a
              }
-
-crlf, sp :: String
-crlf = "\r\n"
-sp   = " "
 
 -- Notice that request body is not included,
 -- this show function is used to serialise
