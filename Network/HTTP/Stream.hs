@@ -143,52 +143,36 @@ httpLogFile = "http-debug.log"
 --  Connection  Where no allowance is made for persistant connections
 --              the Connection header will be set to "close"
 simpleHTTP :: Request_String -> IO (Result Response_String)
-simpleHTTP r = 
-    do 
-       auth <- getAuth r
-       c <- openTCPPort (host auth) (fromMaybe 80 (port auth))
-       simpleHTTP_ c r
+simpleHTTP r = do 
+   auth <- getAuth r
+   c    <- openTCPPort (host auth) (fromMaybe 80 (port auth))
+   simpleHTTP_ c r
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
 simpleHTTP_ :: Stream s => s -> Request_String -> IO (Result Response_String)
-simpleHTTP_ s r =
-    do 
-       auth <- getAuth r
-       let r' = normalizeRequestURI True{-do close-} (host auth) r 
-       rsp <- if debug then do
-	        s' <- debugStream httpLogFile s
-	        sendHTTP s' r'
-	       else
-	        sendHTTP s r'
-       -- already done by sendHTTP because of "Connection: close" header
-       --; close s 
-       return rsp
+simpleHTTP_ s r = do 
+   auth <- getAuth r
+   if not debug 
+    then sendHTTP s r
+    else do
+      s' <- debugStream httpLogFile s
+      sendHTTP s' r
+    -- already done by sendHTTP because of "Connection: close" header
+    --; close s 
 
 sendHTTP :: Stream s => s -> Request_String -> IO (Result Response_String)
-sendHTTP conn rq = 
-    do { let a_rq = normalizeHostHeader rq
-       ; rsp <- catchIO (sendMain conn a_rq (return ()))
-                        (\e -> do { close conn; ioError e })
-       ; let fn list = when (or $ map findConnClose list)
-                            (close conn)
-       ; either (\_ -> fn [rqHeaders rq])
-                (\r -> fn [rqHeaders rq,rspHeaders r])
-                rsp
-       ; return rsp
-       }
+sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 
 sendHTTP_notify :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
-sendHTTP_notify conn rq onSendComplete = 
-    do { let a_rq = normalizeHostHeader rq
-       ; rsp <- catchIO (sendMain conn a_rq onSendComplete)
-                        (\e -> do { close conn; ioError e })
-       ; let fn list = when (or $ map findConnClose list)
-                            (close conn)
-       ; either (\_ -> fn [rqHeaders rq])
-                (\r -> fn [rqHeaders rq,rspHeaders r])
-                rsp
-       ; return rsp
-       }
+sendHTTP_notify conn rq onSendComplete = do 
+   rsp <- catchIO (sendMain conn rq onSendComplete)
+                  (\e -> do { close conn; ioError e })
+   let fn list = when (or $ map findConnClose list)
+                      (close conn)
+   either (\_ -> fn [rqHeaders rq])
+          (\r -> fn [rqHeaders rq,rspHeaders r])
+          rsp
+   return rsp
 
 -- From RFC 2616, section 8.2.3:
 -- 'Because of the presence of older implementations, the protocol allows
@@ -202,21 +186,21 @@ sendHTTP_notify conn rq onSendComplete =
 -- Since we would wait forever, I have disabled use of 100-continue for now.
 sendMain :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
 sendMain conn rqst onSendComplete =  do 
-   --let str = if null (rqBody rqst)
-   --              then show rqst
-   --              else show (insertHeader HdrExpect "100-continue" rqst)
-  writeBlock conn (show rqst)
-  -- write body immediately, don't wait for 100 CONTINUE
-  writeBlock conn (rqBody rqst)
-  onSendComplete
-  rsp <- getResponseHead conn
-  switchResponse conn True False rsp rqst
+    --let str = if null (rqBody rqst)
+    --              then show rqst
+    --              else show (insertHeader HdrExpect "100-continue" rqst)
+   writeBlock conn (show rqst)
+    -- write body immediately, don't wait for 100 CONTINUE
+   writeBlock conn (rqBody rqst)
+   onSendComplete
+   rsp <- getResponseHead conn
+   switchResponse conn True False rsp rqst
         
 -- reads and parses headers
 getResponseHead :: Stream s => s -> IO (Result ResponseData)
 getResponseHead conn = do
-  lor <- readTillEmpty1 stringBufferOp (readLine conn)
-  return $ lor >>= parseResponseHead
+   lor <- readTillEmpty1 stringBufferOp (readLine conn)
+   return $ lor >>= parseResponseHead
 
 -- Hmmm, this could go bad if we keep getting "100 Continue"
 -- responses...  Except this should never happen according

@@ -64,23 +64,10 @@ simpleHTTP_debug httpLogFile r = do
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
 simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-simpleHTTP_ s r = do 
-  auth <- getAuth r
-  let r' = normalizeRequestURI True{-do close-} (host auth) r 
-  rsp <- sendHTTP s r'
-  return rsp
+simpleHTTP_ s r = sendHTTP s r
 
 sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-sendHTTP conn rq = do
-  let a_rq = normalizeHostHeader rq
-  rsp <- catchIO (sendMain conn a_rq (return ()))
-                 (\e -> do { close conn; ioError e })
-  let fn list = when (or $ map findConnClose list)
-                     (close conn)
-  either (\_ -> fn [rqHeaders rq])
-         (\r -> fn [rqHeaders rq,rspHeaders r])
-         rsp
-  return rsp
+sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
@@ -88,8 +75,7 @@ sendHTTP_notify :: HStream ty
 		-> IO ()
 		-> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
-  let a_rq = normalizeHostHeader rq
-  rsp <- catchIO (sendMain conn a_rq onSendComplete)
+  rsp <- catchIO (sendMain conn rq onSendComplete)
                  (\e -> do { close conn; ioError e })
   let fn list = when (or $ map findConnClose list)
                      (close conn)
@@ -97,8 +83,6 @@ sendHTTP_notify conn rq onSendComplete = do
          (\r -> fn [rqHeaders rq,rspHeaders r])
          rsp
   return rsp
-
-
 
 -- From RFC 2616, section 8.2.3:
 -- 'Because of the presence of older implementations, the protocol allows
