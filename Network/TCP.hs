@@ -5,7 +5,7 @@
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004
 -- License     :  BSD
 --
--- Maintainer  :  bjorn@bringert.net
+-- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
@@ -35,6 +35,8 @@ module Network.TCP
    , StreamHooks(..)
    , nullHooks
    , setStreamHooks
+   , hstreamToConnection
+
    ) where
 
 import Network.BSD (getHostByName, hostAddresses)
@@ -91,6 +93,9 @@ data Conn a
  | ConnClosed
    deriving(Eq)
 
+hstreamToConnection :: HandleStream String -> Connection
+hstreamToConnection h = Connection h
+
 connHooks' :: Conn a -> Maybe (StreamHooks a)
 connHooks' ConnClosed{} = Nothing
 connHooks' x = connHooks x
@@ -109,10 +114,10 @@ instance Eq ty => Eq (StreamHooks ty) where
 
 nullHooks :: StreamHooks ty
 nullHooks = StreamHooks 
-     { hook_readLine  = \ _ _ -> return ()
-     , hook_readBlock = \ _ _ _ -> return ()
+     { hook_readLine   = \ _ _   -> return ()
+     , hook_readBlock  = \ _ _ _ -> return ()
      , hook_writeBlock = \ _ _ _ -> return ()
-     , hook_close = return ()
+     , hook_close      = return ()
      }
 
 setStreamHooks :: HandleStream ty -> StreamHooks ty -> IO ()
@@ -162,10 +167,9 @@ instance HStream String where
     -- (I think the behaviour here is TCP specific)
     close c = closeIt c null
     
--- | This function establishes a connection to a remote
--- host, it uses "getHostByName" which interrogates the
--- DNS system, hence may trigger a network connection.
---
+-- | @openTCPPort uri port@  establishes a connection to a remote
+-- host, using 'getHostByName' which possibly queries the DNS system, hence 
+-- may trigger a network connection.
 openTCPPort :: String -> Int -> IO Connection
 openTCPPort uri port = openTCPConnection uri port >>= return.Connection
 
@@ -173,30 +177,38 @@ openTCPPort uri port = openTCPConnection uri port >>= return.Connection
 -- Use "Result" type for synchronous exception reporting?
 openTCPConnection :: BufferType ty => String -> Int -> IO (HandleStream ty)
 openTCPConnection uri port = openTCPConnection_ uri port False
+
 openTCPConnection_ :: BufferType ty => String -> Int -> Bool -> IO (HandleStream ty)
-openTCPConnection_ uri port stashInput = 
-    do { s <- socket AF_INET Stream 6
-       ; setSocketOption s KeepAlive 1
-       ; host <- catchIO (inet_addr uri)    -- handles ascii IP numbers
-                       (\ _ -> getHostByName uri >>= \host ->
-                            case hostAddresses host of
-                                [] -> return (error "no addresses in host entry")
-                                (h:_) -> return h)
-       ; let a = SockAddrInet (toEnum port) host
-       ; catchIO (connect s a) (\e -> sClose s >> ioError e)
-       ; h <- socketToHandle s ReadWriteMode
-       ; mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
-       ; let conn = 
-                 (MkConn { connSock   = s
-			 , connHandle = h
-			 , connBuffer = bufferOps
-			 , connInput  = mb
-			 , connHost   = uri
-			 , connHooks  = Nothing
-			 })
-       ; v <- newMVar conn
-       ; return (HandleStream v)
-       }
+openTCPConnection_ uri port stashInput = do
+    s <- socket AF_INET Stream 6
+    setSocketOption s KeepAlive 1
+    hostA <- getHostAddr uri
+    let a = SockAddrInet (toEnum port) hostA
+    catchIO (connect s a) (\e -> sClose s >> ioError e)
+    h <- socketToHandle s ReadWriteMode
+    mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
+    let conn = MkConn 
+         { connSock   = s
+	 , connHandle = h
+	 , connBuffer = bufferOps
+	 , connInput  = mb
+	 , connHost   = uri
+	 , connHooks  = Nothing
+	 }
+    v <- newMVar conn
+    return (HandleStream v)
+ where
+  getHostAddr h = do
+    catchIO (inet_addr uri)    -- handles ascii IP numbers
+            (\ _ -> do
+	        host <- getHostByName_safe uri
+                case hostAddresses host of
+                  []     -> fail ("openTCPConnection: no addresses in host entry for " ++ show h)
+                  (ha:_) -> return ha)
+
+  getHostByName_safe h = 
+    catchIO (getHostByName h)
+            (\ _ -> fail ("openTCPConnection: host lookup failure for " ++ show h))
 
 closeConnection :: HandleStream a -> IO Bool -> IO ()
 closeConnection ref readL = do
@@ -245,7 +257,6 @@ isTCPConnectedTo conn name = do
       | map toLower (connHost v) == map toLower name -> sIsConnected (connSock v)
       | otherwise -> return False
 
-
 readBlockBS :: HandleStream a -> Int -> IO (Result a)
 readBlockBS ref n = onNonClosedDo ref $ \ conn -> do
    x <- bufferGetBlock ref n
@@ -255,7 +266,7 @@ readBlockBS ref n = onNonClosedDo ref $ \ conn -> do
    return x
 
 -- This function uses a buffer, at this time the buffer is just 1000 characters.
--- (however many bytes this is is left to the user to decypher)
+-- (however many bytes this is is left for the user to decipher)
 readLineBS :: HandleStream a -> IO (Result a)
 readLineBS ref = onNonClosedDo ref $ \ conn -> do
    x <- bufferReadLine ref
@@ -328,5 +339,5 @@ onNonClosedDo h act = do
   x <- readMVar (getRef h)
   case x of
     ConnClosed{} -> return (failWith ErrorClosed)
-    c -> act c
-    
+    _ -> act x
+ 
