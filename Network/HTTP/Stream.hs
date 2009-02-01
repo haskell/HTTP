@@ -150,11 +150,9 @@ simpleHTTP r = do
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
 simpleHTTP_ :: Stream s => s -> Request_String -> IO (Result Response_String)
-simpleHTTP_ s r = do 
-   auth <- getAuth r
-   if not debug 
-    then sendHTTP s r
-    else do
+simpleHTTP_ s r
+ | not debug    = sendHTTP s r
+ | otherwise    = do
       s' <- debugStream httpLogFile s
       sendHTTP s' r
     -- already done by sendHTTP because of "Connection: close" header
