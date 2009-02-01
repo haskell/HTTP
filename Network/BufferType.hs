@@ -60,6 +60,7 @@ data BufferOp a
      , buf_hGetLine     :: Handle -> IO a
      , buf_empty        :: a
      , buf_append       :: a -> a -> a
+     , buf_concat       :: [a] -> a
      , buf_fromStr      :: String -> a
      , buf_toStr        :: a -> String
      , buf_snoc         :: a -> Word8 -> a
@@ -80,6 +81,7 @@ strictBufferOp =
       , buf_hPut         = Strict.hPut
       , buf_hGetLine     = Strict.hGetLine
       , buf_append       = Strict.append
+      , buf_concat       = Strict.concat
       , buf_fromStr      = Strict.pack
       , buf_toStr        = Strict.unpack
       , buf_snoc         = Strict.snoc
@@ -100,6 +102,7 @@ lazyBufferOp =
       , buf_hPut         = Lazy.hPut
       , buf_hGetLine     = \ h -> Strict.hGetLine h >>= \ l -> return (Lazy.fromChunks [l])
       , buf_append       = Lazy.append
+      , buf_concat       = Lazy.concat
       , buf_fromStr      = Lazy.pack
       , buf_toStr        = Lazy.unpack
       , buf_snoc         = Lazy.snoc
@@ -119,6 +122,7 @@ stringBufferOp =BufferOp
       , buf_hPut         = \ h s -> Strict.hPut h (Strict.pack s)
       , buf_hGetLine     = \ h   -> Strict.hGetLine h >>= return . Strict.unpack
       , buf_append       = (++)
+      , buf_concat       = concat
       , buf_fromStr      = id
       , buf_toStr        = id
       , buf_snoc         = \ a x -> a ++ [toEnum (fromIntegral x)]
