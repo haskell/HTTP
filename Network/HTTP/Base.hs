@@ -38,8 +38,10 @@ module Network.HTTP.Base
           -- internal
        , uriToAuthorityString   -- :: URI    -> String
        , uriAuthToString        -- :: URIAuth -> String
-       , parseResponseHead
-       , parseRequestHead
+
+       , parseResponseHead      -- :: [String] -> Result ResponseData
+       , parseRequestHead       -- :: [String] -> Result RequestData
+
        , ResponseNextStep(..)
        , matchResponse
        , ResponseData
@@ -174,7 +176,7 @@ instance Show RequestMethod where
       DELETE   -> "DELETE"
       OPTIONS  -> "OPTIONS"
       TRACE    -> "TRACE"
-      Custom x -> x
+      Custom c -> c
 
 rqMethodMap :: [(String, RequestMethod)]
 rqMethodMap = [("HEAD",    HEAD),
@@ -505,10 +507,10 @@ normalizeRequest forProxy req =
       | forProxy -> 
          case findHeader HdrHost req of
 	   Nothing -> req -- no host/authority in sight..not much we can do.
-	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=port}
+	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
 	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
 				   }}
-            where (hst,port) = span (/=':') h
+            where (hst,pNum) = span (/=':') h
 
       | otherwise -> req
     (h,uri_abs) 
@@ -560,36 +562,36 @@ chunkedTransfer :: BufferOp a
 		-> IO (Result a)
                 -> (Int -> IO (Result a))
                 -> IO (Result ([Header], a))
-chunkedTransfer bufOps readL readBlk = 
-  fmapE (\ (ftrs,count,info) ->
-           let myftrs = Header HdrContentLength (show count) : ftrs              
-           in Right (myftrs,info))
-	(chunkedTransferC bufOps readL readBlk 0)
+chunkedTransfer bufOps readL readBlk = chunkedTransferC bufOps readL readBlk [] 0
 
 chunkedTransferC :: BufferOp a
                  -> IO (Result a)
                  -> (Int -> IO (Result a))
+		 -> [a]
 		 -> Int
-		 -> IO (Result ([Header],Int,a))
-chunkedTransferC bufOps readL readBlk n = do
+		 -> IO (Result ([Header], a))
+chunkedTransferC bufOps readL readBlk acc n = do
   v <- readL
   case v of
     Left e -> return (Left e)
     Right line 
      | size == 0 -> 
+         -- last chunk read; look for trailing headers..
         fmapE (\ strs -> do
 	         ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
-                 return (ftrs,n,buf_empty bufOps))
+		   -- insert (computed) Content-Length header.
+		 let ftrs' = Header HdrContentLength (show n) : ftrs
+                 return (ftrs',buf_concat bufOps (reverse acc)))
+
 	      (readTillEmpty2 bufOps readL [])
 
      | otherwise -> do
          some <- readBlk size
-         readL
-         more <- chunkedTransferC bufOps readL readBlk (n+size)
-         return $ do
-           cdata          <- some
-	   (ftrs,m,mdata) <- more
-           return (ftrs,m,buf_append bufOps cdata mdata) 
+	 case some of
+	   Left e -> return (Left e)
+	   Right cdata -> do
+	       readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
+	       chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
      where
       size 
        | buf_isEmpty bufOps line = 0
