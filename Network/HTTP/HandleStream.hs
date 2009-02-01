@@ -27,7 +27,7 @@ module Network.HTTP.HandleStream
 -----------------------------------------------------------------
 
 import Network.BufferType
-import Network.Stream ( ConnError(..), fmapE, Result )
+import Network.Stream ( fmapE, Result )
 import Network.StreamDebugger ( debugByteStream )
 import Network.TCP (HStream(..), HandleStream )
 
@@ -58,8 +58,8 @@ simpleHTTP r = do
 simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
 simpleHTTP_debug httpLogFile r = do 
   auth <- getAuth r
-  c0 <- openStream (host auth) (fromMaybe 80 (port auth))
-  c <- debugByteStream httpLogFile c0
+  c0   <- openStream (host auth) (fromMaybe 80 (port auth))
+  c    <- debugByteStream httpLogFile c0
   simpleHTTP_ c r
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
