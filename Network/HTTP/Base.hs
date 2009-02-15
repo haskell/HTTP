@@ -163,7 +163,7 @@ httpVersion = "HTTP/1.1"
 -- | The HTTP request method, to be used in the 'Request' object.
 -- We are missing a few of the stranger methods, but these are
 -- not really necessary until we add full TLS.
-data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE | Custom String
+data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE | CONNECT | Custom String
     deriving(Eq)
 
 instance Show RequestMethod where
@@ -176,6 +176,7 @@ instance Show RequestMethod where
       DELETE   -> "DELETE"
       OPTIONS  -> "OPTIONS"
       TRACE    -> "TRACE"
+      CONNECT  -> "CONNECT"
       Custom c -> c
 
 rqMethodMap :: [(String, RequestMethod)]
@@ -185,7 +186,8 @@ rqMethodMap = [("HEAD",    HEAD),
 	       ("POST",    POST),
                ("DELETE",  DELETE),
 	       ("OPTIONS", OPTIONS),
-	       ("TRACE",   TRACE)]
+	       ("TRACE",   TRACE),
+	       ("CONNECT", CONNECT)]
 
 -- 
 -- for backwards-ish compatibility; suggest
