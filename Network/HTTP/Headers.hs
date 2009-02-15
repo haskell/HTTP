@@ -118,6 +118,8 @@ data HeaderName
  | HdrRetryAfter
  | HdrServer
  | HdrSetCookie
+ | HdrTE
+ | HdrTrailer
  | HdrVary
  | HdrWarning
  | HdrWWWAuthenticate
@@ -190,6 +192,8 @@ headerMap =
    , p "Expires"              HdrExpires
    , p "Last-Modified"        HdrLastModified
    , p "Set-Cookie"           HdrSetCookie
+   , p "TE"                   HdrTE
+   , p "Trailer"              HdrTrailer
    , p "Cookie"               HdrCookie
    , p "Expect"               HdrExpect
    ]
