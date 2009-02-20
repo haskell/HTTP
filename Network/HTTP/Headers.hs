@@ -158,6 +158,8 @@ headerMap =
    , p "Accept-Encoding"      HdrAcceptEncoding
    , p "Accept-Language"      HdrAcceptLanguage
    , p "Authorization"        HdrAuthorization
+   , p "Cookie"               HdrCookie
+   , p "Expect"               HdrExpect
    , p "From"                 HdrFrom
    , p "Host"                 HdrHost
    , p "If-Modified-Since"    HdrIfModifiedSince
@@ -176,6 +178,9 @@ headerMap =
    , p "Public"               HdrPublic
    , p "Retry-After"          HdrRetryAfter
    , p "Server"               HdrServer
+   , p "Set-Cookie"           HdrSetCookie
+   , p "TE"                   HdrTE
+   , p "Trailer"              HdrTrailer
    , p "Vary"                 HdrVary
    , p "Warning"              HdrWarning
    , p "WWW-Authenticate"     HdrWWWAuthenticate
@@ -191,11 +196,7 @@ headerMap =
    , p "ETag"                 HdrETag
    , p "Expires"              HdrExpires
    , p "Last-Modified"        HdrLastModified
-   , p "Set-Cookie"           HdrSetCookie
-   , p "TE"                   HdrTE
-   , p "Trailer"              HdrTrailer
-   , p "Cookie"               HdrCookie
-   , p "Expect"               HdrExpect
+   , p "Content-Transfer-Encoding" HdrContentTransferEncoding
    ]
  where
   p a b = (a,b)
