@@ -71,6 +71,12 @@ module Network.HTTP.Base
        , catchIO
        , catchIO_
        , responseParseError
+       
+       , getRequestVersion
+       , getResponseVersion
+       , setRequestVersion
+       , setResponseVersion
+
        ) where
 
 import Network.URI
@@ -82,8 +88,8 @@ import Network.URI
 import Control.Monad ( guard )
 import Control.Monad.Error
 import Data.Char     ( ord, digitToInt, intToDigit, toLower )
-import Data.List     ( partition )
-import Data.Maybe    ( listToMaybe )
+import Data.List     ( partition, find )
+import Data.Maybe    ( listToMaybe, fromMaybe )
 import Numeric       ( showHex, readHex )
 
 import Network.Stream
@@ -211,7 +217,7 @@ data Request a =
                                     --  2) transparent support for both relative
                                     --     & absolute uris, although this should
                                     --     already work (leave scheme & host parts empty).
-             , rqMethod    :: RequestMethod             
+             , rqMethod    :: RequestMethod
              , rqHeaders   :: [Header]
              , rqBody      :: a
              }
@@ -221,10 +227,11 @@ data Request a =
 -- a request for the transport link, we send
 -- the body separately where possible.
 instance Show (Request a) where
-    show (Request u m h _) =
-        show m ++ sp ++ alt_uri ++ sp ++ httpVersion ++ crlf
-        ++ foldr (++) [] (map show h) ++ crlf
+    show req@(Request u m h _) =
+        show m ++ sp ++ alt_uri ++ sp ++ ver ++ crlf
+        ++ foldr (++) [] (map show (dropHttpVersion h)) ++ crlf
         where
+	    ver = fromMaybe httpVersion (getRequestVersion req)
             alt_uri = show $ if null (uriPath u) || head (uriPath u) /= '/' 
                         then u { uriPath = '/' : uriPath u } 
                         else u
@@ -261,9 +268,11 @@ data Response a =
 -- This is an invalid representation of a received response, 
 -- since we have made the assumption that all responses are HTTP/1.1
 instance Show (Response a) where
-    show (Response (a,b,c) reason headers _) =
-        httpVersion ++ ' ' : map intToDigit [a,b,c] ++ ' ' : reason ++ crlf
-        ++ foldr (++) [] (map show headers) ++ crlf
+    show rsp@(Response (a,b,c) reason headers _) =
+        ver ++ ' ' : map intToDigit [a,b,c] ++ ' ' : reason ++ crlf
+        ++ foldr (++) [] (map show (dropHttpVersion headers)) ++ crlf
+     where
+      ver = fromMaybe httpVersion (getResponseVersion rsp)
 
 instance HasHeaders (Response a) where
     getHeaders = rspHeaders
@@ -324,10 +333,13 @@ toBufOps _ = bufferOps
 parseRequestHead :: [String] -> Result RequestData
 parseRequestHead         [] = Left ErrorClosed
 parseRequestHead (com:hdrs) = do
-  (_version,rqm,uri) <- requestCommand com (words com)
+  (version,rqm,uri) <- requestCommand com (words com)
   hdrs'              <- parseHeaders hdrs
-  return (rqm,uri,hdrs')
+  return (rqm,uri,withVer version hdrs')
  where
+  withVer [] hs = hs
+  withVer (h:_) hs = withVersion h hs
+
   requestCommand l _yes@(rqm:uri:version) =
     case (parseURIReference uri, lookup rqm rqMethodMap) of
      (Just u, Just r) -> return (version,r,u)
@@ -344,9 +356,9 @@ parseRequestHead (com:hdrs) = do
 parseResponseHead :: [String] -> Result ResponseData
 parseResponseHead []         = failWith ErrorClosed
 parseResponseHead (sts:hdrs) = do
-  (_version,code,reason) <- responseStatus sts (words sts)
+  (version,code,reason)  <- responseStatus sts (words sts)
   hdrs'                  <- parseHeaders hdrs
-  return (code,reason,hdrs')
+  return (code,reason, withVersion version hdrs')
  where
   responseStatus _l _yes@(version:code:reason) =
     return (version,match code,concatMap (++" ") reason)
@@ -364,8 +376,68 @@ parseResponseHead (sts:hdrs) = do
                    digitToInt c)
   match _ = (-1,-1,-1)  -- will create appropriate behaviour
 
+-- To avoid changing the @RequestData@ and @ResponseData@ types
+-- just for this (and the upstream backwards compat. woes that
+-- will result in), encode version info as a custom header.
+-- Used by 'parseResponseData' and 'parseRequestData'.
+--
+-- Note: the Request and Response types do not currently represent
+-- the version info explicitly in their record types. You have to use
+-- {get,set}{Request,Response}Version for that.
+withVersion :: String -> [Header] -> [Header]
+withVersion v hs 
+ | v == httpVersion = hs  -- don't bother adding it if the default.
+ | otherwise        = (Header (HdrCustom "X-HTTP-Version") v) : hs
 
-        
+-- | @getRequestVersion req@ returns the HTTP protocol version of
+-- the request @req@. If @Nothing@, the default 'httpVersion' can be assumed.
+getRequestVersion :: Request a -> Maybe String
+getRequestVersion r = getHttpVersion r
+
+-- | @setRequestVersion v req@ returns a new request, identical to
+-- @req@, but with its HTTP version set to @v@.
+setRequestVersion :: String -> Request a -> Request a
+setRequestVersion s r = setHttpVersion r s
+
+
+-- | @getResponseVersion rsp@ returns the HTTP protocol version of
+-- the response @rsp@. If @Nothing@, the default 'httpVersion' can be 
+-- assumed.
+getResponseVersion :: Response a -> Maybe String
+getResponseVersion r = getHttpVersion r
+
+-- | @setResponseVersion v rsp@ returns a new response, identical to
+-- @rsp@, but with its HTTP version set to @v@.
+setResponseVersion :: String -> Response a -> Response a
+setResponseVersion s r = setHttpVersion r s
+
+-- internal functions for accessing HTTP-version info in
+-- requests and responses. Not exported as it exposes ho
+-- version info is represented internally.
+
+getHttpVersion :: HasHeaders a => a -> Maybe String
+getHttpVersion r = 
+  fmap toVersion      $
+   find isHttpVersion $
+    getHeaders r
+ where
+  toVersion (Header _ x) = x
+
+setHttpVersion :: HasHeaders a => a -> String -> a
+setHttpVersion r v = 
+  setHeaders r $
+   withVersion v  $
+    dropHttpVersion $
+     getHeaders r
+
+dropHttpVersion :: [Header] -> [Header]
+dropHttpVersion hs = filter (not.isHttpVersion) hs
+
+isHttpVersion :: Header -> Bool
+isHttpVersion (Header (HdrCustom "X-HTTP-Version") _) = True
+isHttpVersion _ = False    
+
+
 
 -----------------------------------------------------------------
 ------------------ HTTP Send / Recv ----------------------------------
