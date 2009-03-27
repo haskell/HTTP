@@ -87,10 +87,11 @@ import Network.URI
 
 import Control.Monad ( guard )
 import Control.Monad.Error
-import Data.Char     ( ord, digitToInt, intToDigit, toLower )
+import Data.Char     ( digitToInt, intToDigit, toLower, 
+                       isAscii, isAlphaNum )
 import Data.List     ( partition, find )
 import Data.Maybe    ( listToMaybe, fromMaybe )
-import Numeric       ( showHex, readHex )
+import Numeric       ( readHex )
 
 import Network.Stream
 import Network.BufferType ( BufferOp(..), BufferType(..) )
@@ -495,34 +496,33 @@ matchResponse rqst rsp =
     Escape method: char -> '%' a b  where a, b :: Hex digits
 -}
 
-urlEncode, urlDecode :: String -> String
-
+urlDecode :: String -> String
 urlDecode ('%':a:b:rest) = toEnum (16 * digitToInt a + digitToInt b)
                          : urlDecode rest
 urlDecode (h:t) = h : urlDecode t
 urlDecode [] = []
 
-urlEncode (h:t) =
-    let str = if reserved (ord h) then escape h else [h]
-    in str ++ urlEncode t
+
+urlEncode :: String -> String
+urlEncode     [] = []
+urlEncode (ch:t) 
+  | (isAscii ch && isAlphaNum ch) || ch `elem` "-_.~" = ch : urlEncode t
+  | not (isAscii ch) = foldr escape (urlEncode t) (eightBs [] (fromEnum ch))
+  | otherwise = escape (fromEnum ch) (urlEncode t)
     where
-        reserved x
-            | x >= ord 'a' && x <= ord 'z' = False
-            | x >= ord 'A' && x <= ord 'Z' = False
-            | x >= ord '0' && x <= ord '9' = False
-            | x <= 0x20 || x >= 0x7F = True
-            | otherwise = x `elem` map ord [';','/','?',':','@','&'
-                                           ,'=','+',',','$','{','}'
-                                           ,'|','\\','^','[',']','`'
-                                           ,'<','>','#','%','"']
-        -- wouldn't it be nice if the compiler
-        -- optimised the above for us?
+     escape b rs = '%':showH (b `div` 16) (showH (b `mod` 16) rs)
+     
+     showH x xs
+       | x <= 9    = toEnum (o_0 + x) : xs
+       | otherwise = toEnum (o_A + (x-10)) : xs
+      where
+       o_0 = fromEnum '0'
+       o_A = fromEnum 'A'
 
-        escape x = '%':showHex (ord x) ""
-
-urlEncode [] = []
-            
-
+eightBs :: [Int]  -> Int -> [Int]
+eightBs acc x
+      | x <= 0xff = (x:acc)
+      | otherwise = eightBs ((x `mod` 256) : acc) (x `div` 256)
 
 -- Encode form variables, useable in either the
 -- query part of a URI, or the body of a POST request.
