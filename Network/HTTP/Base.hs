@@ -313,8 +313,11 @@ mkRequest meth uri forProxy = req
  where
   empty = buf_empty (toBufOps req)
   
+    -- stub out the user info.
+  updAuth = fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri)
+
   withHost = 
-    case uriToAuthorityString uri of
+    case uriToAuthorityString uri{uriAuthority=updAuth} of
       "" -> id
       h  -> ((Header HdrHost h):)
 
@@ -556,10 +559,13 @@ getAuth r =
     Just x -> return x 
     Nothing -> fail $ "Network.HTTP.Base.getAuth: Error parsing URI authority '" ++ auth ++ "'"
  where 
-   auth = 
+  uri     = rqURI r
+    -- stub out the user info.
+  updAuth = fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri)
+  auth = 
     case findHeader HdrHost r of
       Just h  -> h
-      Nothing -> uriToAuthorityString (rqURI r)
+      Nothing -> uriToAuthorityString uri{uriAuthority=updAuth}
 
 -- deprecated, use 'normalizeRequest'.
 normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
