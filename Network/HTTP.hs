@@ -66,9 +66,8 @@ import Data.Maybe ( fromMaybe )
 simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do
   auth <- getAuth r
-  c <- openStream (host auth) (fromMaybe 80 (port auth))
   let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
-  putStrLn (filter (/='\r') (show norm_r))
+  c <- openStream (host auth) (fromMaybe 80 (port auth))
   simpleHTTP_ c norm_r
    
 -- | Like 'simpleHTTP', but acting on an already opened stream.
