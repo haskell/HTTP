@@ -47,6 +47,7 @@ module Network.HTTP.Headers
    ( HasHeaders(..)
    , Header(..)
    , HeaderName(..)
+   , mkHeader
 
    , insertHeader
    , insertHeaderIfMissing
@@ -65,6 +66,10 @@ import Network.HTTP.Utils ( trim, split, crlf )
 
 -- | The @Header@ data type pairs header names & values.
 data Header = Header HeaderName String
+
+-- | Header constructor as a function, hiding above rep.
+mkHeader :: HeaderName -> String -> Header
+mkHeader = Header
 
 instance Show Header where
     show (Header key value) = shows key (':':' ':value ++ crlf)
