@@ -48,12 +48,17 @@ module Network.HTTP.Base
        , ResponseCode
        , RequestData
        
+       , NormalizeRequestOptions(..)
+       , defaultNormalizeRequestOptions
+       
+       , normalizeRequest
+
+       , splitRequestURI
+
        , getAuth
        , normalizeRequestURI
        , normalizeHostHeader
        , findConnClose
-       , splitRequestURI
-       , normalizeRequest
 
          -- internal export (for the use by Network.HTTP.{Stream,ByteStream} )
        , linearTransfer
@@ -63,10 +68,12 @@ module Network.HTTP.Base
        , readTillEmpty1
        , readTillEmpty2
        
-       , libUA
+       , defaultUserAgent
        , defaultGETRequest
        , defaultGETRequest_
        , mkRequest
+
+       , libUA  {- backwards compatibility, will disappear..soon -}
        
        , catchIO
        , catchIO_
@@ -86,7 +93,7 @@ import Network.URI
    )
 
 import Control.Monad ( guard )
-import Control.Monad.Error
+import Control.Monad.Error ()
 import Data.Char     ( digitToInt, intToDigit, toLower, 
                        isAscii, isAlphaNum )
 import Data.List     ( partition, find )
@@ -284,7 +291,10 @@ instance HasHeaders (Response a) where
 ------------------ Request Building ------------------------------
 ------------------------------------------------------------------
 libUA :: String
-libUA = "hs-HTTP/4.0.3"
+libUA = "hs-HTTP-4000.0.5"
+
+defaultUserAgent :: String
+defaultUserAgent = libUA
 
 defaultGETRequest :: URI -> Request_String
 defaultGETRequest uri = defaultGETRequest_ uri
@@ -317,7 +327,7 @@ mkRequest meth uri forProxy = req
             , rqBody     = empty
             , rqHeaders  = withHost $
 	                     [ Header HdrContentLength "0"
-                             , Header HdrUserAgent     libUA
+                             , Header HdrUserAgent     defaultUserAgent
                              ]
             , rqMethod   = meth
             }
@@ -519,8 +529,8 @@ urlEncode (ch:t)
        o_0 = fromEnum '0'
        o_A = fromEnum 'A'
 
-eightBs :: [Int]  -> Int -> [Int]
-eightBs acc x
+     eightBs :: [Int]  -> Int -> [Int]
+     eightBs acc x
       | x <= 0xff = (x:acc)
       | otherwise = eightBs ((x `mod` 256) : acc) (x `div` 256)
 
@@ -551,16 +561,7 @@ getAuth r =
       Just h  -> h
       Nothing -> uriToAuthorityString (rqURI r)
 
-  {- RFC 2616, section 5.1.2:
-     "The most common form of Request-URI is that used to identify a
-      resource on an origin server or gateway. In this case the absolute
-      path of the URI MUST be transmitted (see section 3.2.1, abs_path) as
-      the Request-URI, and the network location of the URI (authority) MUST
-      be transmitted in a Host header field." -}
-  -- we assume that this is the case, so we take the host name from
-  -- the Host header if there is one, otherwise from the request-URI.
-  -- Then we make the request-URI an abs_path and make sure that there
-  -- is a Host header.
+-- deprecated, use 'normalizeRequest'.
 normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
 normalizeRequestURI doClose h r = 
   (if doClose then replaceHeader HdrConnection "close" else id) $
@@ -569,18 +570,75 @@ normalizeRequestURI doClose h r =
                          , uriAuthority = Nothing
 			 }}
 
--- | 'normalizeRequest forProxy req' is the entry point to use to normalize your
--- request prior to transmission (or other use.) It currently makes
--- sure that the method's URI is in the expected state, i.e., if it
--- is destined for proxy usage
-normalizeRequest :: Bool -> Request ty -> Request ty
-normalizeRequest forProxy req = 
-  let uri = rqURI req in 
+-- | @NormalizeRequestOptions@ brings together the various defaulting\/normalization options
+-- over 'Request's. Use 'defaultNormalizeRequestOptions' for the standard selection of option
+data NormalizeRequestOptions ty
+ = NormalizeRequestOptions
+     { normDoClose   :: Bool
+     , normForProxy  :: Bool
+     , normUserAgent :: Maybe String
+     , normCustoms   :: [RequestNormalizer ty]
+     }
+
+-- | @RequestNormalizer@ is the shape of a (pure) function that rewrites
+-- a request into some normalized form.
+type RequestNormalizer ty = NormalizeRequestOptions ty -> Request ty -> Request ty
+
+defaultNormalizeRequestOptions :: NormalizeRequestOptions ty
+defaultNormalizeRequestOptions = NormalizeRequestOptions
+     { normDoClose   = False
+     , normForProxy  = False
+     , normUserAgent = Just defaultUserAgent
+     , normCustoms   = []
+     }
+
+-- | @normalizeRequest opts req@ is the entry point to use to normalize your
+-- request prior to transmission (or other use.) Normalization is controlled
+-- via the @NormalizeRequestOptions@ record.
+normalizeRequest :: NormalizeRequestOptions ty
+                 -> Request ty
+		 -> Request ty
+normalizeRequest opts req = foldr (\ f -> f opts) req normalizers
+ where
+  --normalizers :: [RequestNormalizer ty]
+  normalizers = 
+     ( normalizeHostURI
+     : normalizeConnectionClose
+     : normalizeUserAgent 
+     : normCustoms opts
+     )
+
+-- | @normalizeUserAgent ua x req@ augments the request @req@ with 
+-- a @User-Agent: ua@ header if @req@ doesn't already have a 
+-- a @User-Agent:@ set.
+normalizeUserAgent :: RequestNormalizer ty
+normalizeUserAgent opts req = 
+  case normUserAgent opts of
+    Nothing -> req
+    Just ua -> 
+     case findHeader HdrUserAgent req of
+       Nothing -> setHeaders req (mkHeader HdrUserAgent ua : getHeaders req)
+       Just{}  -> req
+
+-- | @normalizeConnectionClose opts req@ sets the header @Connection: close@ 
+-- to indicate one-shot behavior iff @normDoClose@ is @True@. i.e., it then
+-- _replaces_ any an existing @Connection:@ header in @req@.
+normalizeConnectionClose :: RequestNormalizer ty
+normalizeConnectionClose opts req 
+ | normDoClose opts = replaceHeader HdrConnection "close" req
+ | otherwise        = req
+
+-- | @normalizeHostURI forProxy req@ rewrites your request to have it
+-- follow the expected formats by the receiving party (proxy or server.)
+-- 
+normalizeHostURI :: RequestNormalizer ty
+normalizeHostURI opts req = 
   case splitRequestURI uri of
     ("",_uri_abs)
       | forProxy -> 
          case findHeader HdrHost req of
 	   Nothing -> req -- no host/authority in sight..not much we can do.
+	               -- Hmm..is it correct to scrub out the UserInfo here? 
 	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
 	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
 				   }}
@@ -590,11 +648,28 @@ normalizeRequest forProxy req =
     (h,uri_abs) 
       | forProxy  -> req
       | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs}
+ where
+   uri      = rqURI req 
+   forProxy = normForProxy opts
+
+{- Comments re: above rewriting:
+    RFC 2616, section 5.1.2:
+     "The most common form of Request-URI is that used to identify a
+      resource on an origin server or gateway. In this case the absolute
+      path of the URI MUST be transmitted (see section 3.2.1, abs_path) as
+      the Request-URI, and the network location of the URI (authority) MUST
+      be transmitted in a Host header field." 
+   We assume that this is the case, so we take the host name from
+   the Host header if there is one, otherwise from the request-URI.
+   Then we make the request-URI an abs_path and make sure that there
+   is a Host header.
+-}
 
 splitRequestURI :: URI -> ({-authority-}String, URI)
 splitRequestURI uri = (uriToAuthorityString uri, uri{uriScheme="", uriAuthority=Nothing})
 
--- Adds a Host header if one is NOT ALREADY PRESENT
+-- Adds a Host header if one is NOT ALREADY PRESENT..
+-- [deprecated, use normalizeRequest instead, if possible.]
 normalizeHostHeader :: Request ty -> Request ty
 normalizeHostHeader rq = 
   insertHeaderIfMissing HdrHost
