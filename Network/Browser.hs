@@ -28,61 +28,63 @@
 
 -}
 
-module Network.Browser (
-    BrowserState,
-    BrowserAction,      -- browser monad, effectively a state monad.
-    Cookie,
-    Form(..),
-    Proxy(..),
+module Network.Browser 
+       ( BrowserState
+       , BrowserAction      -- browser monad, effectively a state monad.
+       , Cookie
+       , Form(..)
+       , Proxy(..)
+       
+       , browse             -- :: BrowserAction a -> IO a
+       , request            -- :: Request -> BrowserAction Response
     
-    browse,             -- BrowserAction a -> IO a
-    request,            -- Request -> BrowserAction Response
-    
-    getBrowserState,
-    withBrowserState,
-    
-    setAllowRedirects,
-    getAllowRedirects,
-    
-    Authority(..),
-    getAuthorities, 
-    setAuthorities, 
-    addAuthority, 
-    getAuthorityGen, 
-    setAuthorityGen, 
-    setAllowBasicAuth,
+       , getBrowserState    -- :: BrowserAction t (BrowserState t)
+       , withBrowserState   -- :: BrowserState t -> BrowserAction t a -> BrowserAction t a
+       
+       , setAllowRedirects
+       , getAllowRedirects
+       
+       , Authority(..)
+       , getAuthorities
+       , setAuthorities
+       , addAuthority
+       
+       , getAuthorityGen
+       , setAuthorityGen
+       , setAllowBasicAuth
 
-    setCookieFilter,
-    defaultCookieFilter,
-    userCookieFilter,
+       , setCookieFilter
+       , defaultCookieFilter
+       , userCookieFilter
+       
+       , getCookies
+       , setCookies
+       , addCookie
+       
+       , setErrHandler     -- :: (String -> IO ()) -> BrowserAction t ()
+       , setOutHandler     -- :: (String -> IO ()) -> BrowserAction t ()
     
-    getCookies,
-    setCookies,
-    addCookie,
+       , setEventHandler   -- :: (BrowserEvent t -> BrowserAction t ()) -> BrowserAction t ()
+       
+       , BrowserEvent(..)
+       , BrowserEventType(..)
+       , RequestID
+       
+       , setProxy         -- :: Proxy -> BrowserAction t ()
+       , getProxy         -- :: BrowserAction t Proxy
+       , setDebugLog
+       
+       , out              -- :: String -> BrowserAction t ()
+       , err              -- :: String -> BrowserAction t ()
+       , ioAction         -- :: IO a -> BrowserAction a
 
-    setErrHandler,         -- :: (String -> IO ()) -> BrowserAction t ()
-    setOutHandler,         -- :: (String -> IO ()) -> BrowserAction t ()
-    
-    setEventHandler,         -- :: (BrowserEvent t -> BrowserAction t ()) -> BrowserAction t ()
-    
-    BrowserEvent(..),
-    BrowserEventType(..),
-    RequestID,
-
-    setProxy,
-
-    setDebugLog,
-
-    out,
-    err,
-    ioAction,           -- :: IO a -> BrowserAction a
-
-    defaultGETRequest,
-    defaultGETRequest_,
-    formToRequest,
-    uriDefaultTo,
-    uriTrimHost
-) where
+       , defaultGETRequest
+       , defaultGETRequest_
+       
+       , formToRequest
+       , uriDefaultTo
+       , uriTrimHost
+       ) where
 
 import Network.URI
    ( URI(uriAuthority, uriScheme, uriPath, uriQuery)
@@ -114,27 +116,10 @@ import System.Time ( ClockTime, getClockTime )
 
 import Data.Word (Word8)
 
-type Octet = Word8
-
-------------------------------------------------------------------
------------------------ Miscellaneous ----------------------------
-------------------------------------------------------------------
-
-word, quotedstring :: Parser String
-quotedstring =
-    do { char '"'  -- "
-       ; str <- many (satisfy $ not . (=='"'))
-       ; char '"'
-       ; return str
-       }
-
-word = many1 (satisfy (\x -> isAlphaNum x || x=='_' || x=='.' || x=='-' || x==':'))
-
-
--- | Returns a URI that is consistent with the first
--- argument uri when read in the context of a second.
--- If second argument is not sufficient context for
--- determining a full URI then anarchy reins.
+-- | @uriDefaultTo a b@ returns a URI that is consistent with the first
+-- argument URI @a@ when read in the context of the second URI @b@.
+-- If the second argument is not sufficient context for determining
+-- a full URI then anarchy reins.
 uriDefaultTo :: URI -> URI -> URI
 uriDefaultTo a b = maybe a id (a `relativeTo` b)
 
@@ -187,7 +172,6 @@ userCookieFilter url cky =
        System.IO.hSetBuffering System.IO.stdout System.IO.LineBuffering
        return (toLower x == 'y')
        
-
 
 -- | Serialise a Cookie for inclusion in a request.
 cookieToHeader :: Cookie -> Header
@@ -344,17 +328,19 @@ data Qop = QopAuth | QopAuthInt
     deriving(Eq,Show)
 
 
-data Challenge = ChalBasic  { chRealm   :: String }
-               | ChalDigest { chRealm   :: String
-                            , chDomain  :: [URI]
-                            , chNonce   :: String
-                            , chOpaque  :: Maybe String
-                            , chStale   :: Bool
-                            , chAlgorithm ::Maybe Algorithm
-                            , chQop     :: [Qop]
-                            }
+data Challenge 
+ = ChalBasic  { chRealm   :: String }
+ | ChalDigest { chRealm   :: String
+              , chDomain  :: [URI]
+              , chNonce   :: String
+              , chOpaque  :: Maybe String
+              , chStale   :: Bool
+              , chAlgorithm ::Maybe Algorithm
+              , chQop     :: [Qop]
+              }
 
--- | Convert WWW-Authenticate header into a Challenge object
+-- | @headerChallenge base www_auth@ tries to convert the @WWW-Authenticate@ header 
+-- @www_auth@  into a 'Challenge' value.
 headerToChallenge :: URI -> Header -> Maybe Challenge
 headerToChallenge baseURI (Header _ str) =
     case parse challenge "" str of
@@ -425,36 +411,33 @@ headerToChallenge baseURI (Header _ str) =
             _          -> Nothing
 
 
-data Authority = AuthBasic { auRealm    :: String
-                           , auUsername :: String
-                           , auPassword :: String
-                           , auSite     :: URI
-                           }
-               | AuthDigest { auRealm     :: String
-                            , auUsername  :: String
-                            , auPassword  :: String
-                            , auNonce     :: String
-                            , auAlgorithm :: Maybe Algorithm
-                            , auDomain    :: [URI]
-                            , auOpaque    :: Maybe String
-                            , auQop       :: [Qop]
-                            }
-
+data Authority 
+ = AuthBasic { auRealm    :: String
+             , auUsername :: String
+             , auPassword :: String
+             , auSite     :: URI
+             }
+ | AuthDigest{ auRealm     :: String
+             , auUsername  :: String
+             , auPassword  :: String
+             , auNonce     :: String
+             , auAlgorithm :: Maybe Algorithm
+             , auDomain    :: [URI]
+             , auOpaque    :: Maybe String
+             , auQop       :: [Qop]
+             }
 
 -- | Return authorities for a given domain and path.
 -- Assumes "dom" is lower case
 getAuthFor :: String -> String -> BrowserAction t [Authority]
-getAuthFor dom pth =
-    do { list <- getAuthorities
-       ; return (filter match list)
-       }
-    where
-        match :: Authority -> Bool
-        match (AuthBasic _ _ _ s) = matchURI s
-        match (AuthDigest _ _ _ _ _ ds _ _) = or (map matchURI ds)            
+getAuthFor dom pth = getAuthorities >>= return . (filter match)
+   where
+    match :: Authority -> Bool
+    match au@AuthBasic{}  = matchURI (auSite au)
+    match au@AuthDigest{} = or (map matchURI (auDomain au))
 
-        matchURI :: URI -> Bool
-        matchURI s = (uriToAuthorityString s == dom) && (uriPath s `isPrefixOf` pth)
+    matchURI :: URI -> Bool
+    matchURI s = (uriToAuthorityString s == dom) && (uriPath s `isPrefixOf` pth)
     
 
 -- | Interacting with browser state:
@@ -476,14 +459,9 @@ setAuthorityGen f = alterBS (\b -> b { bsAuthorityGen=f })
 setAllowBasicAuth :: Bool -> BrowserAction t ()
 setAllowBasicAuth ba = alterBS (\b -> b { bsAllowBasicAuth=ba })
 
-
-
-
 -- TO BE CHANGED!!!
 pickChallenge :: [Challenge] -> Maybe Challenge
 pickChallenge = listToMaybe
-
-
 
 -- | Retrieve a likely looking authority for a Request.
 anticipateChallenge :: Request ty -> BrowserAction t (Maybe Authority)
@@ -492,7 +470,6 @@ anticipateChallenge rq =
     do { authlist <- getAuthFor (uriAuthToString $ reqURIAuth rq) (uriPath uri)
        ; return (listToMaybe authlist)
        }
-
 
 -- | Asking the user to respond to a challenge
 challengeToAuthority :: URI -> Challenge -> BrowserAction t (Maybe Authority)
@@ -572,6 +549,8 @@ withAuthority a rq = case a of
         digesturi = show (rqURI rq)
         noncevalue = auNonce a
 
+type Octet = Word8
+
 -- FIXME: these probably only work right for latin-1 strings
 stringToOctets :: String -> [Octet]
 stringToOctets = map (fromIntegral . fromEnum)
@@ -603,6 +582,7 @@ data Proxy = NoProxy -- ^ Don't use a proxy.
 ------------------------------------------------------------------
 
 
+-- | @BrowserState@ 
 data BrowserState connection
  = BS { bsErr, bsOut     :: String -> IO ()
       , bsCookies        :: [Cookie]
@@ -826,19 +806,35 @@ request' nullVal rqState rq = do
          Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
    let rq'' = insertHeaders (map cookieToHeader cookies) rq'
    p <- getProxy
+   let defaultOpts = 
+         case p of 
+	   NoProxy -> defaultNormalizeRequestOptions
+	   Proxy _ ath ->
+	      defaultNormalizeRequestOptions
+	        { normForProxy=True
+		, normCustoms = 
+		    maybe []
+		          (\ authS -> [\ _ r -> insertHeader HdrProxyAuthorization (withAuthority authS r) r])
+			  ath
+		}
+   let final_req = normalizeRequest defaultOpts  rq''
+{-
    let rq_to_go = normalizeRequestURI False{-no close-}
                                       (uriToAuthorityString $ rqURI rq'')
 				      rq''
-   out ("Sending:\n" ++ show rq_to_go) 
+-}
+   out ("Sending:\n" ++ show final_req)
    e_rsp <- 
      case p of
-       NoProxy       -> dorequest (reqURIAuth rq'') rq_to_go
-       Proxy str ath -> do
+       NoProxy        -> dorequest (reqURIAuth rq'') final_req
+       Proxy str _ath -> do
+{-
             -- note: don't split off the authority for proxies..
           let rq_to_go' = maybe rq''
 	                    (\x -> insertHeader HdrProxyAuthorization
 			                        (withAuthority x rq'') rq'')
 		           ath
+-}
           let notURI 
 	       | null pt || null hst = 
 	         URIAuth{ uriUserInfo = ""
@@ -860,7 +856,7 @@ request' nullVal rqState rq = do
                       (parseURI str)
 
           out $ "proxy uri host: " ++ uriRegName proxyURIAuth ++ ", port: " ++ uriPort proxyURIAuth
-          dorequest proxyURIAuth rq_to_go'
+          dorequest proxyURIAuth final_req
    case e_rsp of
     Left v 
      | (reqRetries rqState < maxRetries) && (v == ErrorReset || v == ErrorClosed) ->
@@ -1087,3 +1083,20 @@ formToRequest (Form m u vs) =
                         , rqURI=u
                         }
         _ -> error ("unexpected request: " ++ show m)
+
+
+------------------------------------------------------------------
+----------------------- Miscellaneous ----------------------------
+------------------------------------------------------------------
+
+word, quotedstring :: Parser String
+quotedstring =
+    do { char '"'  -- "
+       ; str <- many (satisfy $ not . (=='"'))
+       ; char '"'
+       ; return str
+       }
+
+word = many1 (satisfy (\x -> isAlphaNum x || x=='_' || x=='.' || x=='-' || x==':'))
+
+
