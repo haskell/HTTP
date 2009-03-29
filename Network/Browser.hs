@@ -144,13 +144,10 @@ data Cookie
     }
     deriving(Show,Read)
 
-
 instance Eq Cookie where
     a == b  =  ckDomain a == ckDomain b 
             && ckName a == ckName b 
             && ckPath a == ckPath b
-
-
 
 defaultCookieFilter :: URI -> Cookie -> IO Bool
 defaultCookieFilter _url _cky = return True
@@ -314,8 +311,6 @@ Notes:
    to use next-nonce etc
 
 -}
-
-
 data Algorithm = AlgMD5 | AlgMD5sess
     deriving(Eq)
 
@@ -629,8 +624,10 @@ defaultBrowserState = res
      , bsOut              = putStrLn
      , bsCookies          = []
      , bsCookieFilter     = defaultCookieFilter
-     , bsAuthorityGen     = \ _uri _realm -> 
-          (bsErr res) ("No action for prompting/generating user+password credentials provided (use: setAuthorityGen); returning Nothing") >> return Nothing
+     , bsAuthorityGen     = \ _uri _realm -> do
+          bsErr res "No action for prompting/generating user+password credentials \
+                     \ provided (use: setAuthorityGen); returning Nothing"
+          return Nothing
      , bsAuthorities      = []
      , bsAllowRedirects   = True
      , bsAllowBasicAuth   = False
@@ -789,9 +786,15 @@ request' :: HStream ty
 	 -> Request ty
 	 -> BrowserAction (HandleStream ty) (URI,Response ty)
 request' nullVal rqState rq = do
-     -- add cookies to request
    let uri = rqURI rq
-   cookies <- getCookiesFor (uriAuthToString $ reqURIAuth rq) (uriPath uri)
+   let uria = reqURIAuth rq 
+     -- add cookies to request
+   cookies <- getCookiesFor (uriAuthToString uria) (uriPath uri)
+{- Not for now:
+   (case uriUserInfo uria of
+     "" -> id
+     xs -> case break (==':') xs of { (as,_:bs) -> withAuth AuthBasic{auUsername=as,auPassword=bs,auRealm="/",auSite=uri} ; _ -> id}) $ do
+-}
    when (not $ null cookies) 
         (out $ "Adding cookies to request.  Cookie names: "  ++
                foldl spaceappend "" (map ckName cookies))
@@ -1006,27 +1009,17 @@ dorequest hst rqst =
                ; conn <- ioAction $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
                ; rsp <- case conn of
                     [] -> do { out ("Creating new connection to " ++ uriAuthToString hst)
-                             ; let aport = case uriPort hst of
-                                            (':':s) -> 
-					      case reads s of { ((v,_):_) -> v ; _ -> 80}
-                                            _       -> 80
+                             ; let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
 		             ; reportEvent OpenConnection (show (rqURI rqst))
-                             ; c <- ioAction $ openStream (uriRegName hst) aport
-			     ; let len_pool = length pool
-                             ; when (len_pool > 5)
-                                    (ioAction $ close (last pool))
-                             ; let pool' 
-			            | len_pool > 5 = init pool
-				    | otherwise    = pool
-                             ; alterBS (\b -> b { bsConnectionPool=c:pool' })
-                             ; dorequest2 c rqst
+                             ; c <- ioAction $ openStream (uriRegName hst) uPort
+			     ; updateConnectionPool c
+			     ; dorequest2 c rqst
                              }
                     (c:_) ->
                         do { out ("Recovering connection to " ++ uriAuthToString hst)
 			   ; reportEvent ReuseConnection (show (rqURI rqst))
                            ; dorequest2 c rqst
                            }
-               ; 
 	       ; case rsp of { Right (Response a b c _) -> reportEvent (ResponseEnd (a,b,c)) (show (rqURI rqst)) ; _ -> return ()}
                ; return rsp
                }
@@ -1049,16 +1042,22 @@ dorequest hst rqst =
 	   sendHTTP_notify c' r onSendComplete
 
 
-reqURIAuth :: Request ty -> URIAuth
-reqURIAuth req = 
-  case uriAuthority (rqURI req) of
-    Just ua -> ua
-    _ -> case lookupHeader HdrHost (rqHeaders req) of
-           Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
-	   Just h  -> URIAuth { uriUserInfo = ""
-	                      , uriRegName  = h
-			      , uriPort     = ""
-			      }
+updateConnectionPool :: HStream hTy
+                     => HandleStream hTy
+		     -> BrowserAction (HandleStream hTy) ()
+updateConnectionPool c = do
+   pool <- getBS bsConnectionPool
+   let len_pool = length pool
+   when (len_pool > maxPoolSize)
+        (ioAction $ close (last pool))
+   let pool' 
+	| len_pool > maxPoolSize = init pool
+	| otherwise              = pool
+   alterBS (\b -> b { bsConnectionPool=c:pool' })
+   return ()
+                             
+maxPoolSize :: Int
+maxPoolSize = 5
 
 -- This form junk is completely untested...
 
