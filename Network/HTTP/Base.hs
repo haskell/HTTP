@@ -198,7 +198,7 @@ reqURIAuth req =
 	      case toHostPort h of
 	        (h,p) -> URIAuth { uriUserInfo = ""
 	                          , uriRegName  = h
-			          , uriPort     = ""
+			          , uriPort     = p
 			          }
   where
     -- Note: just in case you're wondering..the convention is to include the ':'
