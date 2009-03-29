@@ -36,8 +36,10 @@ module Network.HTTP.Base
        , parseURIAuthority
        
           -- internal
-       , uriToAuthorityString   -- :: URI    -> String
+       , uriToAuthorityString   -- :: URI     -> String
        , uriAuthToString        -- :: URIAuth -> String
+       , uriAuthPort            -- :: Maybe URI -> URIAuth -> Int
+       , reqURIAuth             -- :: Request ty -> URIAuth
 
        , parseResponseHead      -- :: [String] -> Result ResponseData
        , parseRequestHead       -- :: [String] -> Result RequestData
@@ -163,6 +165,45 @@ uriAuthToString ua =
          , uriRegName ua
 	 , uriPort ua
 	 ]
+
+uriAuthPort :: Maybe URI -> URIAuth -> Int
+uriAuthPort mbURI u = 
+  case uriPort u of
+    (':':s) -> 
+      case reads s of 
+        ((v,_):_) -> v ; _ -> default_port mbURI
+    _       -> default_port mbURI
+ where
+  default_port Nothing = default_http
+  default_port (Just u) = 
+    case map toLower $ uriScheme u of
+      "http:" -> default_http
+      "https:" -> default_https
+        -- todo: refine
+      _ -> default_http
+
+  default_http  = 80
+  default_https = 443
+
+-- Fish out the authority from a possibly normalized Request, i.e.,
+-- the information may either be in the request's URI or inside
+-- the Host: header.
+reqURIAuth :: Request ty -> URIAuth
+reqURIAuth req = 
+  case uriAuthority (rqURI req) of
+    Just ua -> ua
+    _ -> case lookupHeader HdrHost (rqHeaders req) of
+           Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
+	   Just h  -> 
+	      case toHostPort h of
+	        (h,p) -> URIAuth { uriUserInfo = ""
+	                          , uriRegName  = h
+			          , uriPort     = ""
+			          }
+  where
+    -- Note: just in case you're wondering..the convention is to include the ':'
+    -- in the port part..
+   toHostPort h = break (==':') h
 
 -----------------------------------------------------------------
 ------------------ HTTP Messages --------------------------------
