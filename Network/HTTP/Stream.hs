@@ -1,97 +1,26 @@
 -----------------------------------------------------------------------------
 -- |
--- Module      :  Network.HTTP
+-- Module      :  Network.HTTP.Stream
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2005, 2007 Robin Bate Boerop
 -- License     :  BSD
 -- 
--- Maintainer  :  bjorn@bringert.net
+-- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- An easy HTTP interface enjoy.
+-- Transmitting HTTP requests and responses holding @String@ in their payload bodies.
+-- This is one of the implementation modules for the "Network.HTTP" interface, representing
+-- request and response content as @String@s and transmitting them in non-packed form
+-- (cf. "Network.HTTP.HandleStream" and its use of @ByteString@s.) over 'Stream' handles.
+-- It is mostly here for backwards compatibility, representing how requests and responses
+-- were transmitted up until the 4.x releases of the HTTP package.
 --
--- * Changes by Robin Bate Boerop <robin@bateboerop.name>:
---      - Made dependencies explicit in import statements.
---      - Removed false dependencies in import statements.
---      - Added missing type signatures.
---      - Moved Header-related code to Network.HTTP.Headers module.
---
--- * Changes by Simon Foster:
---      - Split module up into to sepearate Network.[Stream,TCP,HTTP] modules
---      - Created functions receiveHTTP and responseHTTP to allow server side interactions
---        (although 100-continue is unsupported and I haven't checked for standard compliancy).
---      - Pulled the transfer functions from sendHTTP to global scope to allow access by
---        above functions.
---
--- * Changes by Graham Klyne:
---      - export httpVersion
---      - use new URI module (similar to old, but uses revised URI datatype)
---
--- * Changes by Bjorn Bringert:
---
---      - handle URIs with a port number
---      - added debugging toggle
---      - disabled 100-continue transfers to get HTTP\/1.0 compatibility
---      - change 'ioError' to 'throw'
---      - Added simpleHTTP_, which takes a stream argument.
---
--- * Changes from 0.1
---      - change 'openHTTP' to 'openTCP', removed 'closeTCP' - use 'close' from 'Stream' class.
---      - added use of inet_addr to openHTTP, allowing use of IP "dot" notation addresses.
---      - reworking of the use of Stream, including alterations to make 'sendHTTP' generic
---        and the addition of a debugging stream.
---      - simplified error handling.
+-- For more detailed information about what the individual exports do, please consult
+-- the documentation for "Network.HTTP". /Notice/ however that the functions here do
+-- not perform any kind of normalization prior to transmission (or receipt); you are
+-- responsible for doing any such yourself, or, if you prefer, just switch to using
+-- "Network.HTTP" function instead.
 -- 
--- * TODO
---     - request pipelining
---     - https upgrade (includes full TLS, i.e. SSL, implementation)
---         - use of Stream classes will pay off
---         - consider C implementation of encryption\/decryption
---     - comm timeouts
---     - MIME & entity stuff (happening in separate module)
---     - support \"*\" uri-request-string for OPTIONS request method
--- 
--- 
--- * Header notes:
---
---     [@Host@]
---                  Required by HTTP\/1.1, if not supplied as part
---                  of a request a default Host value is extracted
---                  from the request-uri.
--- 
---     [@Connection@] 
---                  If this header is present in any request or
---                  response, and it's value is "close", then
---                  the current request\/response is the last 
---                  to be allowed on that connection.
--- 
---     [@Expect@]
---                  Should a request contain a body, an Expect
---                  header will be added to the request.  The added
---                  header has the value \"100-continue\".  After
---                  a 417 \"Expectation Failed\" response the request
---                  is attempted again without this added Expect
---                  header.
---                  
---     [@TransferEncoding,ContentLength,...@]
---                  if request is inconsistent with any of these
---                  header values then you may not receive any response
---                  or will generate an error response (probably 4xx).
---
---
--- * Response code notes
--- Some response codes induce special behaviour:
---
---   [@1xx@]   \"100 Continue\" will cause any unsent request body to be sent.
---             \"101 Upgrade\" will be returned.
---             Other 1xx responses are ignored.
--- 
---   [@417@]   The reason for this code is \"Expectation failed\", indicating
---             that the server did not like the Expect \"100-continue\" header
---             added to a request.  Receipt of 417 will induce another
---             request attempt (without Expect header), unless no Expect header
---             had been added (in which case 417 response is returned).
---
 -----------------------------------------------------------------------------
 module Network.HTTP.Stream 
        ( module Network.Stream
@@ -136,12 +65,7 @@ httpLogFile = "http-debug.log"
 -----------------------------------------------------------------
 
 
--- | Simple way to get a resource across a non-persistant connection.
--- Headers that may be altered:
---  Host        Altered only if no Host header is supplied, HTTP\/1.1
---              requires a Host header.
---  Connection  Where no allowance is made for persistant connections
---              the Connection header will be set to "close"
+-- | Simple way to transmit a resource across a non-persistent connection.
 simpleHTTP :: Request_String -> IO (Result Response_String)
 simpleHTTP r = do 
    auth <- getAuth r

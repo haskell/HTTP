@@ -1,15 +1,21 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.HandleStream
--- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2005, 2007 Robin Bate Boerop, 2008 Sigbjorn Finne
+-- Copyright   :  (c) 2008- Sigbjorn Finne
 -- License     :  BSD
 -- 
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- A HandleStream version of Network.HTTP.Stream's public offerings.
+-- A 'HandleStream'-based version of "Network.HTTP" interface.
 --
+-- For more detailed information about what the individual exports do, please consult
+-- the documentation for "Network.HTTP". /Notice/ however that the functions here do
+-- not perform any kind of normalization prior to transmission (or receipt); you are
+-- responsible for doing any such yourself, or, if you prefer, just switch to using
+-- "Network.HTTP" function instead.
+-- 
 -----------------------------------------------------------------------------
 module Network.HTTP.HandleStream 
        ( simpleHTTP      -- :: Request ty -> IO (Result (Response ty))
@@ -33,7 +39,7 @@ import Network.TCP (HStream(..), HandleStream )
 
 import Network.HTTP.Base
 import Network.HTTP.Headers
-import Network.HTTP.Utils ( trim )
+import Network.HTTP.Utils ( trim, readsOne )
 
 import Data.Char (toLower)
 import Data.Maybe (fromMaybe)
@@ -43,18 +49,15 @@ import Control.Monad (when)
 ------------------ Misc -----------------------------------------
 -----------------------------------------------------------------
 
--- | Simple way to get a resource across a non-persistant connection.
--- Headers that may be altered:
---  Host        Altered only if no Host header is supplied, HTTP\/1.1
---              requires a Host header.
---  Connection  Where no allowance is made for persistant connections
---              the Connection header will be set to "close"
+-- | @simpleHTTP@ transmits a resource across a non-persistent connection.
 simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do 
   auth <- getAuth r
   c <- openStream (host auth) (fromMaybe 80 (port auth))
   simpleHTTP_ c r
 
+-- | @simpleHTTP_debug debugFile req@ behaves like 'simpleHTTP', but logs
+-- the HTTP operation via the debug file @debugFile@.
 simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
 simpleHTTP_debug httpLogFile r = do 
   auth <- getAuth r
@@ -66,9 +69,16 @@ simpleHTTP_debug httpLogFile r = do
 simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 simpleHTTP_ s r = sendHTTP s r
 
+-- | @sendHTTP hStream httpRequest@ transmits @httpRequest@ over
+-- @hStream@, but does not alter the status of the connection, nor request it to be
+-- closed upon receiving the response.
 sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 
+-- | @sendHTTP_notify hStream httpRequest action@ behaves like 'sendHTTP', but
+-- lets you supply an IO @action@ to execute once the request has been successfully
+-- transmitted over the connection. Useful when you want to set up tracing of
+-- request transmission and its performance.
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
 		-> Request ty
@@ -172,8 +182,7 @@ getResponseHead conn =
    fmapE (\es -> parseResponseHead (map (buf_toStr bufferOps) es))
          (readTillEmpty1 bufferOps (readLine conn))
 
--- | Receive and parse a HTTP request from the given Stream. Should be used 
---   for server side interactions.
+-- | @receiveHTTP hStream@ reads a 'Request' from the 'HandleStream' @hStream@
 receiveHTTP :: HStream bufTy => HandleStream bufTy -> IO (Result (Request bufTy))
 receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
   where
@@ -201,8 +210,9 @@ receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
      cl = lookupHeader HdrContentLength hdrs
      bo = bufferOps
 
--- | Very simple function, send a HTTP response over the given stream. This 
---   could be improved on to use different transfer types.
+-- | @respondHTTP hStream httpResponse@ transmits an HTTP 'Response' over
+-- the 'HandleStream' @hStream@. It could be used to implement simple web
+-- server interactions, performing the dual role to 'sendHTTP'.
 respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
 respondHTTP conn rsp = do 
   writeBlock conn (buf_fromStr bufferOps $ show rsp)
@@ -211,12 +221,6 @@ respondHTTP conn rsp = do
   return ()
 
 ------------------------------------------------------------------------------
-
-readsOne :: Read a => (a -> b) -> b -> String -> b
-readsOne f n str = 
- case reads str of
-   ((v,_):_) -> f v
-   _ -> n
 
 headerName :: String -> String
 headerName x = map toLower (trim x)
