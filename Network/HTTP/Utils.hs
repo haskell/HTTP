@@ -1,7 +1,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Utils
--- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004, 2007 Robin Bate Boerop, 2008 Sigbjorn Finne
+-- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004, 2007 Robin Bate Boerop, 2008- Sigbjorn Finne
 -- License     :  BSD
 --
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
@@ -11,15 +11,17 @@
 -- Set of utility functions and definitions used by package modules.
 --
 module Network.HTTP.Utils
-       ( trim    -- :: String -> String
-       , trimL   -- :: String -> String
-       , trimR   -- :: String -> String
+       ( trim     -- :: String -> String
+       , trimL    -- :: String -> String
+       , trimR    -- :: String -> String
        
-       , crlf    -- :: String
-       , sp      -- :: String
+       , crlf     -- :: String
+       , sp       -- :: String
 
-       , split   -- :: Eq a => a -> [a] -> Maybe ([a],[a])
-       , splitBy -- :: Eq a => a -> [a] -> [[a]]
+       , split    -- :: Eq a => a -> [a] -> Maybe ([a],[a])
+       , splitBy  -- :: Eq a => a -> [a] -> [[a]]
+       
+       , readsOne -- :: Read a => (a -> b) -> b -> String -> b
        
        ) where
        
@@ -69,4 +71,13 @@ splitBy c xs =
     case break (==c) xs of
       (_,[]) -> [xs]
       (as,_:bs) -> as : splitBy c bs
+
+-- | @readsOne f def str@ tries to 'read' @str@, taking
+-- the first result and passing it to @f@. If the 'read'
+-- doesn't succeed, return @def@.
+readsOne :: Read a => (a -> b) -> b -> String -> b
+readsOne f n str = 
+ case reads str of
+   ((v,_):_) -> f v
+   _ -> n
 

@@ -8,13 +8,19 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- An easy HTTP interface; base types.
+-- Definitions of @Request@ and @Response@ types along with functions
+-- for normalizing them. It is assumed to be an internal module; user
+-- code should, if possible, import @Network.HTTP@ to access the functionality
+-- that this module provides.
+--
+-- Additionally, the module exports internal functions for working with URLs,
+-- and for handling the processing of requests and responses coming back.
 --
 -----------------------------------------------------------------------------
 module Network.HTTP.Base
        (
           -- ** Constants
-         httpVersion
+         httpVersion                 -- :: String
 
           -- ** HTTP
        , Request(..)
@@ -50,10 +56,11 @@ module Network.HTTP.Base
        , ResponseCode
        , RequestData
        
-       , NormalizeRequestOptions(..)
-       , defaultNormalizeRequestOptions
-       
-       , normalizeRequest
+       , NormalizeRequestOptions(..) 
+       , defaultNormalizeRequestOptions -- :: NormalizeRequestOptions ty
+       , RequestNormalizer
+
+       , normalizeRequest   -- :: NormalizeRequestOptions ty -> Request ty -> Request ty
 
        , splitRequestURI
 
@@ -105,7 +112,7 @@ import Numeric       ( readHex )
 import Network.Stream
 import Network.BufferType ( BufferOp(..), BufferType(..) )
 import Network.HTTP.Headers
-import Network.HTTP.Utils ( trim, crlf, sp )
+import Network.HTTP.Utils ( trim, crlf, sp, readsOne )
 
 import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
@@ -169,9 +176,7 @@ uriAuthToString ua =
 uriAuthPort :: Maybe URI -> URIAuth -> Int
 uriAuthPort mbURI u = 
   case uriPort u of
-    (':':s) -> 
-      case reads s of 
-        ((v,_):_) -> v ; _ -> default_port mbURI
+    (':':s) -> readsOne id (default_port mbURI) s
     _       -> default_port mbURI
  where
   default_port Nothing = default_http
@@ -603,7 +608,7 @@ getAuth r =
   auth = maybe (uriToAuthorityString uri) id (findHeader HdrHost r)
   uri  = rqURI r
 
--- deprecated, use 'normalizeRequest'.
+{-# DEPRECATED normalizeRequestURI "Please use Network.HTTP.Base.normalizeRequest instead" #-}
 normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
 normalizeRequestURI doClose h r = 
   (if doClose then replaceHeader HdrConnection "close" else id) $
@@ -726,7 +731,7 @@ splitRequestURI :: URI -> ({-authority-}String, URI)
 splitRequestURI uri = (uriToAuthorityString uri, uri{uriScheme="", uriAuthority=Nothing})
 
 -- Adds a Host header if one is NOT ALREADY PRESENT..
--- [deprecated, use normalizeRequest instead, if possible.]
+{-# DEPRECATED normalizeHostHeader "Please use Network.HTTP.Base.normalizeRequest instead" #-}
 normalizeHostHeader :: Request ty -> Request ty
 normalizeHostHeader rq = 
   insertHeaderIfMissing HdrHost
@@ -740,7 +745,6 @@ findConnClose hdrs =
   maybe False
         (\ x -> map toLower (trim x) == "close")
 	(lookupHeader HdrConnection hdrs)
-
 
 -- | Used when we know exactly how many bytes to expect.
 linearTransfer :: (Int -> IO (Result a)) -> Int -> IO (Result ([Header],a))

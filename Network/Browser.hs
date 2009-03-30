@@ -8,31 +8,35 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- An HTTP\/1.1 compatible wrapper for the HTTP module.
+-- Session-level interactions over HTTP.
+-- 
+-- The "Network.Browser" goes beyond the basic "Network.HTTP" functionality in 
+-- providing support for more involved, and real, request/response interactions over 
+-- HTTP. Additional features supported are:
+--
+--* HTTP Authentication handling
+--
+--* Transparent handling of redirects
+--
+--* Cookie stores + transmission.
+--
+--* Transaction logging
+--
+--* Proxy-mediated connections.
+--
+-- Example use:
+--
+-- >    do 
+-- >      rsp <- Network.Browser.browse $ do
+-- >               setAllowRedirects True -- handle HTTP redirects
+-- >               request $ getRequest "http://google.com/"
+-- >      fmap (take 100) (getResponseBody rsp)
+-- 
 -----------------------------------------------------------------------------
- 
-{-
-  Changes by Robin Bate Boerop <robin@bateboerop.name>:
-   - Made dependencies explicit in import statements.
-   - Added type signatures.
-   - Imported new StreamDebugger module.
-
-  Change Log:
-   - altered 'closeTCP' to 'close', for consistency with altered HTTP
-   - added debugging settings to browser.
-
-  To Do: 
-   - testing!!!
-   - remove BrowserAction type? Possibly replace with IORef?
-   - (more todo's in the HTTP mod)
-
--}
-
 module Network.Browser 
        ( BrowserState
        , BrowserAction      -- browser monad, effectively a state monad.
        , Cookie
-       , Form(..)
        , Proxy(..)
        
        , browse             -- :: BrowserAction a -> IO a
@@ -48,6 +52,9 @@ module Network.Browser
        , getAuthorities
        , setAuthorities
        , addAuthority
+       , Challenge(..)
+       , Qop(..)
+       , Algorithm(..)
        
        , getAuthorityGen
        , setAuthorityGen
@@ -84,6 +91,10 @@ module Network.Browser
        , formToRequest
        , uriDefaultTo
        , uriTrimHost
+       
+         -- old and half-baked; don't use:
+       , Form(..)
+       , FormVar
        ) where
 
 import Network.URI
