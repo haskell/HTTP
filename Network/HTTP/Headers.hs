@@ -47,6 +47,7 @@ module Network.HTTP.Headers
    ( HasHeaders(..)
    , Header(..)
    , HeaderName(..)
+   , mkHeader
 
    , insertHeader
    , insertHeaderIfMissing
@@ -60,14 +61,18 @@ module Network.HTTP.Headers
    ) where
 
 import Data.Char (toLower)
-import Network.Stream (Result, ConnError(ErrorParse))
+import Network.Stream (Result, failParse)
 import Network.HTTP.Utils ( trim, split, crlf )
 
 -- | The @Header@ data type pairs header names & values.
 data Header = Header HeaderName String
 
+-- | Header constructor as a function, hiding above rep.
+mkHeader :: HeaderName -> String -> Header
+mkHeader = Header
+
 instance Show Header where
-    show (Header key value) = show key ++ ": " ++ value ++ crlf
+    show (Header key value) = shows key (':':' ':value ++ crlf)
 
 -- | HTTP Header Name type:
 --  Why include this at all?  I have some reasons
@@ -118,6 +123,8 @@ data HeaderName
  | HdrRetryAfter
  | HdrServer
  | HdrSetCookie
+ | HdrTE
+ | HdrTrailer
  | HdrVary
  | HdrWarning
  | HdrWWWAuthenticate
@@ -156,6 +163,8 @@ headerMap =
    , p "Accept-Encoding"      HdrAcceptEncoding
    , p "Accept-Language"      HdrAcceptLanguage
    , p "Authorization"        HdrAuthorization
+   , p "Cookie"               HdrCookie
+   , p "Expect"               HdrExpect
    , p "From"                 HdrFrom
    , p "Host"                 HdrHost
    , p "If-Modified-Since"    HdrIfModifiedSince
@@ -174,6 +183,9 @@ headerMap =
    , p "Public"               HdrPublic
    , p "Retry-After"          HdrRetryAfter
    , p "Server"               HdrServer
+   , p "Set-Cookie"           HdrSetCookie
+   , p "TE"                   HdrTE
+   , p "Trailer"              HdrTrailer
    , p "Vary"                 HdrVary
    , p "Warning"              HdrWarning
    , p "WWW-Authenticate"     HdrWWWAuthenticate
@@ -189,9 +201,7 @@ headerMap =
    , p "ETag"                 HdrETag
    , p "Expires"              HdrExpires
    , p "Last-Modified"        HdrLastModified
-   , p "Set-Cookie"           HdrSetCookie
-   , p "Cookie"               HdrCookie
-   , p "Expect"               HdrExpect
+   , p "Content-Transfer-Encoding" HdrContentTransferEncoding
    ]
  where
   p a b = (a,b)
@@ -257,8 +267,8 @@ lookupHeader _ _  =  Nothing
 parseHeader :: String -> Result Header
 parseHeader str =
     case split ':' str of
-        Nothing -> Left (ErrorParse $ "Unable to parse header: " ++ str)
-        Just (k,v) -> Right $ Header (fn k) (trim $ drop 1 v)
+        Nothing -> failParse ("Unable to parse header: " ++ str)
+        Just (k,v) -> return $ Header (fn k) (trim $ drop 1 v)
     where
         fn k = case map snd $ filter (match k . fst) headerMap of
                  [] -> (HdrCustom k)
@@ -273,17 +283,19 @@ parseHeaders =
    where
         -- Joins consecutive lines where the second line
         -- begins with ' ' or '\t'.
+        joinExtended old      [] = [old]
         joinExtended old (h : t)
-            | not (null h) && (head h == ' ' || head h == '\t')
-                = joinExtended (old ++ ' ' : tail h) t
-            | otherwise = old : joinExtended h t
-        joinExtended old [] = [old]
+	  | isLineExtension h    = joinExtended (old ++ ' ' : tail h) t
+          | otherwise            = old : joinExtended h t
+	
+	isLineExtension (x:_) = x == ' ' || x == '\t'
+	isLineExtension _ = False
 
         clean [] = []
         clean (h:t) | h `elem` "\t\r\n" = ' ' : clean t
                     | otherwise = h : clean t
 
-        -- tollerant of errors?  should parse
+        -- tolerant of errors?  should parse
         -- errors here be reported or ignored?
         -- currently ignored.
         catRslts :: [a] -> [Result a] -> Result [a]

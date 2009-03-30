@@ -96,11 +96,12 @@
 module Network.HTTP.Stream 
        ( module Network.Stream
 
-       , simpleHTTP     -- :: Request -> IO (Result Response)
-       , simpleHTTP_    -- :: Stream s => s -> Request -> IO (Result Response)
-       , sendHTTP       -- :: Stream s => s -> Request -> IO (Result Response)
-       , receiveHTTP    -- :: Stream s => s -> IO (Result Request)
-       , respondHTTP    -- :: Stream s => s -> Response -> IO ()
+       , simpleHTTP      -- :: Request_String -> IO (Result Response_String)
+       , simpleHTTP_     -- :: Stream s => s -> Request_String -> IO (Result Response_String)
+       , sendHTTP        -- :: Stream s => s -> Request_String -> IO (Result Response_String)
+       , sendHTTP_notify -- :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+       , receiveHTTP     -- :: Stream s => s -> IO (Result Request_String)
+       , respondHTTP     -- :: Stream s => s -> Response_String -> IO ()
        
        ) where
 
@@ -117,7 +118,6 @@ import Network.HTTP.Base
 import Network.HTTP.Headers
 import Network.HTTP.Utils ( trim )
 
-import Control.Exception as Exception (IOException)
 import Data.Char     (toLower)
 import Data.Maybe    (fromMaybe)
 import Control.Monad (when)
@@ -131,9 +131,6 @@ debug = False
 httpLogFile :: String
 httpLogFile = "http-debug.log"
 
-catchIO :: IO a -> (IOException -> IO a) -> IO a
-catchIO a h = Prelude.catch a h
-
 -----------------------------------------------------------------
 ------------------ Misc -----------------------------------------
 -----------------------------------------------------------------
@@ -145,41 +142,36 @@ catchIO a h = Prelude.catch a h
 --              requires a Host header.
 --  Connection  Where no allowance is made for persistant connections
 --              the Connection header will be set to "close"
-simpleHTTP :: Request -> IO (Result Response)
-simpleHTTP r = 
-    do 
-       auth <- getAuth r
-       c <- openTCPPort (host auth) (fromMaybe 80 (port auth))
-       simpleHTTP_ c r
+simpleHTTP :: Request_String -> IO (Result Response_String)
+simpleHTTP r = do 
+   auth <- getAuth r
+   c    <- openTCPPort (host auth) (fromMaybe 80 (port auth))
+   simpleHTTP_ c r
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
-simpleHTTP_ :: Stream s => s -> Request -> IO (Result Response)
-simpleHTTP_ s r =
-    do 
-       auth <- getAuth r
-       let r' = normalizeRequestURI auth r 
-       rsp <- if debug then do
-	        s' <- debugStream httpLogFile s
-	        sendHTTP s' r'
-	       else
-	        sendHTTP s r'
-       -- already done by sendHTTP because of "Connection: close" header
-       --; close s 
-       return rsp
+simpleHTTP_ :: Stream s => s -> Request_String -> IO (Result Response_String)
+simpleHTTP_ s r
+ | not debug    = sendHTTP s r
+ | otherwise    = do
+      s' <- debugStream httpLogFile s
+      sendHTTP s' r
+    -- already done by sendHTTP because of "Connection: close" header
+    --; close s 
 
-sendHTTP :: Stream s => s -> Request -> IO (Result Response)
-sendHTTP conn rq = 
-    do { let a_rq = normalizeHostHeader rq
-       ; rsp <- catchIO (main a_rq)
-                        (\e -> do { close conn; ioError e })
-       ; let fn list = when (or $ map findConnClose list)
-                            (close conn)
-       ; either (\_ -> fn [rqHeaders rq])
-                (\r -> fn [rqHeaders rq,rspHeaders r])
-                rsp
-       ; return rsp
-       }
-    where       
+sendHTTP :: Stream s => s -> Request_String -> IO (Result Response_String)
+sendHTTP conn rq = sendHTTP_notify conn rq (return ())
+
+sendHTTP_notify :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+sendHTTP_notify conn rq onSendComplete = do 
+   rsp <- catchIO (sendMain conn rq onSendComplete)
+                  (\e -> do { close conn; ioError e })
+   let fn list = when (or $ map findConnClose list)
+                      (close conn)
+   either (\_ -> fn [rqHeaders rq])
+          (\r -> fn [rqHeaders rq,rspHeaders r])
+          rsp
+   return rsp
+
 -- From RFC 2616, section 8.2.3:
 -- 'Because of the presence of older implementations, the protocol allows
 -- ambiguous situations in which a client may send "Expect: 100-
@@ -190,40 +182,39 @@ sendHTTP conn rq =
 -- for an indefinite period before sending the request body.'
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
-        main :: Request -> IO (Result Response)
-        main rqst =
-            do 
-	       --let str = if null (rqBody rqst)
-               --              then show rqst
-               --              else show (insertHeader HdrExpect "100-continue" rqst)
-               writeBlock conn (show rqst)
-	       -- write body immediately, don't wait for 100 CONTINUE
-	       writeBlock conn (rqBody rqst)
-               rsp <- getResponseHead               
-               switchResponse True False rsp rqst
+sendMain :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+sendMain conn rqst onSendComplete =  do 
+    --let str = if null (rqBody rqst)
+    --              then show rqst
+    --              else show (insertHeader HdrExpect "100-continue" rqst)
+   writeBlock conn (show rqst)
+    -- write body immediately, don't wait for 100 CONTINUE
+   writeBlock conn (rqBody rqst)
+   onSendComplete
+   rsp <- getResponseHead conn
+   switchResponse conn True False rsp rqst
         
-        -- reads and parses headers
-        getResponseHead :: IO (Result ResponseData)
-        getResponseHead =
-            do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
-               ; return $ lor `bindE` parseResponseHead
-               }
+-- reads and parses headers
+getResponseHead :: Stream s => s -> IO (Result ResponseData)
+getResponseHead conn = do
+   lor <- readTillEmpty1 stringBufferOp (readLine conn)
+   return $ lor >>= parseResponseHead
 
-        -- Hmmm, this could go bad if we keep getting "100 Continue"
-        -- responses...  Except this should never happen according
-        -- to the RFC.
-        switchResponse :: Bool {- allow retry? -}
-                       -> Bool {- is body sent? -}
-                       -> Result ResponseData
-                       -> Request
-                       -> IO (Result Response)
-            
-        switchResponse _ _ (Left e) _ = return (Left e)
-                -- retry on connreset?
-                -- if we attempt to use the same socket then there is an excellent
-                -- chance that the socket is not in a completely closed state.
-
-        switchResponse allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
+-- Hmmm, this could go bad if we keep getting "100 Continue"
+-- responses...  Except this should never happen according
+-- to the RFC.
+switchResponse :: Stream s
+               => s
+	       -> Bool {- allow retry? -}
+               -> Bool {- is body sent? -}
+               -> Result ResponseData
+               -> Request_String
+               -> IO (Result Response_String)
+switchResponse _ _ _ (Left e) _ = return (Left e)
+        -- retry on connreset?
+        -- if we attempt to use the same socket then there is an excellent
+        -- chance that the socket is not in a completely closed state.
+switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
             case matchResponse (rqMethod rqst) cd of
                 Continue
                     | not bdy_sent -> {- Time to send the body -}
@@ -231,28 +222,28 @@ sendHTTP conn rq =
                            ; case val of
                                 Left e -> return (Left e)
                                 Right _ ->
-                                    do { rsp <- getResponseHead
-                                       ; switchResponse allow_retry True rsp rqst
+                                    do { rsp <- getResponseHead conn
+                                       ; switchResponse conn allow_retry True rsp rqst
                                        }
                            }
                     | otherwise -> {- keep waiting -}
-                        do { rsp <- getResponseHead
-                           ; switchResponse allow_retry bdy_sent rsp rqst                           
+                        do { rsp <- getResponseHead conn
+                           ; switchResponse conn allow_retry bdy_sent rsp rqst                           
                            }
 
                 Retry -> {- Request with "Expect" header failed.
                                 Trouble is the request contains Expects
                                 other than "100-Continue" -}
                     do { writeBlock conn (show rqst ++ rqBody rqst)
-                       ; rsp <- getResponseHead
-                       ; switchResponse False bdy_sent rsp rqst
+                       ; rsp <- getResponseHead conn
+                       ; switchResponse conn False bdy_sent rsp rqst
                        }   
                      
                 Done ->
                     return (Right $ Response cd rn hdrs "")
 
                 DieHorribly str ->
-                    return $ Left $ ErrorParse ("Invalid response: " ++ str)
+                    return $ responseParseError "sendHTTP" ("Invalid response: " ++ str)
 
                 ExpectEntity ->
                     let tc = lookupHeader HdrTransferEncoding hdrs
@@ -267,20 +258,22 @@ sendHTTP conn rq =
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
 				                               (readLine conn) (readBlock conn)
-                                  _         -> uglyDeathTransfer
-                       ; return $ rslt `bindE` \(ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy) 
+                                  _         -> uglyDeathTransfer "sendHTTP"
+                       ; return $ do
+		            (ftrs,bdy) <- rslt
+			    return (Response cd rn (hdrs++ftrs) bdy)
                        }
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
 --   for server side interactions.
-receiveHTTP :: Stream s => s -> IO (Result Request)
+receiveHTTP :: Stream s => s -> IO (Result Request_String)
 receiveHTTP conn = getRequestHead >>= processRequest
     where
         -- reads and parses headers
         getRequestHead :: IO (Result RequestData)
         getRequestHead =
             do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
-               ; return $ lor `bindE` parseRequestHead
+               ; return $ lor >>= parseRequestHead
                }
 	
         processRequest (Left e) = return $ Left e
@@ -297,14 +290,15 @@ receiveHTTP conn = getRequestHead >>= processRequest
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
 				                               (readLine conn) (readBlock conn)
-                                  _         -> uglyDeathTransfer
+                                  _         -> uglyDeathTransfer "receiveHTTP"
                
-               return $ rslt `bindE` \(ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)
-
+               return $ do
+	          (ftrs,bdy) <- rslt
+		  return (Request uri rm (hdrs++ftrs) bdy)
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
-respondHTTP :: Stream s => s -> Response -> IO ()
+respondHTTP :: Stream s => s -> Response_String -> IO ()
 respondHTTP conn rsp = do writeBlock conn (show rsp)
                           -- write body immediately, don't wait for 100 CONTINUE
                           writeBlock conn (rspBody rsp)

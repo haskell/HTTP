@@ -1,5 +1,5 @@
 Name: HTTP
-Version: 3010.0.0
+Version: 4000.0.5
 Cabal-Version: >= 1.2
 Build-type: Simple
 License: BSD3
@@ -12,10 +12,25 @@ Copyright:
   Copyright (c) 2004, Ganesh Sittampalam
   Copyright (c) 2004-2005, Dominic Steinitz
   Copyright 2007 Robin Bate Boerop
+  Copyright 2008-2009 Sigbjorn Finne
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Sigbjorn Finne <sigbjorn.finne@gmail.com>
-Homepage: http://www.haskell.org/http/
-Description: A library for client-side HTTP
+Homepage: http://projects.haskell.org/http/
+Category: Network
+Synopsis: A library for client-side HTTP
+Description: 
+
+ A library for client-side HTTP, version 4. Rewrite of existing HTTP
+ package to allow overloaded representation of HTTP request bodies
+ and responses. Provides three such instances: lazy and strict 'ByteString',
+ along with the good old @String@.
+ .
+ Inspired in part by Jonas Aadahl et al's work on ByteString'ifying HTTP
+ a couple of years ago.
+ .
+ Git repository available at <git://code.galois.com/HTTPbis.git>
+
+Extra-Source-Files: CHANGES
 
 Flag old-base
   description: Old, monolithic base
@@ -40,9 +55,8 @@ Library
                  Network.HTTP.MD5Aux,
                  Network.HTTP.Utils
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: network, parsec, bytestring
-
+  Build-depends: base >= 2, network, parsec, mtl
   if flag(old-base)
     Build-depends: base < 3
   else
-    Build-depends: base >= 3, array
+    Build-depends: base >= 3, array, old-time, bytestring

@@ -16,6 +16,7 @@ module Network.HTTP.Utils
        , trimR   -- :: String -> String
        
        , crlf    -- :: String
+       , sp      -- :: String
 
        , split   -- :: Eq a => a -> [a] -> Maybe ([a],[a])
        , splitBy -- :: Eq a => a -> [a] -> [[a]]
@@ -29,6 +30,10 @@ import Data.Maybe ( fromMaybe )
 -- | @crlf@ is our beloved two-char line terminator.
 crlf :: String
 crlf = "\r\n"
+
+-- | @sp@ lets you save typing one character.
+sp :: String
+sp   = " "
 
 -- | @split delim ls@ splits a list into two parts, the @delim@ occurring
 -- at the head of the second list.  If @delim@ isn't in @ls@, @Nothing@ is

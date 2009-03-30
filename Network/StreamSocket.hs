@@ -32,12 +32,10 @@ import Network.Socket
    , ShutdownCmd(ShutdownBoth), SocketOption(SoError)
    )
 
+import Network.HTTP.Base ( catchIO )
 import Control.Monad (liftM)
 import Control.Exception as Exception (IOException)
 import System.IO.Error (catch, isEOFError)
-
-catchIO :: IO a -> (IOException -> IO a) -> IO a
-catchIO a h = Prelude.catch a h
 
 -- | Exception handler for socket operations.
 handleSocketError :: Socket -> IOException -> IO (Result a)

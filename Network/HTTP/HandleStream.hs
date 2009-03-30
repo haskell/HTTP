@@ -12,13 +12,14 @@
 --
 -----------------------------------------------------------------------------
 module Network.HTTP.HandleStream 
-       ( simpleHTTP     -- :: HTTPRequest ty -> IO (Result (HTTPResponse ty))
-       , simpleHTTP_    -- :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
-       , sendHTTP       -- :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTResponse ty))
-       , receiveHTTP    -- :: HStream ty => HandleStream ty -> IO (Result (HTTPRequest ty))
-       , respondHTTP    -- :: HStream ty => HandleStream ty -> HTTPResponse ty -> IO ()
+       ( simpleHTTP      -- :: Request ty -> IO (Result (Response ty))
+       , simpleHTTP_     -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+       , sendHTTP        -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+       , sendHTTP_notify -- :: HStream ty => HandleStream ty -> Request ty -> IO () -> IO (Result (Response ty))
+       , receiveHTTP     -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
+       , respondHTTP     -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
        
-       , simpleHTTP_debug -- :: FilePath -> HTTPRequest DebugString -> IO (HTTPResponse DebugString)
+       , simpleHTTP_debug -- :: FilePath -> Request DebugString -> IO (Response DebugString)
        ) where
 
 -----------------------------------------------------------------
@@ -26,7 +27,7 @@ module Network.HTTP.HandleStream
 -----------------------------------------------------------------
 
 import Network.BufferType
-import Network.Stream ( ConnError(..), bindE, Result )
+import Network.Stream ( fmapE, Result )
 import Network.StreamDebugger ( debugByteStream )
 import Network.TCP (HStream(..), HandleStream )
 
@@ -34,13 +35,9 @@ import Network.HTTP.Base
 import Network.HTTP.Headers
 import Network.HTTP.Utils ( trim )
 
-import Control.Exception as Exception (IOException)
 import Data.Char (toLower)
 import Data.Maybe (fromMaybe)
 import Control.Monad (when)
-
-catchIO :: IO a -> (IOException -> IO a) -> IO a
-catchIO a h = Prelude.catch a h
 
 -----------------------------------------------------------------
 ------------------ Misc -----------------------------------------
@@ -52,31 +49,33 @@ catchIO a h = Prelude.catch a h
 --              requires a Host header.
 --  Connection  Where no allowance is made for persistant connections
 --              the Connection header will be set to "close"
-simpleHTTP :: HStream ty => HTTPRequest ty -> IO (Result (HTTPResponse ty))
+simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do 
   auth <- getAuth r
   c <- openStream (host auth) (fromMaybe 80 (port auth))
   simpleHTTP_ c r
 
-simpleHTTP_debug :: HStream ty => FilePath -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
+simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
 simpleHTTP_debug httpLogFile r = do 
   auth <- getAuth r
-  c0 <- openStream (host auth) (fromMaybe 80 (port auth))
-  c <- debugByteStream httpLogFile c0
+  c0   <- openStream (host auth) (fromMaybe 80 (port auth))
+  c    <- debugByteStream httpLogFile c0
   simpleHTTP_ c r
 
 -- | Like 'simpleHTTP', but acting on an already opened stream.
-simpleHTTP_ :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
-simpleHTTP_ s r = do 
-  auth <- getAuth r
-  let r' = normalizeRequestURI auth r 
-  rsp <- sendHTTP s r'
-  return rsp
+simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+simpleHTTP_ s r = sendHTTP s r
 
-sendHTTP :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
-sendHTTP conn rq = do
-  let a_rq = normalizeHostHeader rq
-  rsp <- catchIO (sendMain conn a_rq)
+sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+sendHTTP conn rq = sendHTTP_notify conn rq (return ())
+
+sendHTTP_notify :: HStream ty
+                => HandleStream ty
+		-> Request ty
+		-> IO ()
+		-> IO (Result (Response ty))
+sendHTTP_notify conn rq onSendComplete = do
+  rsp <- catchIO (sendMain conn rq onSendComplete)
                  (\e -> do { close conn; ioError e })
   let fn list = when (or $ map findConnClose list)
                      (close conn)
@@ -95,14 +94,19 @@ sendHTTP conn rq = do
 -- for an indefinite period before sending the request body.'
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
-sendMain :: HStream ty => HandleStream ty -> HTTPRequest ty -> IO (Result (HTTPResponse ty))
-sendMain conn rqst = do
+sendMain :: HStream ty
+         => HandleStream ty
+	 -> Request ty
+	 -> (IO ())
+	 -> IO (Result (Response ty))
+sendMain conn rqst onSendComplete = do
       --let str = if null (rqBody rqst)
       --              then show rqst
       --              else show (insertHeader HdrExpect "100-continue" rqst)
   writeBlock conn (buf_fromStr bufferOps $ show rqst)
     -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rqBody rqst)
+  onSendComplete
   rsp <- getResponseHead conn
   switchResponse conn True False rsp rqst
 
@@ -115,8 +119,8 @@ switchResponse :: HStream ty
 	       -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
-               -> HTTPRequest ty
-               -> IO (Result (HTTPResponse ty))
+               -> Request ty
+               -> IO (Result (Response ty))
 switchResponse _ _ _ (Left e) _ = return (Left e)
                 -- retry on connreset?
                 -- if we attempt to use the same socket then there is an excellent
@@ -145,24 +149,18 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                      
      Done -> return (Right $ Response cd rn hdrs (buf_empty bufferOps))
 
-     DieHorribly str -> return $ Left $ ErrorParse ("Invalid response: " ++ str)
-
-     ExpectEntity -> do
-       rslt <- 
-        case tc of
-          Nothing -> 
-            case cl of
-              Nothing -> hopefulTransfer bo (readLine conn) []
-              Just x  -> 
-	        case reads x of
-		  ((v,_):_) ->  linearTransfer (readBlock conn) v
-		  _ -> return (Left (ErrorParse ("unrecognized content-length value " ++ x)))
-          Just x  -> 
-            case map toLower (trim x) of
-              "chunked" -> chunkedTransfer bo (readLine conn) (readBlock conn)
-              _         -> uglyDeathTransfer
-       return $ rslt `bindE` \(ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)
-
+     DieHorribly str -> return (responseParseError "Invalid response:" str)
+     ExpectEntity -> 
+       fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
+        maybe (maybe (hopefulTransfer bo (readLine conn) [])
+	             (\ x -> 
+		        readsOne (linearTransfer (readBlock conn))
+		                 (return$responseParseError "unrecognized content-length value" x)
+				 x)
+		     cl)
+	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+	                 (uglyDeathTransfer "sendHTTP"))
+              tc
       where
        tc = lookupHeader HdrTransferEncoding hdrs
        cl = lookupHeader HdrContentLength hdrs
@@ -170,49 +168,62 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                     
 -- reads and parses headers
 getResponseHead :: HStream ty => HandleStream ty -> IO (Result ResponseData)
-getResponseHead conn = do
-   lor <- readTillEmpty1 bufferOps (readLine conn)
-   return $ lor `bindE` \es -> parseResponseHead (map (buf_toStr bufferOps) es)
+getResponseHead conn = 
+   fmapE (\es -> parseResponseHead (map (buf_toStr bufferOps) es))
+         (readTillEmpty1 bufferOps (readLine conn))
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
 --   for server side interactions.
-receiveHTTP :: HStream bufTy => HandleStream bufTy -> IO (Result (HTTPRequest bufTy))
+receiveHTTP :: HStream bufTy => HandleStream bufTy -> IO (Result (Request bufTy))
 receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
-    where
-        -- reads and parses headers
-        getRequestHead :: IO (Result RequestData)
-        getRequestHead =
-            do { lor <- readTillEmpty1 bufferOps (readLine conn)
-               ; return $ lor `bindE` \es -> parseRequestHead (map (buf_toStr bufferOps) es)
-               }
+  where
+    -- reads and parses headers
+   getRequestHead :: IO (Result RequestData)
+   getRequestHead = do
+      fmapE (\es -> parseRequestHead (map (buf_toStr bufferOps) es))
+            (readTillEmpty1 bufferOps (readLine conn))
 	
-	processRequest (rm,uri,hdrs) = do
-           rslt <- 
-	     case tc of
-               Nothing ->
-                 case cl of
-                   Nothing -> return (Right ([], buf_empty bo)) -- hopefulTransfer ""
-                   Just x  -> 
-		     case reads x of
-		       ((v,_):_) -> linearTransfer (readBlock conn) v
-		       _ -> return (Left (ErrorParse ("unrecognized content-length value " ++ x)))
-               Just x  ->
-                 case map toLower (trim x) of
-                   "chunked" -> chunkedTransfer bo (readLine conn) (readBlock conn)
-                   _         -> uglyDeathTransfer
-               
-           return $ rslt `bindE` \(ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)
-	  where
-	     -- FIXME : Also handle 100-continue.
-            tc = lookupHeader HdrTransferEncoding hdrs
-            cl = lookupHeader HdrContentLength hdrs
-	    bo = bufferOps
+   processRequest (rm,uri,hdrs) =
+      fmapE (\ (ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)) $
+	     maybe 
+	      (maybe (return (Right ([], buf_empty bo))) -- hopefulTransfer ""
+	             (\ x -> readsOne (linearTransfer (readBlock conn))
+			              (return$responseParseError "unrecognized Content-Length value" x)
+				      x)
+				      
+		     cl)
+  	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+	                 (uglyDeathTransfer "receiveHTTP"))
+              tc
+    where
+     -- FIXME : Also handle 100-continue.
+     tc = lookupHeader HdrTransferEncoding hdrs
+     cl = lookupHeader HdrContentLength hdrs
+     bo = bufferOps
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
-respondHTTP :: HStream ty => HandleStream ty -> HTTPResponse ty -> IO ()
+respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
 respondHTTP conn rsp = do 
   writeBlock conn (buf_fromStr bufferOps $ show rsp)
    -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rspBody rsp)
   return ()
+
+------------------------------------------------------------------------------
+
+readsOne :: Read a => (a -> b) -> b -> String -> b
+readsOne f n str = 
+ case reads str of
+   ((v,_):_) -> f v
+   _ -> n
+
+headerName :: String -> String
+headerName x = map toLower (trim x)
+
+ifChunked :: a -> a -> String -> a
+ifChunked a b s = 
+  case headerName s of
+    "chunked" -> a
+    _ -> b
+

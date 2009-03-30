@@ -9,7 +9,7 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- Abstract representation of wire-transmitted values.
+-- Operations over wire-transmitted values.
 -- 
 -----------------------------------------------------------------------------
 module Network.BufferType
@@ -30,6 +30,13 @@ import qualified Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack, span )
 import System.IO ( Handle )
 import Data.Word ( Word8 )
 
+import Network.HTTP.Utils ( crlf )
+
+-- | The @BufferType@ class encodes, in a mixed-mode way, the interface
+-- that the library requires to operate over data embedded in HTTP
+-- requests and responses. That is, we use explicit dictionaries
+-- for the operations, but overload the name of these dicts.
+-- 
 class BufferType bufType where
    bufferOps :: BufferOp bufType
 
@@ -53,6 +60,7 @@ data BufferOp a
      , buf_hGetLine     :: Handle -> IO a
      , buf_empty        :: a
      , buf_append       :: a -> a -> a
+     , buf_concat       :: [a] -> a
      , buf_fromStr      :: String -> a
      , buf_toStr        :: a -> String
      , buf_snoc         :: a -> Word8 -> a
@@ -68,60 +76,62 @@ instance Eq (BufferOp a) where
 strictBufferOp :: BufferOp Strict.ByteString
 strictBufferOp = 
     BufferOp 
-      { buf_hGet = Strict.hGet
+      { buf_hGet         = Strict.hGet
       , buf_hGetContents = Strict.hGetContents
-      , buf_hPut = Strict.hPut
-      , buf_hGetLine = Strict.hGetLine
-      , buf_append = Strict.append
-      , buf_fromStr = Strict.pack
-      , buf_toStr   = Strict.unpack
-      , buf_snoc = Strict.snoc
-      , buf_splitAt = Strict.splitAt
-      , buf_span    = Strict.span
-      , buf_empty = Strict.empty
-      , buf_isLineTerm = \ b -> Strict.length b == 2 && crlf == b
-      , buf_isEmpty   = Strict.null 
+      , buf_hPut         = Strict.hPut
+      , buf_hGetLine     = Strict.hGetLine
+      , buf_append       = Strict.append
+      , buf_concat       = Strict.concat
+      , buf_fromStr      = Strict.pack
+      , buf_toStr        = Strict.unpack
+      , buf_snoc         = Strict.snoc
+      , buf_splitAt      = Strict.splitAt
+      , buf_span         = Strict.span
+      , buf_empty        = Strict.empty
+      , buf_isLineTerm   = \ b -> Strict.length b == 2 && p_crlf == b
+      , buf_isEmpty      = Strict.null 
       }
    where
-    crlf = Strict.pack "\r\n"
+    p_crlf = Strict.pack crlf
 
 lazyBufferOp :: BufferOp Lazy.ByteString
 lazyBufferOp = 
     BufferOp 
-      { buf_hGet = Lazy.hGet
+      { buf_hGet         = Lazy.hGet
       , buf_hGetContents = Lazy.hGetContents
-      , buf_hPut = Lazy.hPut
-      , buf_hGetLine = \ h -> Strict.hGetLine h >>= \ l -> return (Lazy.fromChunks [l])
-      , buf_append = Lazy.append
-      , buf_fromStr = Lazy.pack
-      , buf_toStr   = Lazy.unpack
-      , buf_snoc = Lazy.snoc
-      , buf_splitAt = \ i x -> Lazy.splitAt (fromIntegral i) x
-      , buf_span    = Lazy.span
-      , buf_empty = Lazy.empty
-      , buf_isLineTerm = \ b -> Lazy.length b == 2 && crlf == b
-      , buf_isEmpty   = Lazy.null 
+      , buf_hPut         = Lazy.hPut
+      , buf_hGetLine     = \ h -> Strict.hGetLine h >>= \ l -> return (Lazy.fromChunks [l])
+      , buf_append       = Lazy.append
+      , buf_concat       = Lazy.concat
+      , buf_fromStr      = Lazy.pack
+      , buf_toStr        = Lazy.unpack
+      , buf_snoc         = Lazy.snoc
+      , buf_splitAt      = \ i x -> Lazy.splitAt (fromIntegral i) x
+      , buf_span         = Lazy.span
+      , buf_empty        = Lazy.empty
+      , buf_isLineTerm   = \ b -> Lazy.length b == 2 && p_crlf == b
+      , buf_isEmpty      = Lazy.null 
       }
    where
-    crlf = Lazy.pack "\r\n"
+    p_crlf = Lazy.pack crlf
 
 stringBufferOp :: BufferOp String
 stringBufferOp =BufferOp 
-      { buf_hGet      = \ h n -> Strict.hGet h n >>= return . Strict.unpack
+      { buf_hGet         = \ h n -> Strict.hGet h n >>= return . Strict.unpack
       , buf_hGetContents = \ h -> Strict.hGetContents h >>= return . Strict.unpack
-      , buf_hPut      = \ h s -> Strict.hPut h (Strict.pack s)
-      , buf_hGetLine  = \ h   -> Strict.hGetLine h >>= return . Strict.unpack
-      , buf_append    = (++)
-      , buf_fromStr   = id
-      , buf_toStr     = id
-      , buf_snoc      = \ a x -> a ++ [toEnum (fromIntegral x)]
-      , buf_splitAt   = splitAt
-      , buf_span      = \ p a -> 
-                           case Strict.span p (Strict.pack a) of
-			     (a,b) -> (Strict.unpack a, Strict.unpack b)
-      , buf_empty     = []
-      , buf_isLineTerm = \ b -> b == crlf
-      , buf_isEmpty   = null 
+      , buf_hPut         = \ h s -> Strict.hPut h (Strict.pack s)
+      , buf_hGetLine     = \ h   -> Strict.hGetLine h >>= return . Strict.unpack
+      , buf_append       = (++)
+      , buf_concat       = concat
+      , buf_fromStr      = id
+      , buf_toStr        = id
+      , buf_snoc         = \ a x -> a ++ [toEnum (fromIntegral x)]
+      , buf_splitAt      = splitAt
+      , buf_span         = \ p a -> 
+                             case Strict.span p (Strict.pack a) of
+			       (x,y) -> (Strict.unpack x, Strict.unpack y)
+      , buf_empty        = []
+      , buf_isLineTerm   = \ b -> b == crlf
+      , buf_isEmpty      = null 
       }
-   where
-    crlf = "\r\n"
+

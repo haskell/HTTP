@@ -8,40 +8,95 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- An easy HTTP interface enjoy.
+-- An easy HTTP interface, toplevel module.
 --
--- * Changes by Robin Bate Boerop <robin@bateboerop.name>:
---      - Made dependencies explicit in import statements.
---      - Removed false dependencies in import statements.
---      - Added missing type signatures.
---      - Moved Header-related code to Network.HTTP.Headers module.
+-- The 'Network.HTTP' module provides functionality for sending
+-- HTTP requests and processing their responses, along with a supporting
+-- cast of types and utility functions.
 --
--- * Changes by Simon Foster:
---      - Split module up into to sepearate Network.[Stream,TCP,HTTP] modules
---      - Created functions receiveHTTP and responseHTTP to allow server side interactions
---        (although 100-continue is unsupported and I haven't checked for standard compliancy).
---      - Pulled the transfer functions from sendHTTP to global scope to allow access by
---        above functions.
---
--- * Changes by Graham Klyne:
---      - export httpVersion
---      - use new URI module (similar to old, but uses revised URI datatype)
---
--- * Changes by Bjorn Bringert:
---
---      - handle URIs with a port number
---      - added debugging toggle
---      - disabled 100-continue transfers to get HTTP\/1.0 compatibility
---      - change 'ioError' to 'throw'
---      - Added simpleHTTP_, which takes a stream argument.
---
--- * Changes from 0.1
---      - change 'openHTTP' to 'openTCP', removed 'closeTCP' - use 'close' from 'Stream' class.
---      - added use of inet_addr to openHTTP, allowing use of IP "dot" notation addresses.
---      - reworking of the use of Stream, including alterations to make 'sendHTTP' generic
---        and the addition of a debugging stream.
---      - simplified error handling.
+-- The actual functionality is implemented by modules in the @Network.HTTP.*@
+-- namespace, allowing the user to either use the default implementation 
+-- by importing @Network.HTTP@ or, for more fine-grained control, selectively
+-- import the modules in @Network.HTTP.*@. To wit, more than one kind of
+-- representation of the bulk data that flows across a HTTP connection is 
+-- supported. Now selectable by importing @Network.HTTP.HandleStream@ (say.)
 -- 
+--
+-- NOTE: The exported send/receive functionality from this module handles any defaulting
+-- and normalization of the 'Request' and 'Response' types. Such as normalizing the
+-- request path and Host: header etc. i.e., if you do not want these payloads to be
+-- altered in any way, drop down one level and use Network.HTTP.{HandleStream,Stream}
+--
+--
+-----------------------------------------------------------------------------
+module Network.HTTP 
+       ( module Network.HTTP.Base
+       , module Network.HTTP.Headers
+
+{- the functionality that Network.HTTP.HandleStream and Network.HTTP.Stream   exposes: -}
+       , simpleHTTP      -- :: Request -> IO (Result Response)
+       , simpleHTTP_     -- :: Stream s => s -> Request -> IO (Result Response)
+       , sendHTTP        -- :: Stream s => s -> Request -> IO (Result Response)
+       , sendHTTP_notify -- :: Stream s => s -> Request -> IO () -> IO (Result Response)
+       , receiveHTTP     -- :: Stream s => s -> IO (Result Request)
+       , respondHTTP     -- :: Stream s => s -> Response -> IO ()
+
+       , module Network.TCP
+       ) where
+
+-----------------------------------------------------------------
+------------------ Imports --------------------------------------
+-----------------------------------------------------------------
+
+import Network.HTTP.Headers
+import Network.HTTP.Base
+--import Network.HTTP.Stream
+import qualified Network.HTTP.HandleStream as S
+import Network.TCP
+import Network.Stream ( Result )
+
+import Data.Maybe ( fromMaybe )
+
+{-
+ Note: if you switch over/back to using Network.HTTP.Stream here, you'll
+ have to wrap the results from 'openStream' as Connections via 'hstreamToConnection'
+ prior to delegating to the Network.HTTP.Stream functions.
+-}
+
+simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
+simpleHTTP r = do
+  auth <- getAuth r
+  c <- openStream (host auth) (fromMaybe 80 (port auth))
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
+  simpleHTTP_ c norm_r
+   
+-- | Like 'simpleHTTP', but acting on an already opened stream.
+simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+simpleHTTP_ s r = do 
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
+  S.sendHTTP s norm_r
+
+sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
+sendHTTP conn rq = do
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq 
+  S.sendHTTP conn norm_r
+
+sendHTTP_notify :: HStream ty
+                => HandleStream ty
+		-> Request ty
+		-> IO ()
+		-> IO (Result (Response ty))
+sendHTTP_notify conn rq onSendComplete = do
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq 
+  S.sendHTTP_notify conn norm_r onSendComplete
+
+receiveHTTP :: HStream ty => HandleStream ty -> IO (Result (Request ty))
+receiveHTTP conn = S.receiveHTTP conn
+
+respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
+respondHTTP conn rsp = S.respondHTTP conn rsp
+
+--
 -- * TODO
 --     - request pipelining
 --     - https upgrade (includes full TLS, i.e. SSL, implementation)
@@ -91,33 +146,3 @@
 --             added to a request.  Receipt of 417 will induce another
 --             request attempt (without Expect header), unless no Expect header
 --             had been added (in which case 417 response is returned).
---
------------------------------------------------------------------------------
-module Network.HTTP 
-       ( module Network.HTTP.HandleStream
-       , module Network.HTTP.Base
-       , module Network.HTTP.Headers
-
-{-
-       , simpleHTTP     -- :: Request -> IO (Result Response)
-       , simpleHTTP_    -- :: Stream s => s -> Request -> IO (Result Response)
-       , sendHTTP       -- :: Stream s => s -> Request -> IO (Result Response)
-       , receiveHTTP    -- :: Stream s => s -> IO (Result Request)
-       , respondHTTP    -- :: Stream s => s -> Response -> IO ()
--}
-       , module Network.TCP
-
-       ) where
-
------------------------------------------------------------------
------------------- Imports --------------------------------------
------------------------------------------------------------------
-
-import Network.HTTP.Headers
-import Network.HTTP.Base
---import Network.HTTP.Stream
-import Network.HTTP.HandleStream
-import Network.TCP
-
-
-

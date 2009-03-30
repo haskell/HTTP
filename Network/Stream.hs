@@ -4,7 +4,7 @@
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004, 2007 Robin Bate Boerop
 -- License     :  BSD
 --
--- Maintainer  :  bjorn@bringert.net
+-- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
@@ -25,7 +25,13 @@ module Network.Stream
    , ConnError(..)
    , Result
    , bindE
+   , fmapE
+
+   , failParse -- :: String -> Result a
+   , failWith  -- :: ConnError -> Result a
    ) where
+
+import Control.Monad.Error
 
 data ConnError 
  = ErrorReset 
@@ -34,10 +40,27 @@ data ConnError
  | ErrorMisc String
    deriving(Show,Eq)
 
+instance Error ConnError where
+  noMsg = strMsg "unknown error"
+  strMsg x = ErrorMisc x
+
+failParse :: String -> Result a
+failParse x = failWith (ErrorParse x)
+
+failWith :: ConnError -> Result a
+failWith x = Left x
+
 bindE :: Result a -> (a -> Result b) -> Result b
 bindE (Left e)  _ = Left e
 bindE (Right v) f = f v
 
+fmapE :: (a -> Result b) -> IO (Result a) -> IO (Result b)
+fmapE f a = do
+ x <- a
+ case x of
+   Left  e -> return (Left e)
+   Right r -> return (f r) 
+  
 -- | This is the type returned by many exported network functions.
 type Result a = Either ConnError   {- error  -}
                        a           {- result -}

@@ -17,12 +17,14 @@ module Network.HTTP.Base
          httpVersion
 
           -- ** HTTP
-       , Request
-       , Response
+       , Request(..)
+       , Response(..)
        , RequestMethod(..)
        
-       , HTTPRequest(..)
-       , HTTPResponse(..)
+       , Request_String
+       , Response_String
+       , HTTPRequest
+       , HTTPResponse
        
           -- ** URL Encoding
        , urlEncode
@@ -34,17 +36,27 @@ module Network.HTTP.Base
        , parseURIAuthority
        
           -- internal
-       , crlf
-       , sp
-       , uriToAuthorityString   -- :: URI    -> String
+       , uriToAuthorityString   -- :: URI     -> String
        , uriAuthToString        -- :: URIAuth -> String
-       , parseResponseHead
-       , parseRequestHead
+       , uriAuthPort            -- :: Maybe URI -> URIAuth -> Int
+       , reqURIAuth             -- :: Request ty -> URIAuth
+
+       , parseResponseHead      -- :: [String] -> Result ResponseData
+       , parseRequestHead       -- :: [String] -> Result RequestData
+
        , ResponseNextStep(..)
        , matchResponse
        , ResponseData
+       , ResponseCode
        , RequestData
        
+       , NormalizeRequestOptions(..)
+       , defaultNormalizeRequestOptions
+       
+       , normalizeRequest
+
+       , splitRequestURI
+
        , getAuth
        , normalizeRequestURI
        , normalizeHostHeader
@@ -57,29 +69,49 @@ module Network.HTTP.Base
        , uglyDeathTransfer
        , readTillEmpty1
        , readTillEmpty2
+       
+       , defaultGETRequest
+       , defaultGETRequest_
+       , mkRequest
+
+       , defaultUserAgent
+       , libUA  {- backwards compatibility, will disappear..soon -}
+       
+       , catchIO
+       , catchIO_
+       , responseParseError
+       
+       , getRequestVersion
+       , getResponseVersion
+       , setRequestVersion
+       , setResponseVersion
+       
        ) where
 
 import Network.URI
    ( URI(uriAuthority, uriPath, uriScheme)
-   , URIAuth(uriUserInfo, uriRegName, uriPort)
+   , URIAuth(URIAuth, uriUserInfo, uriRegName, uriPort)
    , parseURIReference
    )
 
 import Control.Monad ( guard )
-import Data.Char     ( ord, digitToInt, intToDigit, toLower )
-import Data.List     ( partition )
-import Data.Maybe    ( listToMaybe )
-import Numeric       ( showHex, readHex )
+import Control.Monad.Error ()
+import Data.Char     ( digitToInt, intToDigit, toLower, isDigit,
+                       isAscii, isAlphaNum )
+import Data.List     ( partition, find )
+import Data.Maybe    ( listToMaybe, fromMaybe )
+import Numeric       ( readHex )
 
 import Network.Stream
-import Network.BufferType ( BufferOp(..) )
+import Network.BufferType ( BufferOp(..), BufferType(..) )
 import Network.HTTP.Headers
-import Network.HTTP.Utils ( trim )
+import Network.HTTP.Utils ( trim, crlf, sp )
 
 import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
    ( ReadP, readP_to_S, char, (<++), look, munch )
 
+import Control.Exception as Exception (IOException)
 
 -----------------------------------------------------------------
 ------------------ URI Authority parsing ------------------------
@@ -134,6 +166,45 @@ uriAuthToString ua =
 	 , uriPort ua
 	 ]
 
+uriAuthPort :: Maybe URI -> URIAuth -> Int
+uriAuthPort mbURI u = 
+  case uriPort u of
+    (':':s) -> 
+      case reads s of 
+        ((v,_):_) -> v ; _ -> default_port mbURI
+    _       -> default_port mbURI
+ where
+  default_port Nothing = default_http
+  default_port (Just url) = 
+    case map toLower $ uriScheme url of
+      "http:" -> default_http
+      "https:" -> default_https
+        -- todo: refine
+      _ -> default_http
+
+  default_http  = 80
+  default_https = 443
+
+-- Fish out the authority from a possibly normalized Request, i.e.,
+-- the information may either be in the request's URI or inside
+-- the Host: header.
+reqURIAuth :: Request ty -> URIAuth
+reqURIAuth req = 
+  case uriAuthority (rqURI req) of
+    Just ua -> ua
+    _ -> case lookupHeader HdrHost (rqHeaders req) of
+           Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
+	   Just h  -> 
+	      case toHostPort h of
+	        (ht,p) -> URIAuth { uriUserInfo = ""
+	                          , uriRegName  = ht
+			          , uriPort     = p
+			          }
+  where
+    -- Note: just in case you're wondering..the convention is to include the ':'
+    -- in the port part..
+   toHostPort h = break (==':') h
+
 -----------------------------------------------------------------
 ------------------ HTTP Messages --------------------------------
 -----------------------------------------------------------------
@@ -147,8 +218,21 @@ httpVersion = "HTTP/1.1"
 -- | The HTTP request method, to be used in the 'Request' object.
 -- We are missing a few of the stranger methods, but these are
 -- not really necessary until we add full TLS.
-data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE
-    deriving(Show,Eq)
+data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE | CONNECT | Custom String
+    deriving(Eq)
+
+instance Show RequestMethod where
+  show x = 
+    case x of
+      HEAD     -> "HEAD"
+      PUT      -> "PUT"
+      GET      -> "GET"
+      POST     -> "POST"
+      DELETE   -> "DELETE"
+      OPTIONS  -> "OPTIONS"
+      TRACE    -> "TRACE"
+      CONNECT  -> "CONNECT"
+      Custom c -> c
 
 rqMethodMap :: [(String, RequestMethod)]
 rqMethodMap = [("HEAD",    HEAD),
@@ -157,50 +241,65 @@ rqMethodMap = [("HEAD",    HEAD),
 	       ("POST",    POST),
                ("DELETE",  DELETE),
 	       ("OPTIONS", OPTIONS),
-	       ("TRACE",   TRACE)]
+	       ("TRACE",   TRACE),
+	       ("CONNECT", CONNECT)]
 
-type Request  = HTTPRequest  String
-type Response = HTTPResponse String
+-- 
+-- for backwards-ish compatibility; suggest
+-- migrating to new Req/Resp by adding type param.
+-- 
+type Request_String  = Request String
+type Response_String = Response String
+
+-- Hmm..I really want to use these for the record
+-- type, but it will upset codebases wanting to
+-- migrate (and live with using pre-HTTPbis versions.)
+type HTTPRequest a  = Request  a
+type HTTPResponse a = Response a
 
 -- | An HTTP Request.
 -- The 'Show' instance of this type is used for message serialisation,
 -- which means no body data is output.
-data HTTPRequest a =
+data Request a =
      Request { rqURI       :: URI   -- ^ might need changing in future
                                     --  1) to support '*' uri in OPTIONS request
                                     --  2) transparent support for both relative
                                     --     & absolute uris, although this should
                                     --     already work (leave scheme & host parts empty).
-             , rqMethod    :: RequestMethod             
+             , rqMethod    :: RequestMethod
              , rqHeaders   :: [Header]
              , rqBody      :: a
              }
-
-
-
-crlf, sp :: String
-crlf = "\r\n"
-sp   = " "
 
 -- Notice that request body is not included,
 -- this show function is used to serialise
 -- a request for the transport link, we send
 -- the body separately where possible.
-instance Show (HTTPRequest a) where
-    show (Request u m h _) =
-        show m ++ sp ++ alt_uri ++ sp ++ httpVersion ++ crlf
-        ++ foldr (++) [] (map show h) ++ crlf
+instance Show (Request a) where
+    show req@(Request u m h _) =
+        show m ++ sp ++ alt_uri ++ sp ++ ver ++ crlf
+        ++ foldr (++) [] (map show (dropHttpVersion h)) ++ crlf
         where
+	    ver = fromMaybe httpVersion (getRequestVersion req)
             alt_uri = show $ if null (uriPath u) || head (uriPath u) /= '/' 
                         then u { uriPath = '/' : uriPath u } 
                         else u
 
-instance HasHeaders (HTTPRequest a) where
+instance HasHeaders (Request a) where
     getHeaders = rqHeaders
     setHeaders rq hdrs = rq { rqHeaders=hdrs }
 
+-- | For easy pattern matching, HTTP response codes @xyz@ are
+-- represented as @(x,y,z)@.
 type ResponseCode  = (Int,Int,Int)
+
+-- | @ResponseData@ contains the head of a response payload;
+-- HTTP response code, accompanying text description + header
+-- fields.
 type ResponseData  = (ResponseCode,String,[Header])
+
+-- | @RequestData@ contains the head of a HTTP request; method,
+-- its URL along with the auxillary/supporting header data.
 type RequestData   = (RequestMethod,URI,[Header])
 
 -- | An HTTP Response.
@@ -208,7 +307,7 @@ type RequestData   = (RequestMethod,URI,[Header])
 -- which means no body data is output, additionally the output will
 -- show an HTTP version of 1.1 instead of the actual version returned
 -- by a server.
-data HTTPResponse a =
+data Response a =
     Response { rspCode     :: ResponseCode
              , rspReason   :: String
              , rspHeaders  :: [Header]
@@ -217,14 +316,69 @@ data HTTPResponse a =
                    
 -- This is an invalid representation of a received response, 
 -- since we have made the assumption that all responses are HTTP/1.1
-instance Show (HTTPResponse a) where
-    show (Response (a,b,c) reason headers _) =
-        httpVersion ++ ' ' : map intToDigit [a,b,c] ++ ' ' : reason ++ crlf
-        ++ foldr (++) [] (map show headers) ++ crlf
+instance Show (Response a) where
+    show rsp@(Response (a,b,c) reason headers _) =
+        ver ++ ' ' : map intToDigit [a,b,c] ++ ' ' : reason ++ crlf
+        ++ foldr (++) [] (map show (dropHttpVersion headers)) ++ crlf
+     where
+      ver = fromMaybe httpVersion (getResponseVersion rsp)
 
-instance HasHeaders (HTTPResponse a) where
+instance HasHeaders (Response a) where
     getHeaders = rspHeaders
     setHeaders rsp hdrs = rsp { rspHeaders=hdrs }
+
+
+------------------------------------------------------------------
+------------------ Request Building ------------------------------
+------------------------------------------------------------------
+libUA :: String
+libUA = "hs-HTTP-4000.0.5"
+
+defaultUserAgent :: String
+defaultUserAgent = libUA
+
+defaultGETRequest :: URI -> Request_String
+defaultGETRequest uri = defaultGETRequest_ uri
+
+defaultGETRequest_ :: BufferType a => URI -> Request a
+defaultGETRequest_ uri = mkRequest GET uri 
+
+-- | 'mkRequest method uri' constructs a well formed
+-- request for the given HTTP method and URI. It does not
+-- normalize the URI for the request _nor_ add the required 
+-- Host: header. That is done either explicitly by the user
+-- or when requests are normalized prior to transmission.
+mkRequest :: BufferType ty => RequestMethod -> URI -> Request ty
+mkRequest meth uri = req
+ where
+  req = 
+    Request { rqURI      = uri
+            , rqBody     = empty
+            , rqHeaders  = [ Header HdrContentLength "0"
+                           , Header HdrUserAgent     defaultUserAgent
+                           ]
+            , rqMethod   = meth
+            }
+
+  empty = buf_empty (toBufOps req)
+
+{-
+    -- stub out the user info.
+  updAuth = fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri)
+
+  withHost = 
+    case uriToAuthorityString uri{uriAuthority=updAuth} of
+      "" -> id
+      h  -> ((Header HdrHost h):)
+
+  uri_req 
+   | forProxy  = uri
+   | otherwise = snd (splitRequestURI uri)
+-}
+
+
+toBufOps :: BufferType a => Request a -> BufferOp a
+toBufOps _ = bufferOps
 
 -----------------------------------------------------------------
 ------------------ Parsing --------------------------------------
@@ -232,49 +386,113 @@ instance HasHeaders (HTTPResponse a) where
 
 -- Parsing a request
 parseRequestHead :: [String] -> Result RequestData
-parseRequestHead [] = Left ErrorClosed
-parseRequestHead (com:hdrs) =
-    requestCommand com `bindE` \(_version,rqm,uri) ->
-    parseHeaders hdrs `bindE` \hdrs' ->
-    Right (rqm,uri,hdrs')
-    where
-        requestCommand line =
-	  case words line of
-            _yes@(rqm:uri:version) -> 
-	     case (parseURIReference uri, lookup rqm rqMethodMap) of
-  	       (Just u, Just r) -> Right (version,r,u)
-	       _                -> Left parse_err
-	    _no 
-	     | null line -> Left ErrorClosed
-	     | otherwise -> Left parse_err
-          where
-	   parse_err = ErrorParse ("Request command line parse failure: " ++ line)
+parseRequestHead         [] = Left ErrorClosed
+parseRequestHead (com:hdrs) = do
+  (version,rqm,uri) <- requestCommand com (words com)
+  hdrs'              <- parseHeaders hdrs
+  return (rqm,uri,withVer version hdrs')
+ where
+  withVer [] hs = hs
+  withVer (h:_) hs = withVersion h hs
+
+  requestCommand l _yes@(rqm:uri:version) =
+    case (parseURIReference uri, lookup rqm rqMethodMap) of
+     (Just u, Just r) -> return (version,r,u)
+     (Just u, Nothing) -> return (version,Custom rqm,u)
+     _                -> parse_err l
+  requestCommand l _
+   | null l    = failWith ErrorClosed
+   | otherwise = parse_err l
+
+  parse_err l = responseParseError "parseRequestHead"
+                   ("Request command line parse failure: " ++ l)
 
 -- Parsing a response
 parseResponseHead :: [String] -> Result ResponseData
-parseResponseHead [] = Left ErrorClosed
-parseResponseHead (sts:hdrs) = 
-    responseStatus sts `bindE` \(_version,code,reason) ->
-    parseHeaders hdrs `bindE` \hdrs' ->
-    Right (code,reason,hdrs')
-    where
-        responseStatus line =
-          case words line of
-            _yes@(version:code:reason) -> 
-	     Right (version,match code,concatMap (++" ") reason)
-            _no
-	     | null line -> Left ErrorClosed  -- an assumption
-	     | otherwise -> Left parse_err
-          where
-	   parse_err = (ErrorParse $ "Response status line parse failure: " ++ line)
+parseResponseHead []         = failWith ErrorClosed
+parseResponseHead (sts:hdrs) = do
+  (version,code,reason)  <- responseStatus sts (words sts)
+  hdrs'                  <- parseHeaders hdrs
+  return (code,reason, withVersion version hdrs')
+ where
+  responseStatus _l _yes@(version:code:reason) =
+    return (version,match code,concatMap (++" ") reason)
+  responseStatus l _no 
+    | null l    = failWith ErrorClosed  -- an assumption
+    | otherwise = parse_err l
 
-        match [a,b,c] = (digitToInt a,
-                         digitToInt b,
-                         digitToInt c)
-        match _ = (-1,-1,-1)  -- will create appropriate behaviour
+  parse_err l = 
+    responseParseError 
+        "parseResponseHead"
+        ("Response status line parse failure: " ++ l)
+
+  match [a,b,c] = (digitToInt a,
+                   digitToInt b,
+                   digitToInt c)
+  match _ = (-1,-1,-1)  -- will create appropriate behaviour
+
+-- To avoid changing the @RequestData@ and @ResponseData@ types
+-- just for this (and the upstream backwards compat. woes that
+-- will result in), encode version info as a custom header.
+-- Used by 'parseResponseData' and 'parseRequestData'.
+--
+-- Note: the Request and Response types do not currently represent
+-- the version info explicitly in their record types. You have to use
+-- {get,set}{Request,Response}Version for that.
+withVersion :: String -> [Header] -> [Header]
+withVersion v hs 
+ | v == httpVersion = hs  -- don't bother adding it if the default.
+ | otherwise        = (Header (HdrCustom "X-HTTP-Version") v) : hs
+
+-- | @getRequestVersion req@ returns the HTTP protocol version of
+-- the request @req@. If @Nothing@, the default 'httpVersion' can be assumed.
+getRequestVersion :: Request a -> Maybe String
+getRequestVersion r = getHttpVersion r
+
+-- | @setRequestVersion v req@ returns a new request, identical to
+-- @req@, but with its HTTP version set to @v@.
+setRequestVersion :: String -> Request a -> Request a
+setRequestVersion s r = setHttpVersion r s
 
 
-        
+-- | @getResponseVersion rsp@ returns the HTTP protocol version of
+-- the response @rsp@. If @Nothing@, the default 'httpVersion' can be 
+-- assumed.
+getResponseVersion :: Response a -> Maybe String
+getResponseVersion r = getHttpVersion r
+
+-- | @setResponseVersion v rsp@ returns a new response, identical to
+-- @rsp@, but with its HTTP version set to @v@.
+setResponseVersion :: String -> Response a -> Response a
+setResponseVersion s r = setHttpVersion r s
+
+-- internal functions for accessing HTTP-version info in
+-- requests and responses. Not exported as it exposes ho
+-- version info is represented internally.
+
+getHttpVersion :: HasHeaders a => a -> Maybe String
+getHttpVersion r = 
+  fmap toVersion      $
+   find isHttpVersion $
+    getHeaders r
+ where
+  toVersion (Header _ x) = x
+
+setHttpVersion :: HasHeaders a => a -> String -> a
+setHttpVersion r v = 
+  setHeaders r $
+   withVersion v  $
+    dropHttpVersion $
+     getHeaders r
+
+dropHttpVersion :: [Header] -> [Header]
+dropHttpVersion hs = filter (not.isHttpVersion) hs
+
+isHttpVersion :: Header -> Bool
+isHttpVersion (Header (HdrCustom "X-HTTP-Version") _) = True
+isHttpVersion _ = False    
+
+
 
 -----------------------------------------------------------------
 ------------------ HTTP Send / Recv ----------------------------------
@@ -332,34 +550,33 @@ matchResponse rqst rsp =
     Escape method: char -> '%' a b  where a, b :: Hex digits
 -}
 
-urlEncode, urlDecode :: String -> String
-
+urlDecode :: String -> String
 urlDecode ('%':a:b:rest) = toEnum (16 * digitToInt a + digitToInt b)
                          : urlDecode rest
 urlDecode (h:t) = h : urlDecode t
 urlDecode [] = []
 
-urlEncode (h:t) =
-    let str = if reserved (ord h) then escape h else [h]
-    in str ++ urlEncode t
+
+urlEncode :: String -> String
+urlEncode     [] = []
+urlEncode (ch:t) 
+  | (isAscii ch && isAlphaNum ch) || ch `elem` "-_.~" = ch : urlEncode t
+  | not (isAscii ch) = foldr escape (urlEncode t) (eightBs [] (fromEnum ch))
+  | otherwise = escape (fromEnum ch) (urlEncode t)
     where
-        reserved x
-            | x >= ord 'a' && x <= ord 'z' = False
-            | x >= ord 'A' && x <= ord 'Z' = False
-            | x >= ord '0' && x <= ord '9' = False
-            | x <= 0x20 || x >= 0x7F = True
-            | otherwise = x `elem` map ord [';','/','?',':','@','&'
-                                           ,'=','+',',','$','{','}'
-                                           ,'|','\\','^','[',']','`'
-                                           ,'<','>','#','%','"']
-        -- wouldn't it be nice if the compiler
-        -- optimised the above for us?
+     escape b rs = '%':showH (b `div` 16) (showH (b `mod` 16) rs)
+     
+     showH x xs
+       | x <= 9    = toEnum (o_0 + x) : xs
+       | otherwise = toEnum (o_A + (x-10)) : xs
+      where
+       o_0 = fromEnum '0'
+       o_A = fromEnum 'A'
 
-        escape x = '%':showHex (ord x) ""
-
-urlEncode [] = []
-            
-
+     eightBs :: [Int]  -> Int -> [Int]
+     eightBs acc x
+      | x <= 0xff = (x:acc)
+      | otherwise = eightBs ((x `mod` 256) : acc) (x `div` 256)
 
 -- Encode form variables, useable in either the
 -- query part of a URI, or the body of a POST request.
@@ -376,38 +593,141 @@ urlEncodeVars [] = []
 
 -- | @getAuth req@ fishes out the authority portion of the URL in a request's @Host@
 -- header.
-getAuth :: Monad m => HTTPRequest ty -> m URIAuthority
+getAuth :: Monad m => Request ty -> m URIAuthority
 getAuth r = 
    -- ToDo: verify that Network.URI functionality doesn't take care of this (now.)
   case parseURIAuthority auth of
     Just x -> return x 
     Nothing -> fail $ "Network.HTTP.Base.getAuth: Error parsing URI authority '" ++ auth ++ "'"
  where 
-   auth = 
-    case findHeader HdrHost r of
-      Just h  -> h
-      Nothing -> uriToAuthorityString (rqURI r)
+  auth = maybe (uriToAuthorityString uri) id (findHeader HdrHost r)
+  uri  = rqURI r
 
-  {- RFC 2616, section 5.1.2:
-     "The most common form of Request-URI is that used to identify a
-      resource on an origin server or gateway. In this case the absolute
-      path of the URI MUST be transmitted (see section 3.2.1, abs_path) as
-      the Request-URI, and the network location of the URI (authority) MUST
-      be transmitted in a Host header field." -}
-  -- we assume that this is the case, so we take the host name from
-  -- the Host header if there is one, otherwise from the request-URI.
-  -- Then we make the request-URI an abs_path and make sure that there
-  -- is a Host header.
-normalizeRequestURI :: URIAuthority -> HTTPRequest ty -> HTTPRequest ty
-normalizeRequestURI URIAuthority{host=h} r = 
-  replaceHeader HdrConnection "close" $
+-- deprecated, use 'normalizeRequest'.
+normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
+normalizeRequestURI doClose h r = 
+  (if doClose then replaceHeader HdrConnection "close" else id) $
   insertHeaderIfMissing HdrHost h $
     r { rqURI = (rqURI r){ uriScheme = ""
                          , uriAuthority = Nothing
 			 }}
 
--- Adds a Host header if one is NOT ALREADY PRESENT
-normalizeHostHeader :: HTTPRequest ty -> HTTPRequest ty
+-- | @NormalizeRequestOptions@ brings together the various defaulting\/normalization options
+-- over 'Request's. Use 'defaultNormalizeRequestOptions' for the standard selection of option
+data NormalizeRequestOptions ty
+ = NormalizeRequestOptions
+     { normDoClose   :: Bool
+     , normForProxy  :: Bool
+     , normUserAgent :: Maybe String
+     , normCustoms   :: [RequestNormalizer ty]
+     }
+
+-- | @RequestNormalizer@ is the shape of a (pure) function that rewrites
+-- a request into some normalized form.
+type RequestNormalizer ty = NormalizeRequestOptions ty -> Request ty -> Request ty
+
+defaultNormalizeRequestOptions :: NormalizeRequestOptions ty
+defaultNormalizeRequestOptions = NormalizeRequestOptions
+     { normDoClose   = False
+     , normForProxy  = False
+     , normUserAgent = Just defaultUserAgent
+     , normCustoms   = []
+     }
+
+-- | @normalizeRequest opts req@ is the entry point to use to normalize your
+-- request prior to transmission (or other use.) Normalization is controlled
+-- via the @NormalizeRequestOptions@ record.
+normalizeRequest :: NormalizeRequestOptions ty
+                 -> Request ty
+		 -> Request ty
+normalizeRequest opts req = foldr (\ f -> f opts) req normalizers
+ where
+  --normalizers :: [RequestNormalizer ty]
+  normalizers = 
+     ( normalizeHostURI
+     : normalizeConnectionClose
+     : normalizeUserAgent 
+     : normCustoms opts
+     )
+
+-- | @normalizeUserAgent ua x req@ augments the request @req@ with 
+-- a @User-Agent: ua@ header if @req@ doesn't already have a 
+-- a @User-Agent:@ set.
+normalizeUserAgent :: RequestNormalizer ty
+normalizeUserAgent opts req = 
+  case normUserAgent opts of
+    Nothing -> req
+    Just ua -> 
+     case findHeader HdrUserAgent req of
+       Nothing -> setHeaders req (mkHeader HdrUserAgent ua : getHeaders req)
+       Just{}  -> req
+
+-- | @normalizeConnectionClose opts req@ sets the header @Connection: close@ 
+-- to indicate one-shot behavior iff @normDoClose@ is @True@. i.e., it then
+-- _replaces_ any an existing @Connection:@ header in @req@.
+normalizeConnectionClose :: RequestNormalizer ty
+normalizeConnectionClose opts req 
+ | normDoClose opts = replaceHeader HdrConnection "close" req
+ | otherwise        = req
+
+-- | @normalizeHostURI forProxy req@ rewrites your request to have it
+-- follow the expected formats by the receiving party (proxy or server.)
+-- 
+normalizeHostURI :: RequestNormalizer ty
+normalizeHostURI opts req = 
+  case splitRequestURI uri of
+    ("",_uri_abs)
+      | forProxy -> 
+         case findHeader HdrHost req of
+	   Nothing -> req -- no host/authority in sight..not much we can do.
+	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
+	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
+				   }}
+            where 
+	      hst = case span (/='@') user_hst of
+	               (as,'@':bs) -> 
+		          case span (/=':') as of
+			    (_,_:_) -> bs
+			    _ -> user_hst
+		       _ -> user_hst
+
+	      (user_hst, pNum) = 
+	         case span isDigit (reverse h) of
+		   (ds,':':bs) -> (reverse bs, ':':reverse ds)
+		   _ -> (h,"")
+      | otherwise -> 
+         case findHeader HdrHost req of
+	   Nothing -> req -- no host/authority in sight..not much we can do...complain?
+	   Just{}  -> req
+    (h,uri_abs) 
+      | forProxy  -> req -- Note: _not_ stubbing out user:pass
+      | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs}
+ where
+   uri0     = rqURI req 
+     -- stub out the user:pass 
+   uri      = uri0{uriAuthority=fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri0)}
+
+   forProxy = normForProxy opts
+
+{- Comments re: above rewriting:
+    RFC 2616, section 5.1.2:
+     "The most common form of Request-URI is that used to identify a
+      resource on an origin server or gateway. In this case the absolute
+      path of the URI MUST be transmitted (see section 3.2.1, abs_path) as
+      the Request-URI, and the network location of the URI (authority) MUST
+      be transmitted in a Host header field." 
+   We assume that this is the case, so we take the host name from
+   the Host header if there is one, otherwise from the request-URI.
+   Then we make the request-URI an abs_path and make sure that there
+   is a Host header.
+-}
+
+splitRequestURI :: URI -> ({-authority-}String, URI)
+splitRequestURI uri = (uriToAuthorityString uri, uri{uriScheme="", uriAuthority=Nothing})
+
+-- Adds a Host header if one is NOT ALREADY PRESENT..
+-- [deprecated, use normalizeRequest instead, if possible.]
+normalizeHostHeader :: Request ty -> Request ty
 normalizeHostHeader rq = 
   insertHeaderIfMissing HdrHost
                         (uriToAuthorityString $ rqURI rq)
@@ -424,9 +744,7 @@ findConnClose hdrs =
 
 -- | Used when we know exactly how many bytes to expect.
 linearTransfer :: (Int -> IO (Result a)) -> Int -> IO (Result ([Header],a))
-linearTransfer readBlk n
-    = do info <- readBlk n
-         return $ info `bindE` \str -> Right ([],str)
+linearTransfer readBlk n = fmapE (\str -> Right ([],str)) (readBlk n)
 
 -- | Used when nothing about data is known,
 --   Unfortunately waiting for a socket closure
@@ -450,36 +768,36 @@ chunkedTransfer :: BufferOp a
 		-> IO (Result a)
                 -> (Int -> IO (Result a))
                 -> IO (Result ([Header], a))
-chunkedTransfer bufOps readL readBlk = do
-    v <- chunkedTransferC bufOps readL readBlk 0
-    return $ v `bindE` \(ftrs,count,info) ->
-             let myftrs = Header HdrContentLength (show count) : ftrs              
-             in Right (myftrs,info)
+chunkedTransfer bufOps readL readBlk = chunkedTransferC bufOps readL readBlk [] 0
 
 chunkedTransferC :: BufferOp a
                  -> IO (Result a)
                  -> (Int -> IO (Result a))
+		 -> [a]
 		 -> Int
-		 -> IO (Result ([Header],Int,a))
-chunkedTransferC bufOps readL readBlk n = do
+		 -> IO (Result ([Header], a))
+chunkedTransferC bufOps readL readBlk acc n = do
   v <- readL
   case v of
     Left e -> return (Left e)
     Right line 
-     | size == 0 -> do
-         rs <- readTillEmpty2 bufOps readL []
-         return $
-           rs `bindE` \strs ->
-           parseHeaders (map (buf_toStr bufOps) strs) `bindE` \ftrs ->
-           Right (ftrs,n,buf_empty bufOps)
+     | size == 0 -> 
+         -- last chunk read; look for trailing headers..
+        fmapE (\ strs -> do
+	         ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
+		   -- insert (computed) Content-Length header.
+		 let ftrs' = Header HdrContentLength (show n) : ftrs
+                 return (ftrs',buf_concat bufOps (reverse acc)))
+
+	      (readTillEmpty2 bufOps readL [])
+
      | otherwise -> do
          some <- readBlk size
-         readL
-         more <- chunkedTransferC bufOps {-nullVal isNull isLineEnd toStr append -} readL readBlk (n+size)
-         return $ 
-           some `bindE` \cdata ->
-           more `bindE` \(ftrs,m,mdata) -> 
-           Right (ftrs,m,buf_append bufOps cdata mdata) 
+	 case some of
+	   Left e -> return (Left e)
+	   Right cdata -> do
+	       readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
+	       chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
      where
       size 
        | buf_isEmpty bufOps line = 0
@@ -491,9 +809,8 @@ chunkedTransferC bufOps readL readBlk n = do
 -- | Maybe in the future we will have a sensible thing
 --   to do here, at that time we might want to change
 --   the name.
-uglyDeathTransfer :: IO (Result ([Header],a))
-uglyDeathTransfer 
-    = return $ Left $ ErrorParse "Unknown Transfer-Encoding"
+uglyDeathTransfer :: String -> IO (Result ([Header],a))
+uglyDeathTransfer loc = return (responseParseError loc "Unknown Transfer-Encoding")
 
 -- | Remove leading crlfs then call readTillEmpty2 (not required by RFC)
 readTillEmpty1 :: BufferOp a
@@ -523,3 +840,18 @@ readTillEmpty2 bufOps readL list =
 	        if buf_isLineTerm bufOps s || buf_isEmpty bufOps s
                  then return (Right $ reverse (s:list))
                  else readTillEmpty2 bufOps readL (s:list))
+
+--
+-- Misc
+--
+
+-- | @catchIO a h@ handles IO action exceptions throughout codebase; version-specific
+-- tweaks better go here.
+catchIO :: IO a -> (IOException -> IO a) -> IO a
+catchIO a h = Prelude.catch a h
+
+catchIO_ :: IO a -> IO a -> IO a
+catchIO_ a h = Prelude.catch a (const h)
+
+responseParseError :: String -> String -> Result a
+responseParseError loc v = failWith (ErrorParse (loc ++ ' ':v))
