@@ -70,11 +70,11 @@ module Network.HTTP.Base
        , readTillEmpty1
        , readTillEmpty2
        
-       , defaultUserAgent
        , defaultGETRequest
        , defaultGETRequest_
        , mkRequest
 
+       , defaultUserAgent
        , libUA  {- backwards compatibility, will disappear..soon -}
        
        , catchIO
@@ -85,7 +85,7 @@ module Network.HTTP.Base
        , getResponseVersion
        , setRequestVersion
        , setResponseVersion
-
+       
        ) where
 
 import Network.URI
@@ -96,7 +96,7 @@ import Network.URI
 
 import Control.Monad ( guard )
 import Control.Monad.Error ()
-import Data.Char     ( digitToInt, intToDigit, toLower, 
+import Data.Char     ( digitToInt, intToDigit, toLower, isDigit,
                        isAscii, isAlphaNum )
 import Data.List     ( partition, find )
 import Data.Maybe    ( listToMaybe, fromMaybe )
@@ -175,8 +175,8 @@ uriAuthPort mbURI u =
     _       -> default_port mbURI
  where
   default_port Nothing = default_http
-  default_port (Just u) = 
-    case map toLower $ uriScheme u of
+  default_port (Just url) = 
+    case map toLower $ uriScheme url of
       "http:" -> default_http
       "https:" -> default_https
         -- todo: refine
@@ -196,8 +196,8 @@ reqURIAuth req =
            Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
 	   Just h  -> 
 	      case toHostPort h of
-	        (h,p) -> URIAuth { uriUserInfo = ""
-	                          , uriRegName  = h
+	        (ht,p) -> URIAuth { uriUserInfo = ""
+	                          , uriRegName  = ht
 			          , uriPort     = p
 			          }
   where
@@ -341,19 +341,28 @@ defaultGETRequest :: URI -> Request_String
 defaultGETRequest uri = defaultGETRequest_ uri
 
 defaultGETRequest_ :: BufferType a => URI -> Request a
-defaultGETRequest_ uri = mkRequest GET uri False
+defaultGETRequest_ uri = mkRequest GET uri 
 
--- | 'mkRequest method uri forProxy' constructs a well formed
--- request for the given HTTP method and URI. The 'forProxy'
--- flag controls the normalization of the URI. If @False@, then
--- the URI is split up into a path and a Host: header. If @True@,
--- the URI is kept as is. You would insist on doing that when interacting
--- with proxies.
-mkRequest :: BufferType a => RequestMethod -> URI -> Bool -> (Request a)
-mkRequest meth uri forProxy = req
+-- | 'mkRequest method uri' constructs a well formed
+-- request for the given HTTP method and URI. It does not
+-- normalize the URI for the request _nor_ add the required 
+-- Host: header. That is done either explicitly by the user
+-- or when requests are normalized prior to transmission.
+mkRequest :: BufferType ty => RequestMethod -> URI -> Request ty
+mkRequest meth uri = req
  where
+  req = 
+    Request { rqURI      = uri
+            , rqBody     = empty
+            , rqHeaders  = [ Header HdrContentLength "0"
+                           , Header HdrUserAgent     defaultUserAgent
+                           ]
+            , rqMethod   = meth
+            }
+
   empty = buf_empty (toBufOps req)
-  
+
+{-
     -- stub out the user info.
   updAuth = fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri)
 
@@ -365,20 +374,11 @@ mkRequest meth uri forProxy = req
   uri_req 
    | forProxy  = uri
    | otherwise = snd (splitRequestURI uri)
+-}
 
-  req = 
-    Request { rqURI      = uri_req
-            , rqBody     = empty
-            , rqHeaders  = withHost $
-	                     [ Header HdrContentLength "0"
-                             , Header HdrUserAgent     defaultUserAgent
-                             ]
-            , rqMethod   = meth
-            }
 
 toBufOps :: BufferType a => Request a -> BufferOp a
 toBufOps _ = bufferOps
-  
 
 -----------------------------------------------------------------
 ------------------ Parsing --------------------------------------
@@ -600,13 +600,8 @@ getAuth r =
     Just x -> return x 
     Nothing -> fail $ "Network.HTTP.Base.getAuth: Error parsing URI authority '" ++ auth ++ "'"
  where 
-  uri     = rqURI r
-    -- stub out the user info.
-  updAuth = fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri)
-  auth = 
-    case findHeader HdrHost r of
-      Just h  -> h
-      Nothing -> uriToAuthorityString uri{uriAuthority=updAuth}
+  auth = maybe (uriToAuthorityString uri) id (findHeader HdrHost r)
+  uri  = rqURI r
 
 -- deprecated, use 'normalizeRequest'.
 normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
@@ -685,18 +680,33 @@ normalizeHostURI opts req =
       | forProxy -> 
          case findHeader HdrHost req of
 	   Nothing -> req -- no host/authority in sight..not much we can do.
-	               -- Hmm..is it correct to scrub out the UserInfo here? 
 	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
 	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
 				   }}
-            where (hst,pNum) = span (/=':') h
+            where 
+	      hst = case span (/='@') user_hst of
+	               (as,'@':bs) -> 
+		          case span (/=':') as of
+			    (_,_:_) -> bs
+			    _ -> user_hst
+		       _ -> user_hst
 
-      | otherwise -> req
+	      (user_hst, pNum) = 
+	         case span isDigit (reverse h) of
+		   (ds,':':bs) -> (reverse bs, ':':reverse ds)
+		   _ -> (h,"")
+      | otherwise -> 
+         case findHeader HdrHost req of
+	   Nothing -> req -- no host/authority in sight..not much we can do...complain?
+	   Just{}  -> req
     (h,uri_abs) 
-      | forProxy  -> req
+      | forProxy  -> req -- Note: _not_ stubbing out user:pass
       | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs}
  where
-   uri      = rqURI req 
+   uri0     = rqURI req 
+     -- stub out the user:pass 
+   uri      = uri0{uriAuthority=fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri0)}
+
    forProxy = normForProxy opts
 
 {- Comments re: above rewriting:
