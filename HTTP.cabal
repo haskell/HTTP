@@ -12,7 +12,7 @@ Copyright:
   Copyright (c) 2004, Ganesh Sittampalam
   Copyright (c) 2004-2005, Dominic Steinitz
   Copyright 2007 Robin Bate Boerop
-  Copyright 2008-2009 Sigbjorn Finne
+  Copyright 2008- Sigbjorn Finne
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Sigbjorn Finne <sigbjorn.finne@gmail.com>
 Homepage: http://projects.haskell.org/http/
@@ -20,13 +20,24 @@ Category: Network
 Synopsis: A library for client-side HTTP
 Description: 
 
- A library for client-side HTTP, version 4. Rewrite of existing HTTP
- package to allow overloaded representation of HTTP request bodies
- and responses. Provides three such instances: lazy and strict 'ByteString',
- along with the good old @String@.
+ A package for sending and receiving HTTP requests and responses, all implemented
+ in Haskell (assuming you've already got a network stack to spare, via the 'network'
+ package!) The representation of content of in requests and responses is user-controllable,
+ letting you pick a representation that fits your code better (e.g., use @ByteString@s rather
+ than the default Haskell @String@s.) Example uses:
  .
- Inspired in part by Jonas Aadahl et al's work on ByteString'ifying HTTP
- a couple of years ago.
+ >
+ >    do
+ >      rsp <- Network.HTTP.simpleHTTP (getRequest "http://www.haskell.org/")
+ >              -- fetch document and return it (as a 'String'.)
+ >      fmap (take 100) (getResponseBody rsp)
+ >
+ >    do 
+ >      rsp <- Network.Browser.browse $ do
+ >               setAllowRedirects True -- handle HTTP redirects
+ >               request $ getRequest "http://google.com/"
+ >      fmap (take 100) (getResponseBody rsp)
+ > 
  .
  Git repository available at <git://code.galois.com/HTTPbis.git>
 
