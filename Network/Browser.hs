@@ -1,39 +1,37 @@
 {- |
------------------------------------------------------------------------------
---
--- Module      :  Network.Browser
--- Copyright   :  (c) Warrick Gray 2002
--- License     :  BSD
--- 
--- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
--- Stability   :  experimental
--- Portability :  non-portable (not tested)
---
--- Session-level interactions over HTTP.
--- 
--- The "Network.Browser" goes beyond the basic "Network.HTTP" functionality in 
--- providing support for more involved, and real, request/response interactions over 
--- HTTP. Additional features supported are:
---
---* HTTP Authentication handling
---
---* Transparent handling of redirects
---
---* Cookie stores + transmission.
---
---* Transaction logging
---
---* Proxy-mediated connections.
---
--- Example use:
---
--- >    do 
--- >      rsp <- Network.Browser.browse $ do
--- >               setAllowRedirects True -- handle HTTP redirects
--- >               request $ getRequest "http://google.com/"
--- >      fmap (take 100) (getResponseBody rsp)
--- 
------------------------------------------------------------------------------
+
+Module      :  Network.Browser
+Copyright   :  (c) Warrick Gray 2002
+License     :  BSD
+ 
+Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
+Stability   :  experimental
+Portability :  non-portable (not tested)
+
+Session-level interactions over HTTP.
+ 
+The "Network.Browser" goes beyond the basic "Network.HTTP" functionality in 
+providing support for more involved, and real, request/response interactions over 
+HTTP. Additional features supported are:
+
+* HTTP Authentication handling
+
+* Transparent handling of redirects
+
+* Cookie stores + transmission.
+
+* Transaction logging
+
+* Proxy-mediated connections.
+
+Example use:
+
+>    do 
+>      rsp <- Network.Browser.browse $ do
+>               setAllowRedirects True -- handle HTTP redirects
+>               request $ getRequest "http://google.com/"
+>      fmap (take 100) (getResponseBody rsp)
+ 
 -}
 module Network.Browser 
        ( BrowserState
