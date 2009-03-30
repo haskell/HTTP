@@ -1,5 +1,6 @@
+{- |
 -----------------------------------------------------------------------------
--- |
+--
 -- Module      :  Network.Browser
 -- Copyright   :  (c) Warrick Gray 2002
 -- License     :  BSD
@@ -33,6 +34,7 @@
 -- >      fmap (take 100) (getResponseBody rsp)
 -- 
 -----------------------------------------------------------------------------
+-}
 module Network.Browser 
        ( BrowserState
        , BrowserAction      -- browser monad, effectively a state monad.
