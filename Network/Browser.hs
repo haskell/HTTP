@@ -811,7 +811,7 @@ request' nullVal rqState rq = do
    p <- getProxy
    let defaultOpts = 
          case p of 
-	   NoProxy -> defaultNormalizeRequestOptions
+	   NoProxy     -> defaultNormalizeRequestOptions
 	   Proxy _ ath ->
 	      defaultNormalizeRequestOptions
 	        { normForProxy=True
@@ -820,24 +820,12 @@ request' nullVal rqState rq = do
 		          (\ authS -> [\ _ r -> insertHeader HdrProxyAuthorization (withAuthority authS r) r])
 			  ath
 		}
-   let final_req = normalizeRequest defaultOpts  rq''
-{-
-   let rq_to_go = normalizeRequestURI False{-no close-}
-                                      (uriToAuthorityString $ rqURI rq'')
-				      rq''
--}
+   let final_req = normalizeRequest defaultOpts rq''
    out ("Sending:\n" ++ show final_req)
    e_rsp <- 
      case p of
        NoProxy        -> dorequest (reqURIAuth rq'') final_req
        Proxy str _ath -> do
-{-
-            -- note: don't split off the authority for proxies..
-          let rq_to_go' = maybe rq''
-	                    (\x -> insertHeader HdrProxyAuthorization
-			                        (withAuthority x rq'') rq'')
-		           ath
--}
           let notURI 
 	       | null pt || null hst = 
 	         URIAuth{ uriUserInfo = ""
