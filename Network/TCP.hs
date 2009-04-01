@@ -9,16 +9,8 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- An easy access TCP library. Makes the use of TCP in Haskell much easier.
--- This was originally part of Gray's\/Bringert's HTTP module.
---
--- * Changes by Robin Bate Boerop <robin@bateboerop.name>:
---      - Made dependencies explicit in import statements.
---      - Removed false dependencies from import statements.
---      - Removed unused exported functions.
---
--- * Changes by Simon Foster:
---      - Split module up into to separate Network.[Stream,TCP,HTTP] modules
+-- Some utility functions for working with the Haskell @network@ package. Mostly
+-- for internal use by the @Network.HTTP@ code, but 
 --      
 -----------------------------------------------------------------------------
 module Network.TCP
@@ -74,7 +66,7 @@ import qualified Data.ByteString.Lazy as Lazy
 -----------------------------------------------------------------
 
 -- | The 'Connection' newtype is a wrapper that allows us to make
--- connections an instance of the Stream class, without ghc extensions.
+-- connections an instance of the Stream class, without GHC extensions.
 -- While this looks sort of like a generic reference to the transport
 -- layer it is actually TCP specific, which can be seen in the
 -- implementation of the 'Stream Connection' instance.
@@ -123,6 +115,16 @@ nullHooks = StreamHooks
 setStreamHooks :: HandleStream ty -> StreamHooks ty -> IO ()
 setStreamHooks h sh = modifyMVar_ (getRef h) (\ c -> return c{connHooks=Just sh})
 
+-- | @HStream@ overloads the use of 'HandleStream's, letting you
+-- overload the handle operations over the type that is communicated
+-- across the handle. It is used in the context of @Network.HTTP@ to
+-- buy us freedom in how HTTP 'Request' and 'Response' payloads are
+-- represented. 
+--
+-- The package provides instances for @ByteString@s and @String@, but
+-- should you want to plug in your own payload representation, defining
+-- your own @HStream@ instance is all it takes.
+-- 
 class BufferType bufType => HStream bufType where
   openStream :: String -> Int -> IO (HandleStream bufType)
   readLine   :: HandleStream bufType -> IO (Result bufType)
