@@ -168,7 +168,7 @@ defaultCookieFilter _url _cky = return True
 -- user if he/she is willing to accept an incoming cookie before
 -- adding it to the store.
 userCookieFilter :: URI -> Cookie -> IO Bool
-userCookieFilter url cky =
+userCookieFilter url cky = do
     do putStrLn ("Set-Cookie received when requesting: " ++ show url)
        case ckComment cky of
           Nothing -> return ()
@@ -196,7 +196,6 @@ cookieToHeader ck = Header HdrCookie text
                      Nothing -> ""
                      Just x  -> ";$Path=" ++ x)
              ++ ";$Domain=" ++ ckDomain ck
-
 
 {- replace "error" call with [] in final version? -}
 headerToCookies :: String -> Header -> [Cookie]
@@ -253,9 +252,7 @@ headerToCookies _ _ = []
 
 -- | @addCookie c@ adds a cookie to the browser state, removing duplicates.
 addCookie :: Cookie -> BrowserAction t ()
-addCookie c = alterBS (\b -> b { bsCookies=c : fn (bsCookies b) })
-    where
-        fn = filter (not . (==c))
+addCookie c = alterBS (\b -> b{bsCookies = c : filter (/=c) (bsCookies b) })
 
 -- | @setCookies cookies@ replaces the set of cookies known to
 -- the browser to @cookies@. Useful when wanting to restore cookies
@@ -720,11 +717,14 @@ getBrowserState = getBS id
 withBrowserState :: BrowserState t -> BrowserAction t a -> BrowserAction t a
 withBrowserState bs act = BA $ \ _ -> lift act bs
 
-newRequest :: BrowserAction t a -> BrowserAction t a
-newRequest act = do
+-- | @nextRequest act@ performs the browser action @act@ as
+-- the next request, i.e., setting up a new request context
+-- before doing so.
+nextRequest :: BrowserAction t a -> BrowserAction t a
+nextRequest act = do
   let updReqID st = 
        let 
-        rid = 1 + bsRequestID st
+        rid = succ (bsRequestID st)
        in
        rid `seq` st{bsRequestID=rid}
   alterBS updReqID
@@ -888,7 +888,7 @@ defaultMaxAuthAttempts = 2
 request :: HStream ty
         => Request ty
 	-> BrowserAction (HandleStream ty) (URI,Response ty)
-request req = newRequest $ do
+request req = nextRequest $ do
                  res <- request' nullVal initialState req
 		 reportEvent ResponseFinish (show (rqURI req))
 		 case res of
@@ -901,7 +901,8 @@ request req = newRequest $ do
    initialState = nullRequestState
    nullVal      = buf_empty bufferOps
 
--- | Internal helper function, carrying along per-request counts.
+-- | Internal helper function, explicitly carrying along per-request 
+-- counts.
 request' :: HStream ty
          => ty
 	 -> RequestState
@@ -918,8 +919,7 @@ request' nullVal rqState rq = do
      xs -> case break (==':') xs of { (as,_:bs) -> withAuth AuthBasic{auUsername=as,auPassword=bs,auRealm="/",auSite=uri} ; _ -> id}) $ do
 -}
    when (not $ null cookies) 
-        (out $ "Adding cookies to request.  Cookie names: "  ++
-               foldl spaceappend "" (map ckName cookies))
+        (out $ "Adding cookies to request.  Cookie names: "  ++ unwords (map ckName cookies))
     -- add credentials to request
    rq' <- 
     if not (reqStopOnDeny rqState) 
@@ -992,7 +992,7 @@ request' nullVal rqState rq = do
      mapM_ addCookie newcookies'
 
      when (not $ null newcookies)
-          (out $ "Accepting cookies with names: " ++ foldl spaceappend "" (map ckName newcookies'))
+          (out $ "Accepting cookies with names: " ++ unwords (map ckName newcookies'))
        
      mbMxAuths <- getMaxAuthAttempts
      case rspCode rsp of
@@ -1092,7 +1092,7 @@ request' nullVal rqState rq = do
 				     , reqStopOnDeny = True
 				     }
 				     rq
-      (3,_,_) ->  redirect uri rsp
+      (3,_,_) -> redirect uri rsp
       _       -> return (Right (uri,rsp))
 
    where      
@@ -1121,52 +1121,50 @@ request' nullVal rqState rq = do
                 err ("Parse of Location header in a redirect response failed: " ++ u)
                 return (Right (uri,rsp))
 
-spaceappend :: String -> String -> String
-spaceappend x y = x ++ ' ' : y
-
 -- | The internal request handling state machine.
 dorequest :: (HStream ty)
           => URIAuth
 	  -> Request ty
 	  -> BrowserAction (HandleStream ty)
 	                   (Result (Response ty))
-dorequest hst rqst = 
-            do { pool <- getBS bsConnectionPool
-               ; conn <- ioAction $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
-               ; rsp <- case conn of
-                    [] -> do { out ("Creating new connection to " ++ uriAuthToString hst)
-                             ; let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
-		             ; reportEvent OpenConnection (show (rqURI rqst))
-                             ; c <- ioAction $ openStream (uriRegName hst) uPort
-			     ; updateConnectionPool c
-			     ; dorequest2 c rqst
-                             }
-                    (c:_) ->
-                        do { out ("Recovering connection to " ++ uriAuthToString hst)
-			   ; reportEvent ReuseConnection (show (rqURI rqst))
-                           ; dorequest2 c rqst
-                           }
-	       ; case rsp of { Right (Response a b c _) -> reportEvent (ResponseEnd (a,b,c)) (show (rqURI rqst)) ; _ -> return ()}
-               ; return rsp
-               }
-  where
-   dorequest2 c r = do
-     dbg <- getBS bsDebug
-     st  <- getBrowserState
-     onSendComplete <- 
-        case bsEvent st of
-	  Nothing  -> return (return ())
-	  Just evh -> return $ do
-	               x <- buildBrowserEvent RequestSent (show (rqURI r)) (bsRequestID st)
-		       (lift (evh x)) st
-		       return ()
-     ioAction $ 
-       case dbg of
-         Nothing -> sendHTTP_notify c r onSendComplete
-         Just f  -> do
-	   c' <- debugByteStream (f++'-': uriAuthToString hst) c
-	   sendHTTP_notify c' r onSendComplete
-
+dorequest hst rqst = do
+  pool <- getBS bsConnectionPool
+  conn <- ioAction $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
+  rsp <- 
+    case conn of
+      [] -> do 
+        out ("Creating new connection to " ++ uriAuthToString hst)
+        let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
+	reportEvent OpenConnection (show (rqURI rqst))
+        c <- ioAction $ openStream (uriRegName hst) uPort
+	updateConnectionPool c
+	dorequest2 c rqst
+      (c:_) -> do
+        out ("Recovering connection to " ++ uriAuthToString hst)
+	reportEvent ReuseConnection (show (rqURI rqst))
+        dorequest2 c rqst
+  case rsp of 
+     Right (Response a b c _) -> 
+         reportEvent (ResponseEnd (a,b,c)) (show (rqURI rqst)) ; _ -> return ()
+  return rsp
+ where
+  dorequest2 c r = do
+    dbg <- getBS bsDebug
+    st  <- getBrowserState
+    let 
+     onSendComplete =
+       maybe (return ())
+             (\evh -> do
+	        x <- buildBrowserEvent RequestSent (show (rqURI r)) (bsRequestID st)
+		(lift (evh x)) st
+		return ())
+             (bsEvent st)
+    ioAction $ 
+      maybe (sendHTTP_notify c r onSendComplete)
+            (\ f -> do
+               c' <- debugByteStream (f++'-': uriAuthToString hst) c
+	       sendHTTP_notify c' r onSendComplete)
+	    dbg
 
 updateConnectionPool :: HStream hTy
                      => HandleStream hTy
