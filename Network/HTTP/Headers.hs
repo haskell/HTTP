@@ -8,56 +8,35 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- * Changes by Robin Bate Boerop <robin@bateboerop.name>:
---      - Made dependencies explicit in import statements.
---      - Removed false dependencies in import statements.
---      - Added missing type signatures.
---      - Created Network.HTTP.Headers from Network.HTTP modules.
---
--- See changes history and TODO list in Network.HTTP module.
---
--- * Header notes:
---
---     [@Host@]
---                  Required by HTTP\/1.1, if not supplied as part
---                  of a request a default Host value is extracted
---                  from the request-uri.
+-- This module provides the data types for representing HTTP headers, and
+-- operations for looking up header values and working with sequences of
+-- header values in 'Request's and 'Response's. To avoid having to provide
+-- separate set of operations for doing so, we introduce a type class 'HasHeaders'
+-- to facilitate writing such processing using overloading instead.
 -- 
---     [@Connection@] 
---                  If this header is present in any request or
---                  response, and it's value is "close", then
---                  the current request\/response is the last 
---                  to be allowed on that connection.
--- 
---     [@Expect@]
---                  Should a request contain a body, an Expect
---                  header will be added to the request.  The added
---                  header has the value \"100-continue\".  After
---                  a 417 \"Expectation Failed\" response the request
---                  is attempted again without this added Expect
---                  header.
---                  
---     [@TransferEncoding,ContentLength,...@]
---                  if request is inconsistent with any of these
---                  header values then you may not receive any response
---                  or will generate an error response (probably 4xx).
---
 -----------------------------------------------------------------------------
 module Network.HTTP.Headers
-   ( HasHeaders(..)
+   ( HasHeaders(..)     -- type class
+
    , Header(..)
+   , mkHeader           -- :: HeaderName -> String -> Header
+   , hdrName            -- :: Header     -> HeaderName
+   , hdrValue           -- :: Header     -> String
+
    , HeaderName(..)
-   , mkHeader
 
-   , insertHeader
-   , insertHeaderIfMissing
-   , insertHeaders
-   , retrieveHeaders
-   , replaceHeader
-   , findHeader
-   , lookupHeader
-   , parseHeaders
+   , insertHeader          -- :: HasHeaders a => HeaderName -> String -> a -> a
+   , insertHeaderIfMissing -- :: HasHeaders a => HeaderName -> String -> a -> a
+   , insertHeaders         -- :: HasHeaders a => [Header] -> a -> a
+   , retrieveHeaders       -- :: HasHeaders a => HeaderName -> a -> [Header]
+   , replaceHeader         -- :: HasHeaders a => HeaderName -> String -> a -> a
+   , findHeader            -- :: HasHeaders a => HeaderName -> a -> Maybe String
+   , lookupHeader          -- :: HeaderName -> [Header] -> Maybe String
 
+   , parseHeader           -- :: parseHeader :: String -> Result Header
+   , parseHeaders          -- :: [String] -> Result [Header]
+   
+   , HeaderSetter
    ) where
 
 import Data.Char (toLower)
@@ -67,6 +46,12 @@ import Network.HTTP.Utils ( trim, split, crlf )
 -- | The @Header@ data type pairs header names & values.
 data Header = Header HeaderName String
 
+hdrName :: Header -> HeaderName
+hdrName (Header h _) = h
+
+hdrValue :: Header -> String
+hdrValue (Header _ v) = v
+
 -- | Header constructor as a function, hiding above rep.
 mkHeader :: HeaderName -> String -> Header
 mkHeader = Header
@@ -74,17 +59,15 @@ mkHeader = Header
 instance Show Header where
     show (Header key value) = shows key (':':' ':value ++ crlf)
 
--- | HTTP Header Name type:
---  Why include this at all?  I have some reasons
---   1) prevent spelling errors of header names,
---   2) remind everyone of what headers are available,
---   3) might speed up searches for specific headers.
+-- | HTTP @HeaderName@ type, a Haskell data constructor for each
+-- specification-defined header, prefixed with @Hdr@ and CamelCased,
+-- (i.e., eliding the @-@ in the process.) Should you require using
+-- a custom header, there's the @HdrCustom@ constructor which takes
+-- a @String@ argument.
 --
---  Arguments against:
---   1) makes customising header names laborious
---   2) increases code volume.
---
--- Long discussions can be had on this topic!
+-- Encoding HTTP header names differently, as Strings perhaps, is an
+-- equally fine choice..no decidedly clear winner, but let's stick
+-- with data constructors here.
 -- 
 data HeaderName 
     -- Generic Headers --
@@ -147,8 +130,8 @@ data HeaderName
  | HdrCustom String -- not in header map below.
     deriving(Eq)
 
--- Translation between header names and values,
--- good candidate for improvement.
+-- | @headerMap@ is a straight assoc list for translating between header names 
+-- and values.
 headerMap :: [ (String,HeaderName) ]
 headerMap =
    [ p "Cache-Control"        HdrCacheControl
@@ -212,24 +195,28 @@ instance Show HeaderName where
                 [] -> error "headerMap incomplete"
                 (h:_) -> fst h
 
--- | This class allows us to write generic header manipulation functions
--- for both 'Request' and 'Response' data types.
+-- | @HasHeaders@ is a type class for types containing HTTP headers, allowing
+-- you to write overloaded header manipulation functions
+-- for both 'Request' and 'Response' data types, for instance.
 class HasHeaders x where
     getHeaders :: x -> [Header]
     setHeaders :: x -> [Header] -> x
 
 -- Header manipulation functions
-insertHeader, replaceHeader, insertHeaderIfMissing
-    :: HasHeaders a => HeaderName -> String -> a -> a
 
--- | Inserts a header with the given name and value.
--- Allows duplicate header names.
+type HeaderSetter a = HeaderName -> String -> a -> a
+
+-- | @insertHeader hdr val x@ inserts a header with the given header name
+-- and value. Does not check for existing headers with same name, allowing
+-- duplicates to be introduce (use 'replaceHeader' if you want to avoid this.)
+insertHeader :: HasHeaders a => HeaderSetter a
 insertHeader name value x = setHeaders x newHeaders
     where
         newHeaders = (Header name value) : getHeaders x
 
--- | Adds the new header only if no previous header shares
--- the same name.
+-- | @insertHeaderIfMissing hdr val x@ adds the new header only if no previous
+-- header with name @hdr@ exists in @x@.
+insertHeaderIfMissing :: HasHeaders a => HeaderSetter a
 insertHeaderIfMissing name value x = setHeaders x (newHeaders $ getHeaders x)
     where
         newHeaders list@(h@(Header n _): rest)
@@ -237,33 +224,39 @@ insertHeaderIfMissing name value x = setHeaders x (newHeaders $ getHeaders x)
             | otherwise  = h : newHeaders rest
         newHeaders [] = [Header name value]
 
--- | Removes old headers with duplicate name.
+-- | @replaceHeader hdr val o@ replaces the header @hdr@ with the
+-- value @val@, dropping any existing 
+replaceHeader :: HasHeaders a => HeaderSetter a
 replaceHeader name value h = setHeaders h newHeaders
     where
         newHeaders = Header name value : [ x | x@(Header n _) <- getHeaders h, name /= n ]
           
--- | Inserts multiple headers.
+-- | @insertHeaders hdrs x@ appends multiple headers to @x@'s existing
+-- set.
 insertHeaders :: HasHeaders a => [Header] -> a -> a
 insertHeaders hdrs x = setHeaders x (getHeaders x ++ hdrs)
 
--- | Gets a list of headers with a particular 'HeaderName'.
+-- | @retrieveHeaders hdrNm x@ gets a list of headers with 'HeaderName' @hdrNm@.
 retrieveHeaders :: HasHeaders a => HeaderName -> a -> [Header]
 retrieveHeaders name x = filter matchname (getHeaders x)
     where
-        matchname (Header n _)  |  n == name  =  True
-        matchname _ = False
+        matchname (Header n _) = n == name 
 
--- | Lookup presence of specific HeaderName in a list of Headers
--- Returns the value from the first matching header.
+-- | @findHeader hdrNm x@ looks up @hdrNm@ in @x@, returning the first
+-- header that matches, if any.
 findHeader :: HasHeaders a => HeaderName -> a -> Maybe String
 findHeader n x = lookupHeader n (getHeaders x)
 
--- An anomally really:
+-- | @lookupHeader hdr hdrs@ locates the first header matching @hdr@ in the
+-- list @hdrs@.
 lookupHeader :: HeaderName -> [Header] -> Maybe String
-lookupHeader v (Header n s:t)  |  v == n   =  Just s
-                               | otherwise =  lookupHeader v t
-lookupHeader _ _  =  Nothing
+lookupHeader _ [] = Nothing
+lookupHeader v (Header n s:t)  
+  |  v == n   =  Just s
+  | otherwise =  lookupHeader v t
 
+-- | @parseHeader headerNameAndValueString@ tries to unscramble a
+-- @header: value@ pairing and returning it as a 'Header'.
 parseHeader :: String -> Result Header
 parseHeader str =
     case split ':' str of
@@ -277,9 +270,14 @@ parseHeader str =
         match :: String -> String -> Bool
         match s1 s2 = map toLower s1 == map toLower s2
     
+-- | @parseHeaders hdrs@ takes a sequence of strings holding header
+-- information and parses them into a set of headers (preserving their
+-- order in the input argument.) Handles header values split up over
+-- multiple lines.
 parseHeaders :: [String] -> Result [Header]
-parseHeaders =
-   catRslts [] . map (parseHeader . clean) . joinExtended ""
+parseHeaders = catRslts [] . 
+                 map (parseHeader . clean) . 
+		     joinExtended ""
    where
         -- Joins consecutive lines where the second line
         -- begins with ' ' or '\t'.
