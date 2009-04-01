@@ -1,5 +1,8 @@
-Version 4004.0.5: release 2009-01-xx; changes from 4004.0.4
+Version 4004.0.5: release 2009-03-30; changes from 4004.0.4
 
+ * Get serious about comments and Haddock documentation.
+ * Cleaned up normalization of requests, fixing bugs and bringing together
+   previous disparate attempts at handling this.
  * RequestMethod now supports custom verbs; use the (Custom String) constructor
  * Beef up Network.HTTP.Base's support for normalizing requests and URIs:
  
