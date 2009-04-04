@@ -2,6 +2,7 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.BufferType
+-- Description :  Abstract representation of request and response buffer types.
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004, 2007 Robin Bate Boerop, 2008 Sigbjorn Finne
 -- License     :  BSD
 --
@@ -9,7 +10,14 @@
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
--- Operations over wire-transmitted values.
+-- In order to give the user freedom in how request and response content
+-- is represented, a sufficiently abstract representation is needed of
+-- these internally. The "Network.BufferType" module provides this, defining
+-- the 'BufferType' class and its ad-hoc representation of buffer operations
+-- via the 'BufferOp' record.
+--
+-- This module provides definitions for the standard buffer types that the
+-- package supports, i.e., for @String@ and @ByteString@ (strict and lazy.)
 -- 
 -----------------------------------------------------------------------------
 module Network.BufferType
@@ -35,7 +43,7 @@ import Network.HTTP.Utils ( crlf )
 -- | The @BufferType@ class encodes, in a mixed-mode way, the interface
 -- that the library requires to operate over data embedded in HTTP
 -- requests and responses. That is, we use explicit dictionaries
--- for the operations, but overload the name of these dicts.
+-- for the operations, but overload the name of the dicts themselves.
 -- 
 class BufferType bufType where
    bufferOps :: BufferOp bufType
@@ -49,9 +57,17 @@ instance BufferType Strict.ByteString where
 instance BufferType String where
    bufferOps = stringBufferOp
 
--- Encode the I/O operations of the underlying buffer over a Handle 
--- in an (explicit) dictionary type. May not be needed, but gives
+-- | @BufferOp@ encodes the I/O operations of the underlying buffer over 
+-- a Handle in an (explicit) dictionary type. May not be needed, but gives
 -- us flexibility in explicit overriding and wrapping up of these methods.
+--
+-- Along with IO operations is an ad-hoc collection of functions for working
+-- with these abstract buffers, as needed by the internals of the code
+-- that processes requests and responses.
+--
+-- We supply three default @BufferOp@ values, for @String@ along with the
+-- strict and lazy versions of @ByteString@. To add others, provide @BufferOp@
+-- definitions for 
 data BufferOp a
  = BufferOp
      { buf_hGet         :: Handle -> Int -> IO a
@@ -73,6 +89,8 @@ data BufferOp a
 instance Eq (BufferOp a) where
   _ == _ = False
 
+-- | @strictBufferOp@ is the 'BufferOp' definition over @ByteString@s,
+-- the non-lazy kind.
 strictBufferOp :: BufferOp Strict.ByteString
 strictBufferOp = 
     BufferOp 
@@ -94,6 +112,8 @@ strictBufferOp =
    where
     p_crlf = Strict.pack crlf
 
+-- | @lazyBufferOp@ is the 'BufferOp' definition over @ByteString@s,
+-- the non-strict kind.
 lazyBufferOp :: BufferOp Lazy.ByteString
 lazyBufferOp = 
     BufferOp 
@@ -115,12 +135,15 @@ lazyBufferOp =
    where
     p_crlf = Lazy.pack crlf
 
+-- | @stringBufferOp@ is the 'BufferOp' definition over @String@s.
+-- It is defined in terms of @strictBufferOp@ operations,
+-- unpacking/converting to @String@ when needed.
 stringBufferOp :: BufferOp String
 stringBufferOp =BufferOp 
-      { buf_hGet         = \ h n -> Strict.hGet h n >>= return . Strict.unpack
-      , buf_hGetContents = \ h -> Strict.hGetContents h >>= return . Strict.unpack
-      , buf_hPut         = \ h s -> Strict.hPut h (Strict.pack s)
-      , buf_hGetLine     = \ h   -> Strict.hGetLine h >>= return . Strict.unpack
+      { buf_hGet         = \ h n -> buf_hGet strictBufferOp h n >>= return . Strict.unpack
+      , buf_hGetContents = \ h -> buf_hGetContents strictBufferOp h >>= return . Strict.unpack
+      , buf_hPut         = \ h s -> buf_hPut strictBufferOp h (Strict.pack s)
+      , buf_hGetLine     = \ h   -> buf_hGetLine strictBufferOp h >>= return . Strict.unpack
       , buf_append       = (++)
       , buf_concat       = concat
       , buf_fromStr      = id
