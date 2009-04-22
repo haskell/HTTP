@@ -112,7 +112,8 @@ import Network.URI
    , parseURI, parseURIReference, relativeTo
    )
 import Network.StreamDebugger (debugByteStream)
-import Network.HTTP
+import Network.HTTP hiding ( sendHTTP_notify )
+import Network.HTTP.HandleStream ( sendHTTP_notify )
 import qualified Network.HTTP.MD5 as MD5 (hash)
 import qualified Network.HTTP.Base64 as Base64 (encode)
 import Network.Stream ( ConnError(..), Result )
@@ -567,7 +568,7 @@ withAuthority :: Authority -> Request ty -> String
 withAuthority a rq = case a of
         AuthBasic{}  -> "Basic " ++ base64encode (auUsername a ++ ':' : auPassword a)
         AuthDigest{} ->
-            "Digest username=\"" ++ auUsername a -- "
+            "Digest username=\"" ++ auUsername a 
               ++ "\",realm=\"" ++ auRealm a
               ++ "\",nonce=\"" ++ auNonce a
               ++ "\",uri=\"" ++ digesturi
@@ -969,7 +970,7 @@ request' nullVal rqState rq = do
                       (parseURI str)
 
           out $ "proxy uri host: " ++ uriRegName proxyURIAuth ++ ", port: " ++ uriPort proxyURIAuth
-          dorequest proxyURIAuth final_req
+	  dorequest proxyURIAuth final_req
    mbMx <- getMaxErrorRetries
    case e_rsp of
     Left v 
