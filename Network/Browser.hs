@@ -198,58 +198,6 @@ cookieToHeader ck = Header HdrCookie text
                      Just x  -> ";$Path=" ++ x)
              ++ ";$Domain=" ++ ckDomain ck
 
-{- replace "error" call with [] in final version? -}
-headerToCookies :: String -> Header -> [Cookie]
-headerToCookies dom (Header HdrSetCookie val) = 
-    case parse cookies "" val of
-        Left e  -> error ("Cookie parse failure on: " ++ val ++ " " ++ show e) 
-        Right x -> x
-    where
-        cookies :: Parser [Cookie]
-        cookies = sepBy1 cookie (char ',')
-
-        cookie :: Parser Cookie
-        cookie =
-            do { name <- word
-               ; spaces_l
-               ; char '='
-               ; spaces_l
-               ; val1 <- cvalue
-               ; args <- cdetail
-               ; return $ mkCookie name val1 args
-               }
-
-        cvalue :: Parser String
-        
-        spaces_l = many (satisfy isSpace)
-
-        cvalue = quotedstring <|> many1 (satisfy $ not . (==';')) <|> return ""
-       
-        -- all keys in the result list MUST be in lower case
-        cdetail :: Parser [(String,String)]
-        cdetail = many $
-            try (do { spaces_l
-               ; char ';'
-               ; spaces_l
-               ; s1 <- word
-               ; spaces_l
-               ; s2 <- option "" (do { char '=' ; spaces_l ; v <- cvalue ; return v })
-               ; return (map toLower s1,s2)
-               })
-
-        mkCookie :: String -> String -> [(String,String)] -> Cookie
-        mkCookie nm cval more = 
-	  MkCookie { ckName    = nm
-                   , ckValue   = cval
-                   , ckDomain  = map toLower (fromMaybe dom (lookup "domain" more))
-                   , ckPath    = lookup "path" more
-                   , ckVersion = lookup "version" more
-                   , ckComment = lookup "comment" more
-                   }
-
-headerToCookies _ _ = []
-
-      
 
 -- | @addCookie c@ adds a cookie to the browser state, removing duplicates.
 addCookie :: Cookie -> BrowserAction t ()
@@ -982,19 +930,8 @@ request' nullVal rqState rq = do
     Right rsp -> do 
      out ("Received:\n" ++ show rsp)
       -- add new cookies to browser state
-     let cookieheaders = retrieveHeaders HdrSetCookie rsp
-     let newcookies = concat (map (headerToCookies $ uriAuthToString $ reqURIAuth rq) cookieheaders)
-
-     when (not $ null newcookies)
-          (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newcookies)
-               
-     filterfn    <- getCookieFilter
-     newcookies' <- ioAction (filterM (filterfn uri) newcookies)
-     mapM_ addCookie newcookies'
-
-     when (not $ null newcookies)
-          (out $ "Accepting cookies with names: " ++ unwords (map ckName newcookies'))
-       
+     handleCookies uri (uriAuthToString $ reqURIAuth rq) 
+                       (retrieveHeaders HdrSetCookie rsp)
      mbMxAuths <- getMaxAuthAttempts
      case rspCode rsp of
       (4,0,1) -- Credentials not sent or refused.
@@ -1207,6 +1144,73 @@ formToRequest (Form m u vs) =
                         , rqURI=u
                         }
         _ -> error ("unexpected request: " ++ show m)
+
+
+handleCookies :: URI -> String -> [Header] -> BrowserAction t ()
+handleCookies _   _              [] = return () -- cut short the silliness.
+handleCookies uri dom cookieHeaders = do
+  when (not $ null errs)
+       (err $ unlines ("Errors parsing these cookie values: ":errs))
+  when (not $ null newCookies)
+       (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newCookies)
+  filterfn    <- getCookieFilter
+  newCookies' <- ioAction (filterM (filterfn uri) newCookies)
+  when (not $ null newCookies')
+       (out $ "Accepting cookies with names: " ++ unwords (map ckName newCookies'))
+  mapM_ addCookie newCookies'
+ where
+  (errs, newCookies) = foldr (headerToCookies dom) ([],[]) cookieHeaders
+
+headerToCookies :: String -> Header -> ([String], [Cookie]) -> ([String], [Cookie])
+headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) = 
+    case parse cookies "" val of
+        Left e  -> (val:accErr, accCookie)
+        Right x -> (accErr, x ++ accCookie)
+  where
+   cookies :: Parser [Cookie]
+   cookies = sepBy1 cookie (char ',')
+
+   cookie :: Parser Cookie
+   cookie =
+       do { name <- word
+          ; spaces_l
+          ; char '='
+          ; spaces_l
+          ; val1 <- cvalue
+          ; args <- cdetail
+          ; return $ mkCookie name val1 args
+          }
+
+   cvalue :: Parser String
+   
+   spaces_l = many (satisfy isSpace)
+
+   cvalue = quotedstring <|> many1 (satisfy $ not . (==';')) <|> return ""
+   
+   -- all keys in the result list MUST be in lower case
+   cdetail :: Parser [(String,String)]
+   cdetail = many $
+       try (do { spaces_l
+          ; char ';'
+          ; spaces_l
+          ; s1 <- word
+          ; spaces_l
+          ; s2 <- option "" (do { char '=' ; spaces_l ; v <- cvalue ; return v })
+          ; return (map toLower s1,s2)
+          })
+
+   mkCookie :: String -> String -> [(String,String)] -> Cookie
+   mkCookie nm cval more = 
+	  MkCookie { ckName    = nm
+                   , ckValue   = cval
+                   , ckDomain  = map toLower (fromMaybe dom (lookup "domain" more))
+                   , ckPath    = lookup "path" more
+                   , ckVersion = lookup "version" more
+                   , ckComment = lookup "comment" more
+                   }
+headerToCookies _ _ acc = acc
+
+      
 
 
 ------------------------------------------------------------------
