@@ -1,3 +1,14 @@
+Version 4004.0.6: release 2009-04-21; changes from 4004.0.5
+
+ * Patch release.
+ * Network.Browser: use HTTP.HandleStream.sendHTTP_notify, not HTTP.sendHTTP_notify
+   when issuing requests. The latter runs the risk of undoing request normalization.
+ * Network.HTTP.Base.normalizeRequest: when normalizing proxy-bound requests,
+   insert a Host: header if none present. Set it to the destination server authority,
+   not the proxy.
+ * Network.Browser: don't fail on seeing invalid cookie values, but report them
+   as errors and continue.
+
 Version 4004.0.5: release 2009-03-30; changes from 4004.0.4
 
  * Get serious about comments and Haddock documentation.
