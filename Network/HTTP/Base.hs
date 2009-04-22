@@ -705,8 +705,8 @@ normalizeHostURI opts req =
 	   Nothing -> req -- no host/authority in sight..not much we can do...complain?
 	   Just{}  -> req
     (h,uri_abs) 
-      | forProxy  -> req -- Note: _not_ stubbing out user:pass
-      | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs}
+      | forProxy  -> insertHeaderIfMissing HdrHost h req 
+      | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs} -- Note: _not_ stubbing out user:pass
  where
    uri0     = rqURI req 
      -- stub out the user:pass 
