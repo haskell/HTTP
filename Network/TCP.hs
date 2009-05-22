@@ -19,6 +19,7 @@ module Network.TCP
    , isConnectedTo
 
    , openTCPConnection
+   , socketConnection
    , isTCPConnectedTo
    
    , HandleStream
@@ -126,7 +127,8 @@ setStreamHooks h sh = modifyMVar_ (getRef h) (\ c -> return c{connHooks=Just sh}
 -- your own @HStream@ instance is all it takes.
 -- 
 class BufferType bufType => HStream bufType where
-  openStream :: String -> Int -> IO (HandleStream bufType)
+  openStream       :: String -> Int -> IO (HandleStream bufType)
+  openSocketStream :: String -> Socket -> IO (HandleStream bufType)
   readLine   :: HandleStream bufType -> IO (Result bufType)
   readBlock  :: HandleStream bufType -> Int -> IO (Result bufType)
   writeBlock :: HandleStream bufType -> bufType -> IO (Result ())
@@ -134,6 +136,7 @@ class BufferType bufType => HStream bufType where
   
 instance HStream Strict.ByteString where
   openStream       = openTCPConnection
+  openSocketStream = socketConnection
   readBlock c n    = readBlockBS c n
   readLine c       = readLineBS c
   writeBlock c str = writeBlockBS c str
@@ -141,6 +144,7 @@ instance HStream Strict.ByteString where
 
 instance HStream Lazy.ByteString where
     openStream       = \ a b -> openTCPConnection_ a b True
+    openSocketStream = \ a b -> socketConnection_ a b True
     readBlock c n    = readBlockBS c n
     readLine c       = readLineBS c
     writeBlock c str = writeBlockBS c str
@@ -154,6 +158,7 @@ instance Stream.Stream Connection where
   
 instance HStream String where
     openStream      = openTCPConnection
+    openSocketStream = socketConnection
     readBlock ref n = readBlockBS ref n
 
     -- This function uses a buffer, at this time the buffer is just 1000 characters.
@@ -187,18 +192,7 @@ openTCPConnection_ uri port stashInput = do
     hostA <- getHostAddr uri
     let a = SockAddrInet (toEnum port) hostA
     catchIO (connect s a) (\e -> sClose s >> ioError e)
-    h <- socketToHandle s ReadWriteMode
-    mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
-    let conn = MkConn 
-         { connSock   = s
-	 , connHandle = h
-	 , connBuffer = bufferOps
-	 , connInput  = mb
-	 , connHost   = uri
-	 , connHooks  = Nothing
-	 }
-    v <- newMVar conn
-    return (HandleStream v)
+    socketConnection_ uri s stashInput
  where
   getHostAddr h = do
     catchIO (inet_addr uri)    -- handles ascii IP numbers
@@ -211,6 +205,34 @@ openTCPConnection_ uri port stashInput = do
   getHostByName_safe h = 
     catchIO (getHostByName h)
             (\ _ -> fail ("openTCPConnection: host lookup failure for " ++ show h))
+
+-- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
+socketConnection :: BufferType ty
+                 => String
+		 -> Socket
+		 -> IO (HandleStream ty)
+socketConnection hst sock = socketConnection_ hst sock False
+
+-- Internal function used to control the on-demand streaming of input
+-- for /lazy/ streams.
+socketConnection_ :: BufferType ty
+                  => String
+		  -> Socket
+		  -> Bool
+		  -> IO (HandleStream ty)
+socketConnection_ hst sock stashInput = do
+    h <- socketToHandle sock ReadWriteMode
+    mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
+    let conn = MkConn 
+         { connSock   = sock
+	 , connHandle = h
+	 , connBuffer = bufferOps
+	 , connInput  = mb
+	 , connHost   = hst
+	 , connHooks  = Nothing
+	 }
+    v <- newMVar conn
+    return (HandleStream v)
 
 closeConnection :: HandleStream a -> IO Bool -> IO ()
 closeConnection ref readL = do
