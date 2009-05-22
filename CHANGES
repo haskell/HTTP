@@ -1,6 +1,17 @@
+Version 4004.0.7: release 2009-05-22
+
+ * Minor release.
+ * Added 
+     Network.TCP.openSocketStream :: (BufferType t)
+                                  => String {-host-}
+				  -> Socket
+				  -> IO (HandleStream t)
+
+   for interfacing to pre-existing @Socket@s. Contributed and
+   suggested by <http://trac.haskell.org/http/ticket/7>.
+
 Version 4004.0.6: release 2009-04-21; changes from 4004.0.5
 
- * Patch release.
  * Network.Browser: use HTTP.HandleStream.sendHTTP_notify, not HTTP.sendHTTP_notify
    when issuing requests. The latter runs the risk of undoing request normalization.
  * Network.HTTP.Base.normalizeRequest: when normalizing proxy-bound requests,
