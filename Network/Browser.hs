@@ -27,10 +27,10 @@ HTTP. Additional features supported are:
 Example use:
 
 >    do 
->      rsp <- Network.Browser.browse $ do
->               setAllowRedirects True -- handle HTTP redirects
->               request $ getRequest "http://google.com/"
->      fmap (take 100) (getResponseBody rsp)
+>      (_,rsp) <- Network.Browser.browse $ do
+>                  setAllowRedirects True -- handle HTTP redirects
+>                  request $ getRequest "http://google.com/"
+>      putStrLn (take 100 $ rspBody rsp)
  
 -}
 module Network.Browser 
