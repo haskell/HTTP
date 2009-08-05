@@ -50,16 +50,19 @@ module Network.Browser
        , setMaxRedirects    -- :: Int -> BrowserAction t ()
        , getMaxRedirects    -- :: BrowserAction t (Maybe Int)
        
+       , getAuthorities     -- :: BrowserAction t [Authority]
+       , setAuthorities     -- :: [Authority] -> BrowserAction t ()
+       , addAuthority       -- :: Authority   -> BrowserAction t ()
+
+          -- types re-exported from Network.HTTP.Auth
        , Authority(..)
-       , getAuthorities
-       , setAuthorities
-       , addAuthority
        , Challenge(..)
        , Qop(..)
        , Algorithm(..)
        
-       , getAuthorityGen
-       , setAuthorityGen
+       , AuthorityGen        -- type _ = (URI -> String -> IO (Maybe (String,String)))
+       , getAuthorityGen     -- :: BrowserAction t AuthorityGen
+       , setAuthorityGen     -- :: AuthorityGen -> BrowserAction t ()
        , setAllowBasicAuth
        
        , setMaxErrorRetries  -- :: Maybe Int -> BrowserAction t ()
@@ -366,7 +369,7 @@ data BrowserState connection
  = BS { bsErr, bsOut      :: String -> IO ()
       , bsCookies         :: [Cookie]
       , bsCookieFilter    :: URI -> Cookie -> IO Bool
-      , bsAuthorityGen    :: URI -> String -> IO (Maybe (String,String))
+      , bsAuthorityGen    :: AuthorityGen
       , bsAuthorities     :: [Authority]
       , bsAllowRedirects  :: Bool
       , bsAllowBasicAuth  :: Bool
@@ -379,6 +382,16 @@ data BrowserState connection
       , bsEvent           :: Maybe (BrowserEvent connection -> BrowserAction connection ())
       , bsRequestID       :: RequestID
       }
+
+-- | @AuthorityGen@ is responsible for generating a user/pwd pair
+-- for accessing a given resource. Used when HTTP Auth challenges
+-- are processed. If the action is unable to determine such a
+-- pair (perhaps because the user balks/cancels), @Nothing@ is returned. 
+type AuthorityGen
+  =  URI                         -- URI of request
+  -> String                      -- realm
+  -> IO (Maybe (String,String))  -- user,password
+
 
 instance Show (BrowserState t) where
     show bs =  "BrowserState { " 
