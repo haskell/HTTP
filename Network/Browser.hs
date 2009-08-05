@@ -114,51 +114,28 @@ import Network.URI
 import Network.StreamDebugger (debugByteStream)
 import Network.HTTP hiding ( sendHTTP_notify )
 import Network.HTTP.HandleStream ( sendHTTP_notify )
-import qualified Network.HTTP.MD5 as MD5 (hash)
-import qualified Network.HTTP.Base64 as Base64 (encode)
+import Network.HTTP.Auth
+import Network.HTTP.Cookie
+import Network.HTTP.Proxy
+
 import Network.Stream ( ConnError(..), Result )
 import Network.BufferType
 
-import Network.HTTP.Utils ( trim, splitBy )
-
-import Data.Char (toLower,isAlphaNum,isSpace)
-import Data.List (isPrefixOf,isSuffixOf)
-import Data.Maybe (fromMaybe, listToMaybe, catMaybes, fromJust, isJust)
+import Data.Char (toLower)
+import Data.List (isPrefixOf)
+import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
 import Control.Monad (filterM, liftM, when)
 
-import Text.ParserCombinators.Parsec
-   ( Parser, char, many, many1, satisfy, parse, option, try
-   , (<|>), spaces, sepBy1
-   )
 import qualified System.IO
    ( hSetBuffering, hPutStr, stdout, stdin, hGetChar
    , BufferMode(NoBuffering, LineBuffering)
    )
 import System.Time ( ClockTime, getClockTime )
 
-import Data.Word (Word8)
 
 ------------------------------------------------------------------
 ----------------------- Cookie Stuff -----------------------------
 ------------------------------------------------------------------
-
--- | @Cookie@ is the Haskell representation of HTTP cookie values.
--- See its relevant specs for authoritative details.
-data Cookie 
- = MkCookie 
-    { ckDomain  :: String
-    , ckName    :: String
-    , ckValue   :: String
-    , ckPath    :: Maybe String
-    , ckComment :: Maybe String
-    , ckVersion :: Maybe String
-    }
-    deriving(Show,Read)
-
-instance Eq Cookie where
-    a == b  =  ckDomain a == ckDomain b 
-            && ckName a == ckName b 
-            && ckPath a == ckPath b
 
 -- | @defaultCookieFilter@ is the initial cookie acceptance filter.
 -- It welcomes them all into the store @:-)@
@@ -184,20 +161,6 @@ userCookieFilter url cky = do
        System.IO.hSetBuffering System.IO.stdin System.IO.LineBuffering
        System.IO.hSetBuffering System.IO.stdout System.IO.LineBuffering
        return (toLower x == 'y')
-       
-
--- | Serialise a Cookie for inclusion in a request.
-cookieToHeader :: Cookie -> Header
-cookieToHeader ck = Header HdrCookie text
-    where
-        path = maybe "" (";$Path="++) (ckPath ck)
-        text = "$Version=" ++ fromMaybe "0" (ckVersion ck)
-             ++ ';' : ckName ck ++ "=" ++ ckValue ck ++ path
-             ++ (case ckPath ck of
-                     Nothing -> ""
-                     Just x  -> ";$Path=" ++ x)
-             ++ ";$Domain=" ++ ckDomain ck
-
 
 -- | @addCookie c@ adds a cookie to the browser state, removing duplicates.
 addCookie :: Cookie -> BrowserAction t ()
@@ -223,10 +186,7 @@ getCookiesFor dom path =
        return (filter cookiematch cks)
     where
         cookiematch :: Cookie -> Bool
-        cookiematch ck = ckDomain ck `isSuffixOf` dom
-                      && case ckPath ck of
-                             Nothing -> True
-                             Just p  -> p `isPrefixOf` path
+        cookiematch = cookieMatch (dom,path)
       
 
 -- | @setCookieFilter fn@ sets the cookie acceptance filter to @fn@.
@@ -279,119 +239,6 @@ Notes:
    to use next-nonce etc
 
 -}
-
--- | @Algorithm@ controls the digest algorithm to, @MD5@ or @MD5Session@.
-data Algorithm = AlgMD5 | AlgMD5sess
-    deriving(Eq)
-
-instance Show Algorithm where
-    show AlgMD5 = "md5"
-    show AlgMD5sess = "md5-sess"
-
--- | 
-data Qop = QopAuth | QopAuthInt
-    deriving(Eq,Show)
-
-
-data Challenge 
- = ChalBasic  { chRealm   :: String }
- | ChalDigest { chRealm   :: String
-              , chDomain  :: [URI]
-              , chNonce   :: String
-              , chOpaque  :: Maybe String
-              , chStale   :: Bool
-              , chAlgorithm ::Maybe Algorithm
-              , chQop     :: [Qop]
-              }
-
--- | @headerChallenge base www_auth@ tries to convert the @WWW-Authenticate@ header 
--- @www_auth@  into a 'Challenge' value.
-headerToChallenge :: URI -> Header -> Maybe Challenge
-headerToChallenge baseURI (Header _ str) =
-    case parse challenge "" str of
-        Left{} -> Nothing
-        Right (name,props) -> case name of
-            "basic"  -> mkBasic props
-            "digest" -> mkDigest props
-            _        -> Nothing
-    where
-        challenge :: Parser (String,[(String,String)])
-        challenge =
-            do { nme <- word
-               ; spaces
-               ; pps <- cprops
-               ; return (map toLower nme,pps)
-               }
-
-        cprops = sepBy1 cprop comma
-
-        comma = do { spaces ; char ',' ; spaces }
-
-        cprop =
-            do { nm <- word
-               ; char '='
-               ; val <- quotedstring
-               ; return (map toLower nm,val)
-               }
-
-        mkBasic, mkDigest :: [(String,String)] -> Maybe Challenge
-
-        mkBasic params = fmap ChalBasic (lookup "realm" params)
-
-        mkDigest params =
-            -- with Maybe monad
-            do { r <- lookup "realm" params
-               ; n <- lookup "nonce" params
-               ; return $ 
-                    ChalDigest { chRealm  = r
-                               , chDomain = (annotateURIs 
-                                            $ map parseURI
-                                            $ words 
-                                            $ fromMaybe [] 
-                                            $ lookup "domain" params)
-                               , chNonce  = n
-                               , chOpaque = lookup "opaque" params
-                               , chStale  = "true" == (map toLower
-                                           $ fromMaybe "" (lookup "stale" params))
-                               , chAlgorithm= readAlgorithm (fromMaybe "MD5" $ lookup "algorithm" params)
-                               , chQop    = readQop (fromMaybe "" $ lookup "qop" params)
-                               }
-               }
-
-        annotateURIs :: [Maybe URI] -> [URI]
-        annotateURIs = (map (\u -> fromMaybe u (u `relativeTo` baseURI))) . catMaybes
-
-        -- Change These:
-        readQop :: String -> [Qop]
-        readQop = catMaybes . (map strToQop) . (splitBy ',')
-
-        strToQop qs = case map toLower (trim qs) of
-            "auth"     -> Just QopAuth
-            "auth-int" -> Just QopAuthInt
-            _          -> Nothing
-
-        readAlgorithm astr = case map toLower (trim astr) of
-            "md5"      -> Just AlgMD5
-            "md5-sess" -> Just AlgMD5sess
-            _          -> Nothing
-
--- | @Authority@ specifies the HTTP Authentication method to use for
--- a given domain/realm; @Basic@ or @Digest@.
-data Authority 
- = AuthBasic { auRealm    :: String
-             , auUsername :: String
-             , auPassword :: String
-             , auSite     :: URI
-             }
- | AuthDigest{ auRealm     :: String
-             , auUsername  :: String
-             , auPassword  :: String
-             , auNonce     :: String
-             , auAlgorithm :: Maybe Algorithm
-             , auDomain    :: [URI]
-             , auOpaque    :: Maybe String
-             , auQop       :: [Qop]
-             }
 
 -- | Return authorities for a given domain and path.
 -- Assumes "dom" is lower case
@@ -508,73 +355,6 @@ challengeToAuthority uri ch =
                        }
 
 
--- | Generating a credentials value from an Authority, in
--- the context of a specific request.  If a client nonce
--- was to be used then this function might need to
--- be of type ... -> BrowserAction String
-withAuthority :: Authority -> Request ty -> String
-withAuthority a rq = case a of
-        AuthBasic{}  -> "Basic " ++ base64encode (auUsername a ++ ':' : auPassword a)
-        AuthDigest{} ->
-            "Digest username=\"" ++ auUsername a 
-              ++ "\",realm=\"" ++ auRealm a
-              ++ "\",nonce=\"" ++ auNonce a
-              ++ "\",uri=\"" ++ digesturi
-              ++ ",response=\"" ++ rspdigest 
-              ++ "\""
-              -- plus optional stuff:
-              ++ ( if isJust (auAlgorithm a) then "" else ",algorithm=\"" ++ show (fromJust $ auAlgorithm a) ++ "\"" )
-              ++ ( if isJust (auOpaque a) then "" else ",opaque=\"" ++ (fromJust $ auOpaque a) ++ "\"" )
-              ++ ( if null (auQop a) then "" else ",qop=auth" )
-    where
-        rspdigest = "\"" 
-                 ++ map toLower (kd (md5 a1) (noncevalue ++ ":" ++ md5 a2))
-                 ++ "\""
-
-        a1, a2 :: String
-        a1 = auUsername a ++ ":" ++ auRealm a ++ ":" ++ auPassword a
-        
-        {-
-        If the "qop" directive's value is "auth" or is unspecified, then A2
-        is:
-           A2  = Method ":" digest-uri-value
-        If the "qop" value is "auth-int", then A2 is:
-           A2  = Method ":" digest-uri-value ":" H(entity-body)
-        -}
-        a2 = show (rqMethod rq) ++ ":" ++ digesturi
-
-        digesturi = show (rqURI rq)
-        noncevalue = auNonce a
-
-type Octet = Word8
-
--- FIXME: these probably only work right for latin-1 strings
-stringToOctets :: String -> [Octet]
-stringToOctets = map (fromIntegral . fromEnum)
-
-octetsToString :: [Octet] -> String
-octetsToString = map (toEnum . fromIntegral)
-
-base64encode :: String -> String
-base64encode = Base64.encode . stringToOctets
-
-md5 :: String -> String
-md5 = octetsToString . MD5.hash . stringToOctets
-
-kd :: String -> String -> String
-kd a b = md5 (a ++ ":" ++ b)
-
-
-------------------------------------------------------------------
------------------- Proxy Stuff -----------------------------------
-------------------------------------------------------------------
-
--- | @Proxy@ specifies if a proxy should be used for the request.
-data Proxy 
- = NoProxy                 -- ^ Don't use a proxy.
- | Proxy String
-         (Maybe Authority) -- ^ Use the proxy given. Should be of the form "http:\/\/host:port", "host", "host:port", or "http:\/\/host". Optional 'Authority' to authenticate with the proxy as.
-
 ------------------------------------------------------------------
 ------------------ Browser State Actions -------------------------
 ------------------------------------------------------------------
@@ -644,7 +424,7 @@ defaultBrowserState = res
      , bsMaxErrorRetries  = Nothing
      , bsMaxAuthAttempts  = Nothing
      , bsConnectionPool   = []
-     , bsProxy            = NoProxy
+     , bsProxy            = noProxy
      , bsDebug            = Nothing 
      , bsEvent            = Nothing
      , bsRequestID        = 0
@@ -865,7 +645,15 @@ request' nullVal rqState rq = do
 {- Not for now:
    (case uriUserInfo uria of
      "" -> id
-     xs -> case break (==':') xs of { (as,_:bs) -> withAuth AuthBasic{auUsername=as,auPassword=bs,auRealm="/",auSite=uri} ; _ -> id}) $ do
+     xs ->
+       case chopAtDelim ':' xs of
+         (_,[])    -> id
+	 (usr,pwd) -> withAuth
+	                  AuthBasic{ auUserName = usr
+                                   , auPassword = pwd
+			           , auRealm    = "/"
+			           , auSite     = uri
+			           }) $ do
 -}
    when (not $ null cookies) 
         (out $ "Adding cookies to request.  Cookie names: "  ++ unwords (map ckName cookies))
@@ -1122,6 +910,33 @@ updateConnectionPool c = do
 maxPoolSize :: Int
 maxPoolSize = 5
 
+handleCookies :: URI -> String -> [Header] -> BrowserAction t ()
+handleCookies _   _              [] = return () -- cut short the silliness.
+handleCookies uri dom cookieHeaders = do
+  when (not $ null errs)
+       (err $ unlines ("Errors parsing these cookie values: ":errs))
+  when (not $ null newCookies)
+       (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newCookies)
+  filterfn    <- getCookieFilter
+  newCookies' <- ioAction (filterM (filterfn uri) newCookies)
+  when (not $ null newCookies')
+       (out $ "Accepting cookies with names: " ++ unwords (map ckName newCookies'))
+  mapM_ addCookie newCookies'
+ where
+  (errs, newCookies) = processCookieHeaders dom cookieHeaders
+
+------------------------------------------------------------------
+----------------------- Miscellaneous ----------------------------
+------------------------------------------------------------------
+
+-- | @uriDefaultTo a b@ returns a URI that is consistent with the first
+-- argument URI @a@ when read in the context of the second URI @b@.
+-- If the second argument is not sufficient context for determining
+-- a full URI then anarchy reins.
+uriDefaultTo :: URI -> URI -> URI
+uriDefaultTo a b = maybe a id (a `relativeTo` b)
+
+
 -- This form junk is completely untested...
 
 type FormVar = (String,String)
@@ -1146,91 +961,3 @@ formToRequest (Form m u vs) =
         _ -> error ("unexpected request: " ++ show m)
 
 
-handleCookies :: URI -> String -> [Header] -> BrowserAction t ()
-handleCookies _   _              [] = return () -- cut short the silliness.
-handleCookies uri dom cookieHeaders = do
-  when (not $ null errs)
-       (err $ unlines ("Errors parsing these cookie values: ":errs))
-  when (not $ null newCookies)
-       (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newCookies)
-  filterfn    <- getCookieFilter
-  newCookies' <- ioAction (filterM (filterfn uri) newCookies)
-  when (not $ null newCookies')
-       (out $ "Accepting cookies with names: " ++ unwords (map ckName newCookies'))
-  mapM_ addCookie newCookies'
- where
-  (errs, newCookies) = foldr (headerToCookies dom) ([],[]) cookieHeaders
-
-headerToCookies :: String -> Header -> ([String], [Cookie]) -> ([String], [Cookie])
-headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) = 
-    case parse cookies "" val of
-        Left e  -> (val:accErr, accCookie)
-        Right x -> (accErr, x ++ accCookie)
-  where
-   cookies :: Parser [Cookie]
-   cookies = sepBy1 cookie (char ',')
-
-   cookie :: Parser Cookie
-   cookie =
-       do { name <- word
-          ; spaces_l
-          ; char '='
-          ; spaces_l
-          ; val1 <- cvalue
-          ; args <- cdetail
-          ; return $ mkCookie name val1 args
-          }
-
-   cvalue :: Parser String
-   
-   spaces_l = many (satisfy isSpace)
-
-   cvalue = quotedstring <|> many1 (satisfy $ not . (==';')) <|> return ""
-   
-   -- all keys in the result list MUST be in lower case
-   cdetail :: Parser [(String,String)]
-   cdetail = many $
-       try (do { spaces_l
-          ; char ';'
-          ; spaces_l
-          ; s1 <- word
-          ; spaces_l
-          ; s2 <- option "" (do { char '=' ; spaces_l ; v <- cvalue ; return v })
-          ; return (map toLower s1,s2)
-          })
-
-   mkCookie :: String -> String -> [(String,String)] -> Cookie
-   mkCookie nm cval more = 
-	  MkCookie { ckName    = nm
-                   , ckValue   = cval
-                   , ckDomain  = map toLower (fromMaybe dom (lookup "domain" more))
-                   , ckPath    = lookup "path" more
-                   , ckVersion = lookup "version" more
-                   , ckComment = lookup "comment" more
-                   }
-headerToCookies _ _ acc = acc
-
-      
-
-
-------------------------------------------------------------------
------------------------ Miscellaneous ----------------------------
-------------------------------------------------------------------
-
--- | @uriDefaultTo a b@ returns a URI that is consistent with the first
--- argument URI @a@ when read in the context of the second URI @b@.
--- If the second argument is not sufficient context for determining
--- a full URI then anarchy reins.
-uriDefaultTo :: URI -> URI -> URI
-uriDefaultTo a b = maybe a id (a `relativeTo` b)
-
-
-word, quotedstring :: Parser String
-quotedstring =
-    do { char '"'  -- "
-       ; str <- many (satisfy $ not . (=='"'))
-       ; char '"'
-       ; return str
-       }
-
-word = many1 (satisfy (\x -> isAlphaNum x || x=='_' || x=='.' || x=='-' || x==':'))
