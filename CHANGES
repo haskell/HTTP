@@ -1,3 +1,10 @@
+Version 4004.0.8: release 2009-08-05
+
+ * Incorporated proxy setting lookup and parsing contribution
+   by Eric Kow, provided in Network.HTTP.Proxy
+ * Factor out HTTP Cookies and Auth handling into separate
+   modules Network.HTTP.Cookie, Network.HTTP.Auth
+
 Version 4004.0.7: release 2009-05-22
 
  * Minor release.
