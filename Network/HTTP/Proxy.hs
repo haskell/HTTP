@@ -134,7 +134,7 @@ parseProxy str = join
      -- 'uriAuthority' then we try parsing again with a @\"http://\"@ prefix.
      --
 
--- | tidy up user portion, don't want the trailing "@".
+-- | tidy up user portion, don't want the trailing "\@".
 fixUserInfo :: URI -> URI
 fixUserInfo uri = uri{ uriAuthority = f `fmap` uriAuthority uri }
   where
