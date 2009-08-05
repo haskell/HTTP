@@ -74,3 +74,7 @@ Library
     Build-depends: base < 3
   else
     Build-depends: base >= 3, array, old-time, bytestring
+
+  if os(windows)
+     -- sigh, avoid exception versionitis by using haskell98:IO.catch
+    Build-depends: haskell98, Win32

@@ -29,11 +29,15 @@ import Network.URI
 import System.IO ( hPutStrLn, stderr )
 import System.Environment
 
-
+{-
+#if !defined(WIN32) && defined(mingw32_HOST_OS)
+#define WIN32 1
+#endif
+-}
 #if defined(WIN32)
 import System.Win32.Types   ( DWORD, HKEY )
 import System.Win32.Registry( hKEY_CURRENT_USER, regOpenKey, regCloseKey, regQueryValue, regQueryValueEx )
-import Control.Exception    ( handle, bracket )
+import IO                   ( catch, bracket )
 import Foreign              ( toBool, Storable(peek, sizeOf), castPtr, alloca )
 #endif
 
@@ -68,7 +72,7 @@ registryProxyString :: IO (Maybe String)
 #if !defined(WIN32)
 registryProxyString = return Nothing
 #else
-registryProxyLoc :: (DWORD,String)
+registryProxyLoc :: (HKEY,String)
 registryProxyLoc = (hive, path)
   where
     -- some sources say proxy settings should be at 
@@ -81,12 +85,13 @@ registryProxyLoc = (hive, path)
 
 -- read proxy settings from the windows registry; this is just a best
 -- effort and may not work on all setups. 
-registryProxyString = handle (\_ -> return Nothing) $
-  bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
+registryProxyString = IO.catch 
+  (bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
     enable <- fmap toBool $ regQueryValueDWORD hkey "ProxyEnable"
     if enable
         then fmap Just $ regQueryValue hkey (Just "ProxyServer")
-        else return Nothing
+        else return Nothing)
+   (\ _ -> return Nothing)
 #endif
 
 -- | @fetchProxy flg@ gets the local proxy settings and parse the string
