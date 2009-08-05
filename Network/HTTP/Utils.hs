@@ -22,6 +22,9 @@ module Network.HTTP.Utils
        , splitBy  -- :: Eq a => a -> [a] -> [[a]]
        
        , readsOne -- :: Read a => (a -> b) -> b -> String -> b
+
+       , dropWhileTail -- :: (a -> Bool) -> [a] -> [a]
+       , chopAtDelim   -- :: Eq a => a -> [a] -> ([a],[a])
        
        ) where
        
@@ -81,3 +84,23 @@ readsOne f n str =
    ((v,_):_) -> f v
    _ -> n
 
+
+-- | @dropWhileTail p ls@ chops off trailing elements from @ls@
+-- until @p@ returns @False@.
+dropWhileTail :: (a -> Bool) -> [a] -> [a]
+dropWhileTail f ls =
+ case foldr chop Nothing ls of { Just xs -> xs; Nothing -> [] }
+  where
+    chop x (Just xs) = Just (x:xs)
+    chop x _
+     | f x       = Nothing
+     | otherwise = Just [x]
+
+-- | @chopAtDelim elt ls@ breaks up @ls@ into two at first occurrence
+-- of @elt@; @elt@ is elided too. If @elt@ does not occur, the second
+-- list is empty and the first is equal to @ls@.
+chopAtDelim :: Eq a => a -> [a] -> ([a],[a])
+chopAtDelim elt xs =
+  case break (==elt) xs of
+    (_,[])    -> (xs,[])
+    (as,_:bs) -> (as,bs)
