@@ -34,10 +34,11 @@ import System.Environment
 #define WIN32 1
 #endif
 -}
+
 #if defined(WIN32)
 import System.Win32.Types   ( DWORD, HKEY )
 import System.Win32.Registry( hKEY_CURRENT_USER, regOpenKey, regCloseKey, regQueryValue, regQueryValueEx )
-import IO                   ( catch, bracket )
+import Control.Exception    ( bracket )
 import Foreign              ( toBool, Storable(peek, sizeOf), castPtr, alloca )
 #endif
 
@@ -85,18 +86,21 @@ registryProxyLoc = (hive, path)
 
 -- read proxy settings from the windows registry; this is just a best
 -- effort and may not work on all setups. 
-registryProxyString = IO.catch 
+registryProxyString = Prelude.catch
   (bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
     enable <- fmap toBool $ regQueryValueDWORD hkey "ProxyEnable"
     if enable
         then fmap Just $ regQueryValue hkey (Just "ProxyServer")
         else return Nothing)
-   (\ _ -> return Nothing)
+  (\_ -> return Nothing)
 #endif
 
 -- | @fetchProxy flg@ gets the local proxy settings and parse the string
 -- into a @Proxy@ value. If you want to be informed of ill-formed proxy
 -- configuration strings, supply @True@ for @flg@.
+-- Proxy settings are sourced from the @HTTP_PROXY@ environment variable,
+-- and in the case of Windows platforms, by consulting IE/WinInet's proxy
+-- setting in the Registry.
 fetchProxy :: Bool -> IO Proxy
 fetchProxy warnIfIllformed = do
   mstr <- proxyString
