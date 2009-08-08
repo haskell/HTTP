@@ -1,9 +1,19 @@
 Version 4004.0.8: release 2009-08-05
 
  * Incorporated proxy setting lookup and parsing contribution
-   by Eric Kow, provided in Network.HTTP.Proxy
+   by Eric Kow; provided in Network.HTTP.Proxy
  * Factor out HTTP Cookies and Auth handling into separate
    modules Network.HTTP.Cookie, Network.HTTP.Auth
+ * new Network.Browser functionality for hooking up the
+   proxy detection code in Network.HTTP.Proxy:
+
+      setCheckForProxy :: Bool -> BrowserAction t ()
+      getCheckForProxy :: BrowserAction t Bool
+
+   If you do 'setCheckForProxy True' within a browser
+   session, the proxy-checking code will be called upon.
+   Use 'getCheckForProxy' to get the current setting for
+   this flag.
 
 Version 4004.0.7: release 2009-05-22
 
