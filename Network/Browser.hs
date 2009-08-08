@@ -27,10 +27,10 @@ HTTP. Additional features supported are:
 Example use:
 
 >    do 
->      (_,rsp) <- Network.Browser.browse $ do
->                  setAllowRedirects True -- handle HTTP redirects
->                  request $ getRequest "http://google.com/"
->      putStrLn (take 100 $ rspBody rsp)
+>      rsp <- Network.Browser.browse $ do
+>               setAllowRedirects True -- handle HTTP redirects
+>               request $ getRequest "http://google.com/"
+>      fmap (take 100) (getResponseBody rsp)
  
 -}
 module Network.Browser 
@@ -50,19 +50,16 @@ module Network.Browser
        , setMaxRedirects    -- :: Int -> BrowserAction t ()
        , getMaxRedirects    -- :: BrowserAction t (Maybe Int)
        
-       , getAuthorities     -- :: BrowserAction t [Authority]
-       , setAuthorities     -- :: [Authority] -> BrowserAction t ()
-       , addAuthority       -- :: Authority   -> BrowserAction t ()
-
-          -- types re-exported from Network.HTTP.Auth
        , Authority(..)
+       , getAuthorities
+       , setAuthorities
+       , addAuthority
        , Challenge(..)
        , Qop(..)
        , Algorithm(..)
        
-       , AuthorityGen        -- type _ = (URI -> String -> IO (Maybe (String,String)))
-       , getAuthorityGen     -- :: BrowserAction t AuthorityGen
-       , setAuthorityGen     -- :: AuthorityGen -> BrowserAction t ()
+       , getAuthorityGen
+       , setAuthorityGen
        , setAllowBasicAuth
        
        , setMaxErrorRetries  -- :: Maybe Int -> BrowserAction t ()
@@ -92,7 +89,11 @@ module Network.Browser
        
        , setProxy         -- :: Proxy -> BrowserAction t ()
        , getProxy         -- :: BrowserAction t Proxy
-       , setDebugLog
+
+       , setCheckForProxy -- :: Bool -> BrowserAction t ()
+       , getCheckForProxy -- :: BrowserAction t Bool
+
+       , setDebugLog      -- :: Maybe String -> BrowserAction t ()
        
        , out              -- :: String -> BrowserAction t ()
        , err              -- :: String -> BrowserAction t ()
@@ -369,7 +370,7 @@ data BrowserState connection
  = BS { bsErr, bsOut      :: String -> IO ()
       , bsCookies         :: [Cookie]
       , bsCookieFilter    :: URI -> Cookie -> IO Bool
-      , bsAuthorityGen    :: AuthorityGen
+      , bsAuthorityGen    :: URI -> String -> IO (Maybe (String,String))
       , bsAuthorities     :: [Authority]
       , bsAllowRedirects  :: Bool
       , bsAllowBasicAuth  :: Bool
@@ -377,21 +378,12 @@ data BrowserState connection
       , bsMaxErrorRetries :: Maybe Int
       , bsMaxAuthAttempts :: Maybe Int
       , bsConnectionPool  :: [connection]
+      , bsCheckProxy      :: Bool
       , bsProxy           :: Proxy
       , bsDebug           :: Maybe String
       , bsEvent           :: Maybe (BrowserEvent connection -> BrowserAction connection ())
       , bsRequestID       :: RequestID
       }
-
--- | @AuthorityGen@ is responsible for generating a user/pwd pair
--- for accessing a given resource. Used when HTTP Auth challenges
--- are processed. If the action is unable to determine such a
--- pair (perhaps because the user balks/cancels), @Nothing@ is returned. 
-type AuthorityGen
-  =  URI                         -- URI of request
-  -> String                      -- realm
-  -> IO (Maybe (String,String))  -- user,password
-
 
 instance Show (BrowserState t) where
     show bs =  "BrowserState { " 
@@ -437,6 +429,7 @@ defaultBrowserState = res
      , bsMaxErrorRetries  = Nothing
      , bsMaxAuthAttempts  = Nothing
      , bsConnectionPool   = []
+     , bsCheckProxy       = defaultAutoProxyDetect
      , bsProxy            = noProxy
      , bsDebug            = Nothing 
      , bsEvent            = Nothing
@@ -521,11 +514,46 @@ getMaxRedirects = getBS bsMaxRedirects
 -- as the URL of the proxy to use, possibly authenticating via 
 -- 'Authority' information in @mbAuth@.
 setProxy :: Proxy -> BrowserAction t ()
-setProxy p = alterBS (\b -> b {bsProxy = p})
+setProxy p =
+   -- Note: if user _explicitly_ sets the proxy, we turn
+   -- off any auto-detection of proxies.
+  alterBS (\b -> b {bsProxy = p, bsCheckProxy=False})
 
--- | @getProxy@ returns the current proxy settings.
+-- | @getProxy@ returns the current proxy settings. If
+-- the auto-proxy flag is set to @True@, @getProxy@ will
+-- perform the necessary 
 getProxy :: BrowserAction t Proxy
-getProxy = getBS bsProxy
+getProxy = do
+  p <- getBS bsProxy
+  case p of
+      -- Note: if there is a proxy, no need to perform any auto-detect.
+      -- Presumably this is the user's explicit and preferred proxy server.
+    Proxy{} -> return p
+    NoProxy{} -> do
+    flg <- getBS bsCheckProxy
+    if not flg
+     then return p 
+     else do
+      np <- ioAction $ fetchProxy True{-issue warning on stderr if ill-formed...-}
+       -- note: this resets the check-proxy flag; a one-off affair.
+      setProxy np
+      return np
+
+-- | @setCheckForProxy flg@ sets the one-time check for proxy
+-- flag to @flg@. If @True@, the session will try to determine
+-- the proxy server is locally configured. See 'Network.HTTP.Proxy.fetchProxy'
+-- for details of how this done.
+setCheckForProxy :: Bool -> BrowserAction t ()
+setCheckForProxy flg = alterBS (\ b -> b{bsCheckProxy=flg})
+
+-- | @getCheckForProxy@ returns the current check-proxy setting.
+-- Notice that this may not be equal to @True@ if the session has
+-- set it to that via 'setCheckForProxy' and subsequently performed
+-- some HTTP protocol interactions. i.e., the flag return represents
+-- whether a proxy will be checked for again before any future protocol
+-- interactions.
+getCheckForProxy :: BrowserAction t Bool
+getCheckForProxy = getBS bsCheckProxy
 
 -- | @setDebugLog mbFile@ turns off debug logging iff @mbFile@
 -- is @Nothing@. If set to @Just fStem@, logs of browser activity
@@ -617,11 +645,16 @@ defaultMaxRetries = 4
 defaultMaxErrorRetries :: Int
 defaultMaxErrorRetries = 4
 
-
 -- | The default maximum HTTP Authentication attempts we will make for
 -- a single request.
 defaultMaxAuthAttempts :: Int
 defaultMaxAuthAttempts = 2
+
+-- | The default setting for auto-proxy detection.
+-- You may change this within a session via 'setAutoProxyDetect'.
+-- To avoid initial backwards compatibility issues, leave this as @False@.
+defaultAutoProxyDetect :: Bool
+defaultAutoProxyDetect = False
 
 -- | @request httpRequest@ tries to submit the 'Request' @httpRequest@
 -- to some HTTP server (possibly going via a /proxy/, see 'setProxy'.)
@@ -631,17 +664,17 @@ request :: HStream ty
         => Request ty
 	-> BrowserAction (HandleStream ty) (URI,Response ty)
 request req = nextRequest $ do
-                 res <- request' nullVal initialState req
-		 reportEvent ResponseFinish (show (rqURI req))
-		 case res of
-		   Left e  -> do
-		      let errStr = ("Error raised during request handling: " ++ show e)
-		      err errStr
-		      fail errStr
-		   Right r -> return r
-  where
-   initialState = nullRequestState
-   nullVal      = buf_empty bufferOps
+  res <- request' nullVal initialState req
+  reportEvent ResponseFinish (show (rqURI req))
+  case res of
+    Right r -> return r
+    Left e  -> do
+     let errStr = ("Network.Browser.request: Error raised " ++ show e)
+     err errStr
+     fail errStr
+ where
+  initialState = nullRequestState
+  nullVal      = buf_empty bufferOps
 
 -- | Internal helper function, explicitly carrying along per-request 
 -- counts.
