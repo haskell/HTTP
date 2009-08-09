@@ -61,6 +61,7 @@ module Network.Browser
        , getAuthorityGen
        , setAuthorityGen
        , setAllowBasicAuth
+       , getAllowBasicAuth
        
        , setMaxErrorRetries  -- :: Maybe Int -> BrowserAction t ()
        , getMaxErrorRetries  -- :: BrowserAction t (Maybe Int)
@@ -284,6 +285,9 @@ setAuthorityGen f = alterBS (\b -> b { bsAuthorityGen=f })
 setAllowBasicAuth :: Bool -> BrowserAction t ()
 setAllowBasicAuth ba = alterBS (\b -> b { bsAllowBasicAuth=ba })
 
+getAllowBasicAuth :: BrowserAction t Bool
+getAllowBasicAuth = getBS bsAllowBasicAuth
+
 -- | @setMaxAuthAttempts mbMax@ sets the maximum number of authentication attempts
 -- to do. If @Nothing@, rever to default max.
 setMaxAuthAttempts :: Maybe Int -> BrowserAction t ()
@@ -308,8 +312,10 @@ getMaxErrorRetries :: BrowserAction t (Maybe Int)
 getMaxErrorRetries = getBS bsMaxErrorRetries
 
 -- TO BE CHANGED!!!
-pickChallenge :: [Challenge] -> Maybe Challenge
-pickChallenge = listToMaybe
+pickChallenge :: Bool -> [Challenge] -> Maybe Challenge
+pickChallenge allowBasic []
+ | allowBasic = Just (ChalBasic "/") -- manufacture a challenge if one missing; more robust.
+pickChallenge _ ls = listToMaybe ls
 
 -- | Retrieve a likely looking authority for a Request.
 anticipateChallenge :: Request ty -> BrowserAction t (Maybe Authority)
@@ -321,33 +327,32 @@ anticipateChallenge rq =
 
 -- | Asking the user to respond to a challenge
 challengeToAuthority :: URI -> Challenge -> BrowserAction t (Maybe Authority)
-challengeToAuthority uri ch =
-    -- prompt user for authority
-    if answerable ch then
-        do { prompt <- getAuthorityGen
-           ; userdetails <- ioAction $ prompt uri (chRealm ch)
-           ; case userdetails of
-               Nothing    -> return Nothing
-               Just (u,p) -> return (Just $ buildAuth ch u p)
-           }
-    else return Nothing
-    where
-        answerable :: Challenge -> Bool
-        answerable (ChalBasic _) = True
-        answerable chall         = (chAlgorithm chall) == Just AlgMD5
+challengeToAuthority uri ch
+ | not (answerable ch) = return Nothing
+ | otherwise = do
+      -- prompt user for authority
+    prompt <- getAuthorityGen
+    userdetails <- ioAction $ prompt uri (chRealm ch)
+    case userdetails of
+     Nothing    -> return Nothing
+     Just (u,p) -> return (Just $ buildAuth ch u p)
+ where
+  answerable :: Challenge -> Bool
+  answerable ChalBasic{} = True
+  answerable chall       = (chAlgorithm chall) == Just AlgMD5
 
-        buildAuth :: Challenge -> String -> String -> Authority
-        buildAuth (ChalBasic r) u p = 
-            AuthBasic { auSite=uri
-                      , auRealm=r
-                      , auUsername=u
-                      , auPassword=p
-                      }
+  buildAuth :: Challenge -> String -> String -> Authority
+  buildAuth (ChalBasic r) u p = 
+       AuthBasic { auSite=uri
+                 , auRealm=r
+                 , auUsername=u
+                 , auPassword=p
+                 }
 
-         -- note to self: this is a pretty stupid operation
-         -- to perform isn't it? ChalX and AuthX are so very
-         -- similar.
-        buildAuth (ChalDigest r d n o _stale a q) u p =
+    -- note to self: this is a pretty stupid operation
+    -- to perform isn't it? ChalX and AuthX are so very
+    -- similar.
+  buildAuth (ChalDigest r d n o _stale a q) u p =
             AuthDigest { auRealm=r
                        , auUsername=u
                        , auPassword=p
@@ -775,12 +780,17 @@ request' nullVal rqState rq = do
 	| otherwise -> do
           out "401 - credentials not supplied or refused; retrying.."
           let hdrs = retrieveHeaders HdrWWWAuthenticate rsp
-          case pickChallenge (catMaybes $ map (headerToChallenge uri) hdrs) of
-            Nothing -> return (Right (uri,rsp))   {- do nothing -}
+	  flg <- getAllowBasicAuth
+          case pickChallenge flg (catMaybes $ map (headerToChallenge uri) hdrs) of
+            Nothing -> do
+	      out "no challenge"
+	      return (Right (uri,rsp))   {- do nothing -}
             Just x  -> do
               au <- challengeToAuthority uri x
               case au of
-                Nothing  -> return (Right (uri,rsp)) {- do nothing -}
+                Nothing  -> do
+		  out "no auth"
+		  return (Right (uri,rsp)) {- do nothing -}
                 Just au' -> do
                   out "Retrying request with new credentials"
 		  request' nullVal
@@ -796,7 +806,8 @@ request' nullVal rqState rq = do
         | otherwise -> do
           out "407 - proxy authentication required"
           let hdrs = retrieveHeaders HdrProxyAuthenticate rsp
-          case pickChallenge (catMaybes $ map (headerToChallenge uri) hdrs) of
+	  flg <- getAllowBasicAuth
+          case pickChallenge flg (catMaybes $ map (headerToChallenge uri) hdrs) of
             Nothing -> return (Right (uri,rsp))   {- do nothing -}
             Just x  -> do
               au <- challengeToAuthority uri x
