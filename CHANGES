@@ -15,6 +15,11 @@ Version 4004.0.8: release 2009-08-05
    Use 'getCheckForProxy' to get the current setting for
    this flag.
 
+ * Network.Browser: if HTTP Basic Auth is allowed and
+   server doesn't 401-challenge with an WWW-Authenticate:
+   header, simply assume / realm and proceed. Preferable
+   than failing, even if server is the wrong.
+
 Version 4004.0.7: release 2009-05-22
 
  * Minor release.
