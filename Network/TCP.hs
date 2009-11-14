@@ -37,7 +37,7 @@ import Network.Socket
    ( Socket, SockAddr(SockAddrInet), SocketOption(KeepAlive)
    , SocketType(Stream), inet_addr, connect
    , shutdown, ShutdownCmd(ShutdownSend, ShutdownReceive)
-   , sClose, sIsConnected, setSocketOption
+   , sClose, setSocketOption, getPeerName
    , socket, Family(AF_INET)
    )
 import qualified Network.Stream as Stream
@@ -267,9 +267,10 @@ isConnectedTo :: Connection -> String -> IO Bool
 isConnectedTo (Connection conn) name = do
    v <- readMVar (getRef conn)
    case v of
-     ConnClosed -> return False
+     ConnClosed -> print "aa" >> return False
      _ 
-      | map toLower (connHost v) == map toLower name -> sIsConnected (connSock v)
+      | map toLower (connHost v) == map toLower name ->
+          catch (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
 isTCPConnectedTo :: HandleStream ty -> String -> IO Bool
@@ -278,7 +279,8 @@ isTCPConnectedTo conn name = do
    case v of
      ConnClosed -> return False
      _ 
-      | map toLower (connHost v) == map toLower name -> sIsConnected (connSock v)
+      | map toLower (connHost v) == map toLower name -> 
+          catch (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
 readBlockBS :: HandleStream a -> Int -> IO (Result a)
