@@ -36,6 +36,8 @@ module Network.HTTP.Headers
    , parseHeader           -- :: parseHeader :: String -> Result Header
    , parseHeaders          -- :: [String] -> Result [Header]
    
+   , headerMap             -- :: :: [(String, HeaderName)]
+   
    , HeaderSetter
    ) where
 
