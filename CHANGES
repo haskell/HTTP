@@ -2,6 +2,7 @@ Version 4004.0.9: release 2009-
 
  * Export headerMap from Network.HTTP.Headers
    (suggested by David Leuschner.)
+ * Fix Network.TCP.{isTCPConnectedTo,isConnectedTo} to be useful.
 
 Version 4004.0.8: release 2009-08-05
 
