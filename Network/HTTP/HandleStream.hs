@@ -84,15 +84,11 @@ sendHTTP_notify :: HStream ty
 		-> Request ty
 		-> IO ()
 		-> IO (Result (Response ty))
-sendHTTP_notify conn rq onSendComplete = do
-  rsp <- catchIO (sendMain conn rq onSendComplete)
-                 (\e -> do { close conn; ioError e })
-  let fn list = when (or $ map findConnClose list)
-                     (close conn)
-  either (\_ -> fn [rqHeaders rq])
-         (\r -> fn [rqHeaders rq,rspHeaders r])
-         rsp
-  return rsp
+sendHTTP_notify conn rq onSendComplete = 
+  catchIO (sendMain conn rq onSendComplete providedClose)
+          (\e -> do { close conn; ioError e })
+ where
+  providedClose = findConnClose (rqHeaders rq)
 
 -- From RFC 2616, section 8.2.3:
 -- 'Because of the presence of older implementations, the protocol allows
@@ -108,8 +104,9 @@ sendMain :: HStream ty
          => HandleStream ty
 	 -> Request ty
 	 -> (IO ())
+	 -> Bool
 	 -> IO (Result (Response ty))
-sendMain conn rqst onSendComplete = do
+sendMain conn rqst onSendComplete closeOnEOF = do
       --let str = if null (rqBody rqst)
       --              then show rqst
       --              else show (insertHeader HdrExpect "100-continue" rqst)
@@ -118,7 +115,7 @@ sendMain conn rqst onSendComplete = do
   writeBlock conn (rqBody rqst)
   onSendComplete
   rsp <- getResponseHead conn
-  switchResponse conn True False rsp rqst
+  switchResponse conn closeOnEOF True False rsp rqst
 
    -- Hmmm, this could go bad if we keep getting "100 Continue"
    -- responses...  Except this should never happen according
@@ -126,27 +123,28 @@ sendMain conn rqst onSendComplete = do
 
 switchResponse :: HStream ty
                => HandleStream ty
+	       -> Bool {- close on EOF -}
 	       -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request ty
                -> IO (Result (Response ty))
-switchResponse _ _ _ (Left e) _ = return (Left e)
+switchResponse _ _ _ _ (Left e) _ = return (Left e)
                 -- retry on connreset?
                 -- if we attempt to use the same socket then there is an excellent
                 -- chance that the socket is not in a completely closed state.
 
-switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst = 
+switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst = 
    case matchResponse (rqMethod rqst) cd of
      Continue
       | not bdy_sent -> do {- Time to send the body -}
         writeBlock conn (rqBody rqst) >>= either (return . Left)
 	   (\ _ -> do
               rsp <- getResponseHead conn
-              switchResponse conn allow_retry True rsp rqst)
+              switchResponse conn closeOnEOF allow_retry True rsp rqst)
       | otherwise    -> do {- keep waiting -}
         rsp <- getResponseHead conn
-        switchResponse conn allow_retry bdy_sent rsp rqst
+        switchResponse conn closeOnEOF allow_retry bdy_sent rsp rqst
 
      Retry -> do {- Request with "Expect" header failed.
                     Trouble is the request contains Expects
@@ -155,22 +153,36 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
 		                     (buf_fromStr bufferOps (show rqst))
 			             (rqBody rqst))
         rsp <- getResponseHead conn
-        switchResponse conn False bdy_sent rsp rqst
+        switchResponse conn closeOnEOF False bdy_sent rsp rqst
                      
-     Done -> return (Right $ Response cd rn hdrs (buf_empty bufferOps))
+     Done -> do
+       when (closeOnEOF || findConnClose hdrs)
+            (close conn)
+       return (Right $ Response cd rn hdrs (buf_empty bufferOps))
 
-     DieHorribly str -> return (responseParseError "Invalid response:" str)
-     ExpectEntity -> 
-       fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
-        maybe (maybe (hopefulTransfer bo (readLine conn) [])
-	             (\ x -> 
-		        readsOne (linearTransfer (readBlock conn))
-		                 (return$responseParseError "unrecognized content-length value" x)
-				 x)
-		     cl)
-	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
-	                 (uglyDeathTransfer "sendHTTP"))
-              tc
+     DieHorribly str -> do
+       close conn
+       return (responseParseError "Invalid response:" str)
+     ExpectEntity -> do
+       r <- fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
+             maybe (maybe (hopefulTransfer bo (readLine conn) [])
+	               (\ x -> 
+		          readsOne (linearTransfer (readBlock conn))
+		                   (return$responseParseError "unrecognized content-length value" x)
+			  	   x)
+		        cl)
+	           (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+	                      (uglyDeathTransfer "sendHTTP"))
+                   tc
+       case r of
+         Left{} -> do
+	   close conn
+	   return r
+	 Right (Response _ _ hs _) -> do
+	   when (closeOnEOF || findConnClose hs)
+                (close conn)
+	   return r
+
       where
        tc = lookupHeader HdrTransferEncoding hdrs
        cl = lookupHeader HdrContentLength hdrs

@@ -154,7 +154,7 @@ instance Stream.Stream Connection where
   readBlock (Connection c)  = Network.TCP.readBlock c
   readLine (Connection c)   = Network.TCP.readLine c
   writeBlock (Connection c) = Network.TCP.writeBlock c 
-  close (Connection c)      = Network.TCP.close c
+  close (Connection c)      = Network.TCP.close c 
   
 instance HStream String where
     openStream      = openTCPConnection
@@ -224,12 +224,12 @@ socketConnection_ hst sock stashInput = do
     h <- socketToHandle sock ReadWriteMode
     mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
     let conn = MkConn 
-         { connSock   = sock
-	 , connHandle = h
-	 , connBuffer = bufferOps
-	 , connInput  = mb
-	 , connHost   = hst
-	 , connHooks  = Nothing
+         { connSock     = sock
+	 , connHandle   = h
+	 , connBuffer   = bufferOps
+	 , connInput    = mb
+	 , connHost     = hst
+	 , connHooks    = Nothing
 	 }
     v <- newMVar conn
     return (HandleStream v)
@@ -313,11 +313,11 @@ writeBlockBS ref b = onNonClosedDo ref $ \ conn -> do
 
 closeIt :: HandleStream ty -> (ty -> Bool) -> IO ()
 closeIt c p = do
-  closeConnection c (readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True})
-  conn <- readMVar (getRef c)
-  maybe (return ())
-        (hook_close)
-	(connHooks' conn)
+   closeConnection c (readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True})
+   conn <- readMVar (getRef c)
+   maybe (return ())
+         (hook_close)
+	 (connHooks' conn)
 
 bufferGetBlock :: HandleStream a -> Int -> IO (Result a)
 bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
@@ -328,9 +328,10 @@ bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
       return (return a)
     _ -> do
       Prelude.catch (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.return)
-                    (\ e -> if isEOFError e 
-			     then return (return (buf_empty (connBuffer conn)))
-			     else return (fail (show e)))
+                    (\ e -> 
+		       if isEOFError e 
+			then return (return (buf_empty (connBuffer conn)))
+			else return (fail (show e)))
 
 bufferPutBlock :: BufferOp a -> Handle -> a -> IO (Result ())
 bufferPutBlock ops h b = 
@@ -348,7 +349,7 @@ bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
    _ -> Prelude.catch 
               (buf_hGetLine (connBuffer conn) (connHandle conn) >>= 
 	            return . return . appendNL (connBuffer conn))
-              (\ e -> 
+              (\ e ->
                  if isEOFError e
                   then return (return   (buf_empty (connBuffer conn)))
                   else return (fail (show e)))
