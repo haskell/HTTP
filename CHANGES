@@ -1,3 +1,8 @@
+Version 4004.0.9: release 2009-
+
+ * Export headerMap from Network.HTTP.Headers
+   (suggested by David Leuschner.)
+
 Version 4004.0.8: release 2009-08-05
 
  * Incorporated proxy setting lookup and parsing contribution
