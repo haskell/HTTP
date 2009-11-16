@@ -36,6 +36,7 @@ import Network.BufferType
 import Network.Stream ( fmapE, Result )
 import Network.StreamDebugger ( debugByteStream )
 import Network.TCP (HStream(..), HandleStream )
+import Network.Socket ( ShutdownCmd(..) )
 
 import Network.HTTP.Base
 import Network.HTTP.Headers
@@ -86,7 +87,7 @@ sendHTTP_notify :: HStream ty
 		-> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = 
   catchIO (sendMain conn rq onSendComplete providedClose)
-          (\e -> do { close conn; ioError e })
+          (\e -> do { close conn Nothing; ioError e })
  where
   providedClose = findConnClose (rqHeaders rq)
 
@@ -106,16 +107,17 @@ sendMain :: HStream ty
 	 -> (IO ())
 	 -> Bool
 	 -> IO (Result (Response ty))
-sendMain conn rqst onSendComplete closeOnEOF = do
+sendMain conn rqst onSendComplete closeOnSend = do
       --let str = if null (rqBody rqst)
       --              then show rqst
       --              else show (insertHeader HdrExpect "100-continue" rqst)
   writeBlock conn (buf_fromStr bufferOps $ show rqst)
     -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rqBody rqst)
+  when closeOnSend (close conn (Just ShutdownSend))
   onSendComplete
   rsp <- getResponseHead conn
-  switchResponse conn closeOnEOF True False rsp rqst
+  switchResponse conn True False rsp rqst
 
    -- Hmmm, this could go bad if we keep getting "100 Continue"
    -- responses...  Except this should never happen according
@@ -123,28 +125,27 @@ sendMain conn rqst onSendComplete closeOnEOF = do
 
 switchResponse :: HStream ty
                => HandleStream ty
-	       -> Bool {- close on EOF -}
 	       -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request ty
                -> IO (Result (Response ty))
-switchResponse _ _ _ _ (Left e) _ = return (Left e)
+switchResponse _ _ _ (Left e) _ = return (Left e)
                 -- retry on connreset?
                 -- if we attempt to use the same socket then there is an excellent
                 -- chance that the socket is not in a completely closed state.
 
-switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst = 
+switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst = 
    case matchResponse (rqMethod rqst) cd of
      Continue
       | not bdy_sent -> do {- Time to send the body -}
         writeBlock conn (rqBody rqst) >>= either (return . Left)
 	   (\ _ -> do
               rsp <- getResponseHead conn
-              switchResponse conn closeOnEOF allow_retry True rsp rqst)
+              switchResponse conn allow_retry True rsp rqst)
       | otherwise    -> do {- keep waiting -}
         rsp <- getResponseHead conn
-        switchResponse conn closeOnEOF allow_retry bdy_sent rsp rqst
+        switchResponse conn allow_retry bdy_sent rsp rqst
 
      Retry -> do {- Request with "Expect" header failed.
                     Trouble is the request contains Expects
@@ -153,15 +154,15 @@ switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
 		                     (buf_fromStr bufferOps (show rqst))
 			             (rqBody rqst))
         rsp <- getResponseHead conn
-        switchResponse conn closeOnEOF False bdy_sent rsp rqst
+        switchResponse conn False bdy_sent rsp rqst
                      
      Done -> do
-       when (closeOnEOF || findConnClose hdrs)
-            (close conn)
+       when (findConnClose hdrs)
+            (close conn Nothing)
        return (Right $ Response cd rn hdrs (buf_empty bufferOps))
 
      DieHorribly str -> do
-       close conn
+       close conn Nothing
        return (responseParseError "Invalid response:" str)
      ExpectEntity -> do
        r <- fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
@@ -176,11 +177,11 @@ switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                    tc
        case r of
          Left{} -> do
-	   close conn
+	   close conn Nothing
 	   return r
 	 Right (Response _ _ hs _) -> do
-	   when (closeOnEOF || findConnClose hs)
-                (close conn)
+	   when (findConnClose hs)
+                (close conn Nothing)
 	   return r
 
       where

@@ -36,7 +36,7 @@ import Network.BSD (getHostByName, hostAddresses)
 import Network.Socket
    ( Socket, SockAddr(SockAddrInet), SocketOption(KeepAlive)
    , SocketType(Stream), inet_addr, connect
-   , shutdown, ShutdownCmd(ShutdownSend, ShutdownReceive)
+   , shutdown, ShutdownCmd(..)
    , sClose, setSocketOption, getPeerName
    , socket, Family(AF_INET)
    )
@@ -55,7 +55,7 @@ import Network.Socket ( socketToHandle )
 import Data.Char  ( toLower )
 import Data.Word  ( Word8 )
 import Control.Concurrent
-import Control.Monad ( liftM )
+import Control.Monad ( liftM, when )
 import System.IO ( Handle, hFlush, IOMode(..), hClose )
 import System.IO.Error ( isEOFError )
 
@@ -132,7 +132,7 @@ class BufferType bufType => HStream bufType where
   readLine   :: HandleStream bufType -> IO (Result bufType)
   readBlock  :: HandleStream bufType -> Int -> IO (Result bufType)
   writeBlock :: HandleStream bufType -> bufType -> IO (Result ())
-  close      :: HandleStream bufType -> IO ()
+  close      :: HandleStream bufType -> Maybe ShutdownCmd -> IO ()
   
 instance HStream Strict.ByteString where
   openStream       = openTCPConnection
@@ -140,7 +140,7 @@ instance HStream Strict.ByteString where
   readBlock c n    = readBlockBS c n
   readLine c       = readLineBS c
   writeBlock c str = writeBlockBS c str
-  close c          = closeIt c Strict.null
+  close c f        = closeIt c f Strict.null
 
 instance HStream Lazy.ByteString where
     openStream       = \ a b -> openTCPConnection_ a b True
@@ -148,13 +148,13 @@ instance HStream Lazy.ByteString where
     readBlock c n    = readBlockBS c n
     readLine c       = readLineBS c
     writeBlock c str = writeBlockBS c str
-    close c          = closeIt c Lazy.null
+    close c f        = closeIt c f Lazy.null
 
 instance Stream.Stream Connection where
   readBlock (Connection c)  = Network.TCP.readBlock c
   readLine (Connection c)   = Network.TCP.readLine c
   writeBlock (Connection c) = Network.TCP.writeBlock c 
-  close (Connection c)      = Network.TCP.close c 
+  close (Connection c) f    = Network.TCP.close c f
   
 instance HStream String where
     openStream      = openTCPConnection
@@ -172,7 +172,7 @@ instance HStream String where
     -- allow any of the other Stream functions.  Notice that a Connection may close
     -- at any time before a call to this function.  This function is idempotent.
     -- (I think the behaviour here is TCP specific)
-    close c = closeIt c null
+    close c f = closeIt c f null
     
 -- | @openTCPPort uri port@  establishes a connection to a remote
 -- host, using 'getHostByName' which possibly queries the DNS system, hence 
@@ -234,8 +234,8 @@ socketConnection_ hst sock stashInput = do
     v <- newMVar conn
     return (HandleStream v)
 
-closeConnection :: HandleStream a -> IO Bool -> IO ()
-closeConnection ref readL = do
+closeConnection :: HandleStream a -> Maybe ShutdownCmd -> IO Bool -> IO ()
+closeConnection ref shut readL = do
     -- won't hold onto the lock for the duration
     -- we are draining it...ToDo: have Connection
     -- into a shutting-down state so that other
@@ -243,17 +243,25 @@ closeConnection ref readL = do
     -- to also close it.
   c <- readMVar (getRef ref)
   closeConn c `catchIO` (\_ -> return ())
-  modifyMVar_ (getRef ref) (\ _ -> return ConnClosed)
+  when doClose $ modifyMVar_ (getRef ref) (\ _ -> return ConnClosed)
  where
    -- Be kind to peer & close gracefully.
   closeConn ConnClosed = return ()
   closeConn conn = do
     let sk = connSock conn
-    shutdown sk ShutdownSend
-    suck readL
-    hClose (connHandle conn)
-    shutdown sk ShutdownReceive
-    sClose sk
+    hFlush (connHandle conn)
+    when shutSend $ shutdown sk ShutdownSend
+    when doClose  $ suck readL
+    when doClose  $ hClose (connHandle conn)
+    when shutRecv $ shutdown sk ShutdownReceive
+    when doClose  $ sClose sk
+
+  (shutSend, doClose, shutRecv) = 
+    case shut of
+      Nothing -> (True, True, True)
+      Just ShutdownBoth -> (True, False, True)
+      Just ShutdownSend -> (True, False, False)
+      Just ShutdownReceive -> (False, False, True)
 
   suck :: IO Bool -> IO ()
   suck rd = do
@@ -311,9 +319,9 @@ writeBlockBS ref b = onNonClosedDo ref $ \ conn -> do
 	(connHooks' conn)
   return x
 
-closeIt :: HandleStream ty -> (ty -> Bool) -> IO ()
-closeIt c p = do
-   closeConnection c (readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True})
+closeIt :: HandleStream ty -> Maybe ShutdownCmd -> (ty -> Bool) -> IO ()
+closeIt c f p = do
+   closeConnection c f (readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True})
    conn <- readMVar (getRef c)
    maybe (return ())
          (hook_close)

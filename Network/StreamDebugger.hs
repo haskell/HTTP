@@ -44,10 +44,10 @@ instance (Stream x) => Stream (StreamDebugger x) where
         do val <- writeBlock x str
            hPutStrLn h ("writeBlock " ++ show val ++ ' ' : show str)
            return val
-    close (Dbg h x) =
+    close (Dbg h x) f =
         do hPutStrLn h "closing..."
            hFlush h
-           close x
+           close x f
            hPutStrLn h "...closed"
            hClose h
 

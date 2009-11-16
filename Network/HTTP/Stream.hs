@@ -41,6 +41,7 @@ module Network.HTTP.Stream
 import Network.Stream
 import Network.StreamDebugger (debugStream)
 import Network.TCP (openTCPPort)
+import Network.Socket (ShutdownCmd(..))
 import Network.BufferType ( stringBufferOp )
 
 import Network.HTTP.Base
@@ -88,7 +89,7 @@ sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 sendHTTP_notify :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
 sendHTTP_notify conn rq onSendComplete = 
    catchIO (sendMain conn rq onSendComplete providedClose)
-           (\e -> do { close conn; ioError e })
+           (\e -> do { close conn Nothing; ioError e })
  where
   providedClose = findConnClose (rqHeaders rq)
 
@@ -111,8 +112,9 @@ sendMain conn rqst onSendComplete closeOnEOF =  do
     -- write body immediately, don't wait for 100 CONTINUE
    writeBlock conn (rqBody rqst)
    onSendComplete
+   when closeOnEOF (close conn (Just ShutdownSend))
    rsp <- getResponseHead conn
-   switchResponse conn closeOnEOF True False rsp rqst
+   switchResponse conn True False rsp rqst
         
 -- reads and parses headers
 getResponseHead :: Stream s => s -> IO (Result ResponseData)
@@ -125,17 +127,16 @@ getResponseHead conn = do
 -- to the RFC.
 switchResponse :: Stream s
                => s
-	       -> Bool
 	       -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request_String
                -> IO (Result Response_String)
-switchResponse _ _ _ _ (Left e) _ = return (Left e)
+switchResponse _ _ _ (Left e) _ = return (Left e)
         -- retry on connreset?
         -- if we attempt to use the same socket then there is an excellent
         -- chance that the socket is not in a completely closed state.
-switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
+switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
             case matchResponse (rqMethod rqst) cd of
                 Continue
                     | not bdy_sent -> {- Time to send the body -}
@@ -144,12 +145,12 @@ switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                                 Left e -> return (Left e)
                                 Right _ ->
                                     do { rsp <- getResponseHead conn
-                                       ; switchResponse conn closeOnEOF allow_retry True rsp rqst
+                                       ; switchResponse conn allow_retry True rsp rqst
                                        }
                            }
                     | otherwise -> {- keep waiting -}
                         do { rsp <- getResponseHead conn
-                           ; switchResponse conn closeOnEOF allow_retry bdy_sent rsp rqst                           
+                           ; switchResponse conn allow_retry bdy_sent rsp rqst                           
                            }
 
                 Retry -> {- Request with "Expect" header failed.
@@ -157,16 +158,16 @@ switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                                 other than "100-Continue" -}
                     do { writeBlock conn (show rqst ++ rqBody rqst)
                        ; rsp <- getResponseHead conn
-                       ; switchResponse conn closeOnEOF False bdy_sent rsp rqst
+                       ; switchResponse conn False bdy_sent rsp rqst
                        }   
                      
                 Done -> do
-		    when (closeOnEOF || findConnClose hdrs)
-            	    	 (close conn)
+		    when (findConnClose hdrs)
+            	    	 (close conn Nothing)
                     return (Right $ Response cd rn hdrs "")
 
                 DieHorribly str -> do
-		    close conn
+		    close conn Nothing
                     return $ responseParseError "sendHTTP" ("Invalid response: " ++ str)
 
                 ExpectEntity ->
@@ -184,10 +185,10 @@ switchResponse conn closeOnEOF allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
 				                               (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "sendHTTP"
                        ; case rslt of
-		           Left e -> close conn >> return (Left e)
+		           Left e -> close conn Nothing >> return (Left e)
 			   Right (ftrs,bdy) -> do
-			    when (closeOnEOF || findConnClose (hdrs++ftrs))
-			    	 (close conn)
+			    when (findConnClose (hdrs++ftrs))
+			    	 (close conn Nothing)
 			    return (Right (Response cd rn (hdrs++ftrs) bdy))
                        }
 
