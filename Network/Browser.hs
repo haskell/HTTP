@@ -956,7 +956,7 @@ updateConnectionPool c = do
    pool <- getBS bsConnectionPool
    let len_pool = length pool
    when (len_pool > maxPoolSize)
-        (ioAction $ close (last pool))
+        (ioAction $ close (last pool) Nothing)
    let pool' 
 	| len_pool > maxPoolSize = init pool
 	| otherwise              = pool
