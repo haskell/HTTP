@@ -41,7 +41,6 @@ module Network.HTTP.Stream
 import Network.Stream
 import Network.StreamDebugger (debugStream)
 import Network.TCP (openTCPPort)
-import Network.Socket (ShutdownCmd(..))
 import Network.BufferType ( stringBufferOp )
 
 import Network.HTTP.Base
@@ -80,16 +79,15 @@ simpleHTTP_ s r
  | otherwise    = do
       s' <- debugStream httpLogFile s
       sendHTTP s' r
-    -- already done by sendHTTP because of "Connection: close" header
-    --; close s 
 
 sendHTTP :: Stream s => s -> Request_String -> IO (Result Response_String)
 sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 
 sendHTTP_notify :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
-sendHTTP_notify conn rq onSendComplete = 
-   catchIO (sendMain conn rq onSendComplete providedClose)
-           (\e -> do { close conn Nothing; ioError e })
+sendHTTP_notify conn rq onSendComplete = do
+   when providedClose $ (closeOnEnd conn True)
+   catchIO (sendMain conn rq onSendComplete)
+           (\e -> do { close conn; ioError e })
  where
   providedClose = findConnClose (rqHeaders rq)
 
@@ -103,8 +101,8 @@ sendHTTP_notify conn rq onSendComplete =
 -- for an indefinite period before sending the request body.'
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
-sendMain :: Stream s => s -> Request_String -> IO () -> Bool -> IO (Result Response_String)
-sendMain conn rqst onSendComplete closeOnEOF =  do 
+sendMain :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
+sendMain conn rqst onSendComplete =  do 
     --let str = if null (rqBody rqst)
     --              then show rqst
     --              else show (insertHeader HdrExpect "100-continue" rqst)
@@ -112,7 +110,6 @@ sendMain conn rqst onSendComplete closeOnEOF =  do
     -- write body immediately, don't wait for 100 CONTINUE
    writeBlock conn (rqBody rqst)
    onSendComplete
-   when closeOnEOF (close conn (Just ShutdownSend))
    rsp <- getResponseHead conn
    switchResponse conn True False rsp rqst
         
@@ -163,11 +160,11 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                      
                 Done -> do
 		    when (findConnClose hdrs)
-            	    	 (close conn Nothing)
+            	    	 (closeOnEnd conn True)
                     return (Right $ Response cd rn hdrs "")
 
                 DieHorribly str -> do
-		    close conn Nothing
+		    close conn
                     return $ responseParseError "sendHTTP" ("Invalid response: " ++ str)
 
                 ExpectEntity ->
@@ -185,10 +182,10 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
 				                               (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "sendHTTP"
                        ; case rslt of
-		           Left e -> close conn Nothing >> return (Left e)
+		           Left e -> close conn >> return (Left e)
 			   Right (ftrs,bdy) -> do
 			    when (findConnClose (hdrs++ftrs))
-			    	 (close conn Nothing)
+			    	 (closeOnEnd conn True)
 			    return (Right (Response cd rn (hdrs++ftrs) bdy))
                        }
 

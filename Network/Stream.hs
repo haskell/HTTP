@@ -22,7 +22,6 @@
 -----------------------------------------------------------------------------
 module Network.Stream
    ( Stream(..)
-   , ShutdownCmd
    , ConnError(..)
    , Result
    , bindE
@@ -33,7 +32,6 @@ module Network.Stream
    ) where
 
 import Control.Monad.Error
-import Network.Socket (ShutdownCmd)
 
 data ConnError 
  = ErrorReset 
@@ -80,6 +78,7 @@ class Stream x where
     readLine   :: x -> IO (Result String)
     readBlock  :: x -> Int -> IO (Result String)
     writeBlock :: x -> String -> IO (Result ())
-    close      :: x -> Maybe ShutdownCmd -> IO ()
-      -- ^ Nothing => close down stream right away.
-      --   Just f  => shut down the stream, for reading, writing, or both.
+    close      :: x -> IO ()
+    closeOnEnd :: x -> Bool -> IO ()
+      -- ^ True => shutdown the connection when response has been read / end-of-stream
+      --           has been reached.
