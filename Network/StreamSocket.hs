@@ -55,13 +55,11 @@ instance Stream Socket where
     readBlock sk n    = readBlockSocket sk n
     readLine sk       = readLineSocket sk
     writeBlock sk str = writeBlockSocket sk str
-    close sk closer   = 
+    close sk          = do
         -- This slams closed the connection (which is considered rude for TCP\/IP)
-      case closer of
-        Nothing -> do
          shutdown sk ShutdownBoth
          sClose sk
-	Just flg -> shutdown sk flg
+    closeOnEnd _sk _  = return () -- can't really deal with this, so do run the risk of leaking sockets here.
 
 readBlockSocket :: Socket -> Int -> IO (Result String)
 readBlockSocket sk n = (liftM Right $ fn n) `catchIO` (handleSocketError sk)

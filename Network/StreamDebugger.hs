@@ -44,12 +44,16 @@ instance (Stream x) => Stream (StreamDebugger x) where
         do val <- writeBlock x str
            hPutStrLn h ("writeBlock " ++ show val ++ ' ' : show str)
            return val
-    close (Dbg h x) f =
+    close (Dbg h x) =
         do hPutStrLn h "closing..."
            hFlush h
-           close x f
+           close x
            hPutStrLn h "...closed"
            hClose h
+    closeOnEnd (Dbg h x) f =
+        do hPutStrLn h ("close-on-end.. " ++ show f)
+           hFlush h 
+           closeOnEnd x f
 
 -- | Wraps a stream with logging I\/O.
 --   The first argument is a filename which is opened in @AppendMode@.

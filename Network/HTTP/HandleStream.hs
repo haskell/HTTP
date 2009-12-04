@@ -36,7 +36,6 @@ import Network.BufferType
 import Network.Stream ( fmapE, Result )
 import Network.StreamDebugger ( debugByteStream )
 import Network.TCP (HStream(..), HandleStream )
-import Network.Socket ( ShutdownCmd(..) )
 
 import Network.HTTP.Base
 import Network.HTTP.Headers
@@ -85,9 +84,10 @@ sendHTTP_notify :: HStream ty
 		-> Request ty
 		-> IO ()
 		-> IO (Result (Response ty))
-sendHTTP_notify conn rq onSendComplete = 
-  catchIO (sendMain conn rq onSendComplete providedClose)
-          (\e -> do { close conn Nothing; ioError e })
+sendHTTP_notify conn rq onSendComplete = do
+  when providedClose $ (closeOnEnd conn True)
+  catchIO (sendMain conn rq onSendComplete)
+          (\e -> do { close conn; ioError e })
  where
   providedClose = findConnClose (rqHeaders rq)
 
@@ -105,16 +105,14 @@ sendMain :: HStream ty
          => HandleStream ty
 	 -> Request ty
 	 -> (IO ())
-	 -> Bool
 	 -> IO (Result (Response ty))
-sendMain conn rqst onSendComplete closeOnSend = do
+sendMain conn rqst onSendComplete = do
       --let str = if null (rqBody rqst)
       --              then show rqst
       --              else show (insertHeader HdrExpect "100-continue" rqst)
   writeBlock conn (buf_fromStr bufferOps $ show rqst)
     -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rqBody rqst)
-  when closeOnSend (close conn (Just ShutdownSend))
   onSendComplete
   rsp <- getResponseHead conn
   switchResponse conn True False rsp rqst
@@ -158,11 +156,11 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                      
      Done -> do
        when (findConnClose hdrs)
-            (close conn Nothing)
+            (closeOnEnd conn True)
        return (Right $ Response cd rn hdrs (buf_empty bufferOps))
 
      DieHorribly str -> do
-       close conn Nothing
+       close conn
        return (responseParseError "Invalid response:" str)
      ExpectEntity -> do
        r <- fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
@@ -177,11 +175,11 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                    tc
        case r of
          Left{} -> do
-	   close conn Nothing
+	   close conn
 	   return r
 	 Right (Response _ _ hs _) -> do
 	   when (findConnClose hs)
-                (close conn Nothing)
+                (closeOnEnd conn True)
 	   return r
 
       where
