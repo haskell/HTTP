@@ -337,7 +337,7 @@ instance HasHeaders (Response a) where
 ------------------ Request Building ------------------------------
 ------------------------------------------------------------------
 libUA :: String
-libUA = "hs-HTTP-4000.0.5"
+libUA = "hs-HTTP-4000.0.9"
 
 defaultUserAgent :: String
 defaultUserAgent = libUA
@@ -664,8 +664,8 @@ normalizeUserAgent opts req =
     Nothing -> req
     Just ua -> 
      case findHeader HdrUserAgent req of
-       Nothing -> setHeaders req (mkHeader HdrUserAgent ua : getHeaders req)
-       Just{}  -> req
+       Just u  | u /= defaultUserAgent -> req
+       _ -> replaceHeader HdrUserAgent ua req
 
 -- | @normalizeConnectionClose opts req@ sets the header @Connection: close@ 
 -- to indicate one-shot behavior iff @normDoClose@ is @True@. i.e., it then

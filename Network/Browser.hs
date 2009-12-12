@@ -96,6 +96,9 @@ module Network.Browser
 
        , setDebugLog      -- :: Maybe String -> BrowserAction t ()
        
+       , getUserAgent     -- :: BrowserAction t String
+       , setUserAgent     -- :: String -> BrowserAction t ()
+       
        , out              -- :: String -> BrowserAction t ()
        , err              -- :: String -> BrowserAction t ()
        , ioAction         -- :: IO a -> BrowserAction a
@@ -112,7 +115,7 @@ module Network.Browser
        ) where
 
 import Network.URI
-   ( URI(uriAuthority, uriPath, uriQuery)
+   ( URI(..)
    , URIAuth(..)
    , parseURI, parseURIReference, relativeTo
    )
@@ -388,6 +391,7 @@ data BrowserState connection
       , bsDebug           :: Maybe String
       , bsEvent           :: Maybe (BrowserEvent connection -> BrowserAction connection ())
       , bsRequestID       :: RequestID
+      , bsUserAgent       :: Maybe String
       }
 
 instance Show (BrowserState t) where
@@ -414,7 +418,7 @@ browse :: BrowserAction conn a -> IO a
 browse act = do x <- lift act defaultBrowserState
                 return (snd x)
 
--- | Default browser state..
+-- | The default browser state has the settings 
 defaultBrowserState :: BrowserState t
 defaultBrowserState = res
  where
@@ -439,6 +443,7 @@ defaultBrowserState = res
      , bsDebug            = Nothing 
      , bsEvent            = Nothing
      , bsRequestID        = 0
+     , bsUserAgent        = Nothing
      }
 
 -- | Alter browser state
@@ -566,6 +571,17 @@ getCheckForProxy = getBS bsCheckProxy
 -- @fStem@ is just the prefix for a set of log files, one per host/authority.
 setDebugLog :: Maybe String -> BrowserAction t ()
 setDebugLog v = alterBS (\b -> b {bsDebug=v})
+
+-- | @setUserAgent ua@ sets the current @User-Agent:@ string to @ua@. It
+-- will be used if no explicit user agent header is found in subsequent requests.
+setUserAgent :: String -> BrowserAction t ()
+setUserAgent ua = alterBS (\b -> b{bsUserAgent=Just ua})
+
+-- | @getUserAgent@ returns the current @User-Agent:@ default string.
+getUserAgent :: BrowserAction t String
+getUserAgent  = do
+  n <- getBS bsUserAgent
+  return (maybe defaultUserAgent id n)
 
 -- | @RequestState@ is an internal tallying type keeping track of various 
 -- per-connection counters, like the number of authorization attempts and 
@@ -719,13 +735,15 @@ request' nullVal rqState rq = do
          Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
    let rq'' = insertHeaders (map cookieToHeader cookies) rq'
    p <- getProxy
+   def_ua <- getBS bsUserAgent
    let defaultOpts = 
          case p of 
-	   NoProxy     -> defaultNormalizeRequestOptions
+	   NoProxy     -> defaultNormalizeRequestOptions{normUserAgent=def_ua}
 	   Proxy _ ath ->
 	      defaultNormalizeRequestOptions
-	        { normForProxy=True
-		, normCustoms = 
+	        { normForProxy  = True
+		, normUserAgent = def_ua
+		, normCustoms   = 
 		    maybe []
 		          (\ authS -> [\ _ r -> insertHeader HdrProxyAuthorization (withAuthority authS r) r])
 			  ath
@@ -828,13 +846,12 @@ request' nullVal rqState rq = do
 				     }
 			      rq
 
-      (3,0,x) | x == 3 || x == 2 ->  do -- Redirect using GET request method.
+      (3,0,x) | x `elem` [2,3,1,7] ->  do -- Redirect using GET request method.
         out ("30" ++ show x ++  " - redirect using GET")
-        rd <- getAllowRedirects
-	mbMxRetries <- getMaxRedirects
-        if not rd || reqRedirects rqState > fromMaybe defaultMaxRetries mbMxRetries
-	 then return (Right (uri,rsp))
-	 else 
+	allow_redirs <- allowRedirect rqState
+	case allow_redirs of
+	  False -> return (Right (uri,rsp))
+	  _ -> do
           case retrieveHeaders HdrLocation rsp of
            [] -> do 
 	     err "No Location: header in redirect response"
@@ -844,17 +861,21 @@ request' nullVal rqState rq = do
                Nothing -> do
                  err ("Parse of Location: header in a redirect response failed: " ++ u)
                  return (Right (uri,rsp))
-               Just newuri -> do
-	         out ("Redirecting to " ++ show newuri' ++ " ...") 
-		 let rq1 = rq { rqMethod=GET, rqURI=newuri', rqBody=nullVal }
-                 request' nullVal
-			  rqState{ reqDenies     = 0
-			         , reqRedirects  = succ(reqRedirects rqState)
-				 , reqStopOnDeny = True
-				 }
-                          (replaceHeader HdrContentLength "0" rq1)
+               Just newURI
+		| {-uriScheme newURI_abs /= uriScheme uri && -}(not (supportedScheme newURI_abs)) -> do
+		   err ("Unable to handle redirect, unsupported scheme: " ++ show newURI_abs)
+		   return (Right (uri, rsp))
+                | otherwise -> do		     
+  	           out ("Redirecting to " ++ show newURI_abs ++ " ...") 
+		   let rq1 = rq { rqMethod=GET, rqURI=newURI_abs, rqBody=nullVal }
+                   request' nullVal
+			    rqState{ reqDenies     = 0
+			           , reqRedirects  = succ(reqRedirects rqState)
+				   , reqStopOnDeny = True
+				   }
+                                   (replaceHeader HdrContentLength "0" rq1)
                 where
-                  newuri' = maybe newuri id (newuri `relativeTo` uri)
+                  newURI_abs = maybe newURI id (newURI `relativeTo` uri)
 
       (3,0,5) ->
         case retrieveHeaders HdrLocation rsp of
@@ -891,15 +912,15 @@ request' nullVal rqState rq = do
             return (Right (uri,rsp))
           (Header _ u:_) -> 
 	    case parseURIReference u of
-              Just newuri -> do
-                let newuri' = maybe newuri id (newuri `relativeTo` uri)
-                out ("Redirecting to " ++ show newuri' ++ " ...") 
+              Just newURI -> do
+                let newURI_abs = maybe newURI id (newURI `relativeTo` uri)
+                out ("Redirecting to " ++ show newURI_abs ++ " ...") 
                 request' nullVal
 		         rqState{ reqDenies     = 0
 			        , reqRedirects  = succ (reqRedirects rqState)
 			        , reqStopOnDeny = True
 				}
-		         rq{rqURI=newuri'}
+		         rq{rqURI=newURI_abs}
               Nothing -> do
                 err ("Parse of Location header in a redirect response failed: " ++ u)
                 return (Right (uri,rsp))
@@ -985,6 +1006,17 @@ handleCookies uri dom cookieHeaders = do
 ------------------------------------------------------------------
 ----------------------- Miscellaneous ----------------------------
 ------------------------------------------------------------------
+
+allowRedirect :: RequestState -> BrowserAction t Bool
+allowRedirect rqState = do
+  rd <- getAllowRedirects
+  mbMxRetries <- getMaxRedirects
+  return (rd && (reqRedirects rqState <= fromMaybe defaultMaxRetries mbMxRetries))
+
+-- | Return @True@ iff the package is able to handle requests and responses
+-- over it.
+supportedScheme :: URI -> Bool
+supportedScheme u = uriScheme u == "http:"
 
 -- | @uriDefaultTo a b@ returns a URI that is consistent with the first
 -- argument URI @a@ when read in the context of the second URI @b@.
