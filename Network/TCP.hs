@@ -28,6 +28,7 @@ module Network.TCP
    , StreamHooks(..)
    , nullHooks
    , setStreamHooks
+   , getStreamHooks
    , hstreamToConnection
 
    ) where
@@ -101,6 +102,7 @@ data StreamHooks ty
      , hook_readBlock  :: (ty -> String) -> Int -> Result ty -> IO ()
      , hook_writeBlock :: (ty -> String) -> ty  -> Result () -> IO ()
      , hook_close      :: IO ()
+     , hook_name       :: String -- hack alert: name of the hook itself.
      }
 
 instance Eq ty => Eq (StreamHooks ty) where
@@ -112,20 +114,23 @@ nullHooks = StreamHooks
      , hook_readBlock  = \ _ _ _ -> return ()
      , hook_writeBlock = \ _ _ _ -> return ()
      , hook_close      = return ()
+     , hook_name       = ""
      }
 
 setStreamHooks :: HandleStream ty -> StreamHooks ty -> IO ()
 setStreamHooks h sh = modifyMVar_ (getRef h) (\ c -> return c{connHooks=Just sh})
 
+getStreamHooks :: HandleStream ty -> IO (Maybe (StreamHooks ty))
+getStreamHooks h = readMVar (getRef h) >>= return.connHooks
+
 -- | @HStream@ overloads the use of 'HandleStream's, letting you
 -- overload the handle operations over the type that is communicated
--- across the handle. It is used in the context of @Network.HTTP@ to
--- buy us freedom in how HTTP 'Request' and 'Response' payloads are
--- represented. 
+-- across the handle. It comes in handy for @Network.HTTP@ 'Request'
+-- and 'Response's as the payload representation isn't fixed, but overloaded.
 --
--- The package provides instances for @ByteString@s and @String@, but
+-- The library comes with instances for @ByteString@s and @String@, but
 -- should you want to plug in your own payload representation, defining
--- your own @HStream@ instance is all it takes.
+-- your own @HStream@ instance _should_ be all that it takes.
 -- 
 class BufferType bufType => HStream bufType where
   openStream       :: String -> Int -> IO (HandleStream bufType)
@@ -352,7 +357,7 @@ bufferPutBlock ops h b =
   Prelude.catch (buf_hPut ops h b >> hFlush h >> return (return ()))
                 (\ e -> return (fail (show e)))
 
-bufferReadLine :: HStream a => HandleStream a -> IO (Result a) -- BufferOp a -> Handle -> IO (Result a)
+bufferReadLine :: HStream a => HandleStream a -> IO (Result a)
 bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
   case connInput conn of
    Just c -> do
