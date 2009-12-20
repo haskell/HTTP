@@ -82,7 +82,7 @@ module Network.Browser
        , setErrHandler     -- :: (String -> IO ()) -> BrowserAction t ()
        , setOutHandler     -- :: (String -> IO ()) -> BrowserAction t ()
     
-       , setEventHandler   -- :: (BrowserEvent t -> BrowserAction t ()) -> BrowserAction t ()
+       , setEventHandler   -- :: (BrowserEvent -> BrowserAction t ()) -> BrowserAction t ()
        
        , BrowserEvent(..)
        , BrowserEventType(..)
@@ -389,7 +389,7 @@ data BrowserState connection
       , bsCheckProxy      :: Bool
       , bsProxy           :: Proxy
       , bsDebug           :: Maybe String
-      , bsEvent           :: Maybe (BrowserEvent connection -> BrowserAction connection ())
+      , bsEvent           :: Maybe (BrowserEvent -> BrowserAction connection ())
       , bsRequestID       :: RequestID
       , bsUserAgent       :: Maybe String
       }
@@ -608,47 +608,47 @@ nullRequestState = RequestState
 -- via 'setEventHandler', will be passed. It indicates various state changes
 -- encountered in the processing of a given 'RequestID', along with timestamps
 -- at which they occurred.
-data BrowserEvent ty
+data BrowserEvent
  = BrowserEvent
       { browserTimestamp  :: ClockTime
       , browserRequestID  :: RequestID
       , browserRequestURI :: {-URI-}String
-      , browserEventType  :: BrowserEventType ty
+      , browserEventType  :: BrowserEventType
       }
 
 -- | 'BrowserEventType' is the enumerated list of events that the browser
 -- internals will report to a user-defined event handler.
-data BrowserEventType ty
+data BrowserEventType
  = OpenConnection
  | ReuseConnection
  | RequestSent
+ | ResponseEnd ResponseData
+ | ResponseFinish
 {- not yet, you will have to determine these via the ResponseEnd event.
  | Redirect
  | AuthChallenge
  | AuthResponse
 -}
- | ResponseEnd ResponseData
- | ResponseFinish
  
 -- | @setEventHandler onBrowserEvent@ configures event handling.
 -- If @onBrowserEvent@ is @Nothing@, event handling is turned off;
 -- setting it to @Just onEv@ causes the @onEv@ IO action to be
 -- notified of browser events during the processing of a request
 -- by the Browser pipeline.
-setEventHandler :: Maybe (BrowserEvent ty -> BrowserAction ty ()) -> BrowserAction ty ()
+setEventHandler :: Maybe (BrowserEvent -> BrowserAction ty ()) -> BrowserAction ty ()
 setEventHandler mbH = alterBS (\b -> b { bsEvent=mbH})
 
-buildBrowserEvent :: BrowserEventType t -> {-URI-}String -> RequestID -> IO (BrowserEvent t)
+buildBrowserEvent :: BrowserEventType -> {-URI-}String -> RequestID -> IO BrowserEvent
 buildBrowserEvent bt uri reqID = do
   ct <- getClockTime
   return BrowserEvent 
-      { browserTimestamp  = ct
-      , browserRequestID  = reqID
-      , browserRequestURI = uri
-      , browserEventType  = bt
-      }
+         { browserTimestamp  = ct
+         , browserRequestID  = reqID
+         , browserRequestURI = uri
+         , browserEventType  = bt
+         }
 
-reportEvent :: BrowserEventType t -> {-URI-}String -> BrowserAction t ()
+reportEvent :: BrowserEventType -> {-URI-}String -> BrowserAction t ()
 reportEvent bt uri = do
   st <- getBrowserState
   case bsEvent st of
