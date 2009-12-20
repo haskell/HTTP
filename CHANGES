@@ -1,9 +1,16 @@
-Version 4004.0.9: release 2009-
+Version 4004.0.9: release 2009-12-20
 
  * Export headerMap from Network.HTTP.Headers
    (suggested by David Leuschner.)
  * Fix Network.TCP.{isTCPConnectedTo,isConnectedTo} to be useful.
- * For Connection:close transmissions, delay closing until we reach EOF.
+ * Always delay closing non-persistent connections until we reach EOF.
+   Delaying it until then is vital when reading the response out as a 
+   lazy ByteString; all of the I/O may not have happened by the time we
+   were returning the HTTP response. Bug manifested itself occasionally
+   with larger responses. Courtesy of Valery Vorotyntsev; both untiring bug
+   hunt and fix.
+ * drop unused type argument from Network.Browser.BrowserEvent; needlessly general.
+   (patch provided by Daniel Wagner.)
 
 Version 4004.0.8: release 2009-08-05
 
