@@ -47,6 +47,7 @@ import Network.Stream
    ( ConnError(..)
    , Result
    , failWith
+   , failMisc
    )
 import Network.BufferType
 
@@ -350,12 +351,12 @@ bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
 			then do
 			  when (connCloseEOF conn) $ catch (close ref) (\ _ -> return ())
 			  return (return (buf_empty (connBuffer conn)))
-			else return (fail (show e)))
+			else return (failMisc (show e)))
 
 bufferPutBlock :: BufferOp a -> Handle -> a -> IO (Result ())
 bufferPutBlock ops h b = 
   Prelude.catch (buf_hPut ops h b >> hFlush h >> return (return ()))
-                (\ e -> return (fail (show e)))
+                (\ e -> return (failMisc (show e)))
 
 bufferReadLine :: HStream a => HandleStream a -> IO (Result a)
 bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
@@ -373,7 +374,7 @@ bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
                   then do
 	  	    when (connCloseEOF conn) $ catch (close ref) (\ _ -> return ())
 		    return (return   (buf_empty (connBuffer conn)))
-                  else return (fail (show e)))
+                  else return (failMisc (show e)))
  where
    -- yes, this s**ks.. _may_ have to be addressed if perf
    -- suggests worthiness.
