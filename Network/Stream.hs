@@ -29,6 +29,7 @@ module Network.Stream
 
    , failParse -- :: String -> Result a
    , failWith  -- :: ConnError -> Result a
+   , failMisc  -- :: String -> Result a
    ) where
 
 import Control.Monad.Error
@@ -43,6 +44,12 @@ data ConnError
 instance Error ConnError where
   noMsg = strMsg "unknown error"
   strMsg x = ErrorMisc x
+
+-- in GHC 7.0 the Monad instance for Error no longer
+-- uses fail x = Left (strMsg x). failMisc is therefore
+-- used instead.
+failMisc :: String -> Result a
+failMisc x = failWith (strMsg x)
 
 failParse :: String -> Result a
 failParse x = failWith (ErrorParse x)
