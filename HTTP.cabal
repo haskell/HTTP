@@ -50,7 +50,7 @@ Description:
  >      fmap (take 100) (getResponseBody rsp)
  > 
  .
- Git repository available at <git://code.galois.com/HTTPbis.git>
+ Git repository available at <git://github.com/haskell/HTTP.git>
 
 Extra-Source-Files: CHANGES
 
