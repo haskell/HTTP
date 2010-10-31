@@ -14,7 +14,7 @@ Copyright:
   Copyright 2007 Robin Bate Boerop
   Copyright 2008- Sigbjorn Finne
 Author: Warrick Gray <warrick.gray@hotmail.com>
-Maintainer: Sigbjorn Finne <sigbjorn.finne@gmail.com>
+Maintainer: Ganesh Sittampalam <ganesh@earth.li>
 Homepage: http://projects.haskell.org/http/
 Category: Network
 Synopsis: A library for client-side HTTP
