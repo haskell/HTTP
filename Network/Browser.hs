@@ -846,8 +846,8 @@ request' nullVal rqState rq = do
 				     }
 			      rq
 
-      (3,0,x) | x `elem` [2,3,1,7] ->  do -- Redirect using GET request method.
-        out ("30" ++ show x ++  " - redirect using GET")
+      (3,0,x) | x /= 5  ->  do
+        out ("30" ++ show x ++  " - redirect using Something")
 	allow_redirs <- allowRedirect rqState
 	case allow_redirs of
 	  False -> return (Right (uri,rsp))
@@ -867,13 +867,20 @@ request' nullVal rqState rq = do
 		   return (Right (uri, rsp))
                 | otherwise -> do		     
   	           out ("Redirecting to " ++ show newURI_abs ++ " ...") 
-		   let rq1 = rq { rqMethod=GET, rqURI=newURI_abs, rqBody=nullVal }
+                   
+                   -- Redirect using GET request method, depending on
+                   -- response code.
+                   let toGet = x `elem` [2,3]
+                       method = if toGet then GET else rqMethod rq
+                       rq1 = rq { rqMethod=method, rqURI=newURI_abs }
+                       rq2 = if toGet then (replaceHeader HdrContentLength "0") (rq1 {rqBody = nullVal}) else rq1
+                   
                    request' nullVal
 			    rqState{ reqDenies     = 0
 			           , reqRedirects  = succ(reqRedirects rqState)
 				   , reqStopOnDeny = True
 				   }
-                                   (replaceHeader HdrContentLength "0" rq1)
+                            rq2
                 where
                   newURI_abs = maybe newURI id (newURI `relativeTo` uri)
 
