@@ -847,7 +847,7 @@ request' nullVal rqState rq = do
 			      rq
 
       (3,0,x) | x /= 5  ->  do
-        out ("30" ++ show x ++  " - redirect using Something")
+        out ("30" ++ show x ++  " - redirect")
 	allow_redirs <- allowRedirect rqState
 	case allow_redirs of
 	  False -> return (Right (uri,rsp))
