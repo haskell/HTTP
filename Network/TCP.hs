@@ -140,6 +140,7 @@ class BufferType bufType => HStream bufType where
   readBlock        :: HandleStream bufType -> Int -> IO (Result bufType)
   writeBlock       :: HandleStream bufType -> bufType -> IO (Result ())
   close            :: HandleStream bufType -> IO ()
+  closeQuick       :: HandleStream bufType -> IO ()
   closeOnEnd       :: HandleStream bufType -> Bool -> IO ()
   
 instance HStream Strict.ByteString where
@@ -148,7 +149,8 @@ instance HStream Strict.ByteString where
   readBlock c n    = readBlockBS c n
   readLine c       = readLineBS c
   writeBlock c str = writeBlockBS c str
-  close c          = closeIt c Strict.null
+  close c          = closeIt c Strict.null True
+  closeQuick c     = closeIt c Strict.null False
   closeOnEnd c f   = closeEOF c f
 
 instance HStream Lazy.ByteString where
@@ -157,7 +159,8 @@ instance HStream Lazy.ByteString where
     readBlock c n    = readBlockBS c n
     readLine c       = readLineBS c
     writeBlock c str = writeBlockBS c str
-    close c          = closeIt c Lazy.null
+    close c          = closeIt c Lazy.null True
+    closeQuick c     = closeIt c Lazy.null False
     closeOnEnd c f   = closeEOF c f
 
 instance Stream.Stream Connection where
@@ -183,8 +186,11 @@ instance HStream String where
     -- allow any of the other Stream functions.  Notice that a Connection may close
     -- at any time before a call to this function.  This function is idempotent.
     -- (I think the behaviour here is TCP specific)
-    close c = closeIt c null
+    close c = closeIt c null True
     
+    -- Closes a Connection without munching the rest of the stream.
+    closeQuick c = closeIt c null False
+
     closeOnEnd c f = closeEOF c f
     
 -- | @openTCPPort uri port@  establishes a connection to a remote
@@ -326,9 +332,11 @@ writeBlockBS ref b = onNonClosedDo ref $ \ conn -> do
 	(connHooks' conn)
   return x
 
-closeIt :: HStream ty => HandleStream ty -> (ty -> Bool) -> IO ()
-closeIt c p = do
-   closeConnection c (readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True})
+closeIt :: HStream ty => HandleStream ty -> (ty -> Bool) -> Bool -> IO ()
+closeIt c p b = do
+   closeConnection c (if b
+                      then readLineBS c >>= \ x -> case x of { Right xs -> return (p xs); _ -> return True}
+                      else return True)
    conn <- readMVar (getRef c)
    maybe (return ())
          (hook_close)
@@ -349,7 +357,7 @@ bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
                     (\ e -> 
 		       if isEOFError e 
 			then do
-			  when (connCloseEOF conn) $ catch (close ref) (\ _ -> return ())
+			  when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
 			  return (return (buf_empty (connBuffer conn)))
 			else return (failMisc (show e)))
 
@@ -372,7 +380,7 @@ bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
               (\ e ->
                  if isEOFError e
                   then do
-	  	    when (connCloseEOF conn) $ catch (close ref) (\ _ -> return ())
+	  	    when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
 		    return (return   (buf_empty (connBuffer conn)))
                   else return (failMisc (show e)))
  where
