@@ -1,4 +1,22 @@
-Version 4004.0.9: release 2009-12-20
+Version 4000.1.0
+ * Retroactively fixed CHANGES to refer to 4000.x.x instead of
+   4004.x.x.
+ * Fix problem with close looping on certain URLs due to trying
+   to munch the rest of the stream even on EOF. Modified from
+   a fix by Daniel Wagner.
+    * This involves a new class member for HStream and is thus an
+      API change, but one that will only affect clients that
+      define their own payload type to replace String/ByteString.
+ * Applied patch by Antoine Latter to fix problem with 301 and 307
+   redirects.
+
+Version 4000.0.10: release 2010-10-29
+ * Bump base dependency to support GHC 7.0.
+ * Stop using 'fail' from the Either monad and instead build Left
+   values explicitly; the behaviour of fail is changing in GHC 7.0
+   and this avoids being sensitive to the change.
+
+Version 4000.0.9: release 2009-12-20
 
  * Export headerMap from Network.HTTP.Headers
    (suggested by David Leuschner.)
@@ -12,7 +30,7 @@ Version 4004.0.9: release 2009-12-20
  * drop unused type argument from Network.Browser.BrowserEvent; needlessly general.
    (patch provided by Daniel Wagner.)
 
-Version 4004.0.8: release 2009-08-05
+Version 4000.0.8: release 2009-08-05
 
  * Incorporated proxy setting lookup and parsing contribution
    by Eric Kow; provided in Network.HTTP.Proxy
@@ -34,7 +52,7 @@ Version 4004.0.8: release 2009-08-05
    header, simply assume / realm and proceed. Preferable
    than failing, even if server is the wrong.
 
-Version 4004.0.7: release 2009-05-22
+Version 4000.0.7: release 2009-05-22
 
  * Minor release.
  * Added 
@@ -46,7 +64,7 @@ Version 4004.0.7: release 2009-05-22
    for interfacing to pre-existing @Socket@s. Contributed and
    suggested by <http://trac.haskell.org/http/ticket/7>.
 
-Version 4004.0.6: release 2009-04-21; changes from 4004.0.5
+Version 4000.0.6: release 2009-04-21; changes from 4000.0.5
 
  * Network.Browser: use HTTP.HandleStream.sendHTTP_notify, not HTTP.sendHTTP_notify
    when issuing requests. The latter runs the risk of undoing request normalization.
@@ -56,7 +74,7 @@ Version 4004.0.6: release 2009-04-21; changes from 4004.0.5
  * Network.Browser: don't fail on seeing invalid cookie values, but report them
    as errors and continue.
 
-Version 4004.0.5: release 2009-03-30; changes from 4004.0.4
+Version 4000.0.5: release 2009-03-30; changes from 4000.0.4
 
  * Get serious about comments and Haddock documentation.
  * Cleaned up normalization of requests, fixing bugs and bringing together
