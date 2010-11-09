@@ -1,4 +1,4 @@
-Version 4000.1.0
+Version 4000.1.0: release 2010-11-09
  * Retroactively fixed CHANGES to refer to 4000.x.x instead of
    4004.x.x.
  * Fix problem with close looping on certain URLs due to trying
