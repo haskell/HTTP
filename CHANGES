@@ -1,3 +1,7 @@
+Version 4000.1.1: release 2010-11-28
+ * Be tolerant of LF (instead of CRLF which is the spec) in responses
+   Patch by Chris Pettitt <cpettitt@gmail.com>.
+
 Version 4000.1.0: release 2010-11-09
  * Retroactively fixed CHANGES to refer to 4000.x.x instead of
    4004.x.x.
