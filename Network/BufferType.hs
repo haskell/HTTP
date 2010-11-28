@@ -38,7 +38,7 @@ import qualified Data.ByteString.Lazy.Char8 as Lazy ( pack, unpack, span )
 import System.IO ( Handle )
 import Data.Word ( Word8 )
 
-import Network.HTTP.Utils ( crlf )
+import Network.HTTP.Utils ( crlf, lf )
 
 -- | The @BufferType@ class encodes, in a mixed-mode way, the interface
 -- that the library requires to operate over data embedded in HTTP
@@ -106,11 +106,13 @@ strictBufferOp =
       , buf_splitAt      = Strict.splitAt
       , buf_span         = Strict.span
       , buf_empty        = Strict.empty
-      , buf_isLineTerm   = \ b -> Strict.length b == 2 && p_crlf == b
+      , buf_isLineTerm   = \ b -> Strict.length b == 2 && p_crlf == b ||
+                                  Strict.length b == 1 && p_lf   == b
       , buf_isEmpty      = Strict.null 
       }
    where
     p_crlf = Strict.pack crlf
+    p_lf   = Strict.pack lf
 
 -- | @lazyBufferOp@ is the 'BufferOp' definition over @ByteString@s,
 -- the non-strict kind.
@@ -129,11 +131,13 @@ lazyBufferOp =
       , buf_splitAt      = \ i x -> Lazy.splitAt (fromIntegral i) x
       , buf_span         = Lazy.span
       , buf_empty        = Lazy.empty
-      , buf_isLineTerm   = \ b -> Lazy.length b == 2 && p_crlf == b
+      , buf_isLineTerm   = \ b -> Lazy.length b == 2 && p_crlf == b ||
+                                  Lazy.length b == 1 && p_lf   == b
       , buf_isEmpty      = Lazy.null 
       }
    where
     p_crlf = Lazy.pack crlf
+    p_lf   = Lazy.pack lf
 
 -- | @stringBufferOp@ is the 'BufferOp' definition over @String@s.
 -- It is defined in terms of @strictBufferOp@ operations,
@@ -154,7 +158,7 @@ stringBufferOp =BufferOp
                              case Strict.span p (Strict.pack a) of
 			       (x,y) -> (Strict.unpack x, Strict.unpack y)
       , buf_empty        = []
-      , buf_isLineTerm   = \ b -> b == crlf
+      , buf_isLineTerm   = \ b -> b == crlf || b == lf
       , buf_isEmpty      = null 
       }
 
