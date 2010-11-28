@@ -16,6 +16,7 @@ module Network.HTTP.Utils
        , trimR    -- :: String -> String
        
        , crlf     -- :: String
+       , lf       -- :: String
        , sp       -- :: String
 
        , split    -- :: Eq a => a -> [a] -> Maybe ([a],[a])
@@ -35,6 +36,10 @@ import Data.Maybe ( fromMaybe )
 -- | @crlf@ is our beloved two-char line terminator.
 crlf :: String
 crlf = "\r\n"
+
+-- | @lf@ is a tolerated line terminator, per RFC 2616 section 19.3.
+lf :: String
+lf = "\n"
 
 -- | @sp@ lets you save typing one character.
 sp :: String
