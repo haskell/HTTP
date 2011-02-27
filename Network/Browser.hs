@@ -540,14 +540,14 @@ getProxy = do
       -- Presumably this is the user's explicit and preferred proxy server.
     Proxy{} -> return p
     NoProxy{} -> do
-    flg <- getBS bsCheckProxy
-    if not flg
-     then return p 
-     else do
-      np <- ioAction $ fetchProxy True{-issue warning on stderr if ill-formed...-}
-       -- note: this resets the check-proxy flag; a one-off affair.
-      setProxy np
-      return np
+     flg <- getBS bsCheckProxy
+     if not flg
+      then return p 
+      else do
+       np <- ioAction $ fetchProxy True{-issue warning on stderr if ill-formed...-}
+        -- note: this resets the check-proxy flag; a one-off affair.
+       setProxy np
+       return np
 
 -- | @setCheckForProxy flg@ sets the one-time check for proxy
 -- flag to @flg@. If @True@, the session will try to determine
@@ -852,37 +852,37 @@ request' nullVal rqState rq = do
 	case allow_redirs of
 	  False -> return (Right (uri,rsp))
 	  _ -> do
-          case retrieveHeaders HdrLocation rsp of
-           [] -> do 
-	     err "No Location: header in redirect response"
-             return (Right (uri,rsp))
-           (Header _ u:_) -> 
-	     case parseURIReference u of
-               Nothing -> do
-                 err ("Parse of Location: header in a redirect response failed: " ++ u)
-                 return (Right (uri,rsp))
-               Just newURI
-		| {-uriScheme newURI_abs /= uriScheme uri && -}(not (supportedScheme newURI_abs)) -> do
-		   err ("Unable to handle redirect, unsupported scheme: " ++ show newURI_abs)
-		   return (Right (uri, rsp))
-                | otherwise -> do		     
-  	           out ("Redirecting to " ++ show newURI_abs ++ " ...") 
-                   
-                   -- Redirect using GET request method, depending on
-                   -- response code.
-                   let toGet = x `elem` [2,3]
-                       method = if toGet then GET else rqMethod rq
-                       rq1 = rq { rqMethod=method, rqURI=newURI_abs }
-                       rq2 = if toGet then (replaceHeader HdrContentLength "0") (rq1 {rqBody = nullVal}) else rq1
-                   
-                   request' nullVal
-			    rqState{ reqDenies     = 0
-			           , reqRedirects  = succ(reqRedirects rqState)
-				   , reqStopOnDeny = True
-				   }
-                            rq2
-                where
-                  newURI_abs = maybe newURI id (newURI `relativeTo` uri)
+           case retrieveHeaders HdrLocation rsp of
+            [] -> do 
+	      err "No Location: header in redirect response"
+              return (Right (uri,rsp))
+            (Header _ u:_) -> 
+	      case parseURIReference u of
+                Nothing -> do
+                  err ("Parse of Location: header in a redirect response failed: " ++ u)
+                  return (Right (uri,rsp))
+                Just newURI
+	         | {-uriScheme newURI_abs /= uriScheme uri && -}(not (supportedScheme newURI_abs)) -> do
+	            err ("Unable to handle redirect, unsupported scheme: " ++ show newURI_abs)
+	            return (Right (uri, rsp))
+                 | otherwise -> do		     
+  	            out ("Redirecting to " ++ show newURI_abs ++ " ...") 
+                    
+                    -- Redirect using GET request method, depending on
+                    -- response code.
+                    let toGet = x `elem` [2,3]
+                        method = if toGet then GET else rqMethod rq
+                        rq1 = rq { rqMethod=method, rqURI=newURI_abs }
+                        rq2 = if toGet then (replaceHeader HdrContentLength "0") (rq1 {rqBody = nullVal}) else rq1
+                    
+                    request' nullVal
+	         	    rqState{ reqDenies     = 0
+	         	           , reqRedirects  = succ(reqRedirects rqState)
+	         		   , reqStopOnDeny = True
+	         		   }
+                             rq2
+                 where
+                   newURI_abs = maybe newURI id (newURI `relativeTo` uri)
 
       (3,0,5) ->
         case retrieveHeaders HdrLocation rsp of
