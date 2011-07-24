@@ -26,7 +26,7 @@ import Network.URI
 import Network.HTTP.Base
 import Network.HTTP.Utils
 import Network.HTTP.Headers ( Header(..) )
-import qualified Network.HTTP.MD5 as MD5 (hash)
+import qualified Network.HTTP.MD5Aux as MD5 (md5s, Str(Str))
 import qualified Network.HTTP.Base64 as Base64 (encode)
 import Text.ParserCombinators.Parsec
    ( Parser, char, many, many1, satisfy, parse, spaces, sepBy1 )
@@ -122,14 +122,11 @@ type Octet = Word8
 stringToOctets :: String -> [Octet]
 stringToOctets = map (fromIntegral . fromEnum)
 
-octetsToString :: [Octet] -> String
-octetsToString = map (toEnum . fromIntegral)
-
 base64encode :: String -> String
 base64encode = Base64.encode . stringToOctets
 
 md5 :: String -> String
-md5 = octetsToString . MD5.hash . stringToOctets
+md5 = MD5.md5s . MD5.Str
 
 kd :: String -> String -> String
 kd a b = md5 (a ++ ":" ++ b)
