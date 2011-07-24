@@ -76,7 +76,6 @@ Library
                  Network.Browser
   Other-modules:
                  Network.HTTP.Base64,
-                 Network.HTTP.MD5,
                  Network.HTTP.MD5Aux,
                  Network.HTTP.Utils
   GHC-options: -fwarn-missing-signatures -Wall
