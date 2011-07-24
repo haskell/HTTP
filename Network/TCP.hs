@@ -16,10 +16,12 @@
 module Network.TCP
    ( Connection
    , openTCPPort
+   , isConnected
    , isConnectedTo
 
    , openTCPConnection
    , socketConnection
+   , isTCPConnected
    , isTCPConnectedTo
    
    , HandleStream
@@ -83,6 +85,8 @@ data Conn a
           , connBuffer    :: BufferOp a
 	  , connInput     :: Maybe a
           , connHost      :: String
+            --Note: connHost only used for deprecated isConnectedTo
+            --      so can remove when isConnectedTo is removed.
 	  , connHooks     :: Maybe (StreamHooks a)
 	  , connCloseEOF  :: Bool -- True => close socket upon reaching end-of-stream.
           }
@@ -280,6 +284,26 @@ closeConnection ref readL = do
   suck rd = do
     f <- rd
     if f then return () else suck rd
+
+-- | Checks that the underlying Socket is connected
+isConnected :: Connection -> IO Bool
+isConnected (Connection conn) = do
+   v <- readMVar (getRef conn)
+   case v of
+     ConnClosed -> return False
+     _          -> catch (getPeerName (connSock v) >> return True)
+                         (const $ return False)
+
+isTCPConnected :: HandleStream ty -> IO Bool
+isTCPConnected conn = do
+   v <- readMVar (getRef conn)
+   case v of
+     ConnClosed -> return False
+     _          -> catch (getPeerName (connSock v) >> return True)
+                         (const $ return False)
+
+{-# DEPRECATED isConnectedTo, isTCPConnectedTo
+    "This function is silly, use isConnected or isTCPConnected" #-}
 
 -- | Checks both that the underlying Socket is connected
 -- and that the connection peer matches the given

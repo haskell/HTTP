@@ -385,7 +385,7 @@ data BrowserState connection
       , bsMaxRedirects    :: Maybe Int
       , bsMaxErrorRetries :: Maybe Int
       , bsMaxAuthAttempts :: Maybe Int
-      , bsConnectionPool  :: [connection]
+      , bsConnectionPool  :: [(String,Int,connection)] -- (host,port,conn)
       , bsCheckProxy      :: Bool
       , bsProxy           :: Proxy
       , bsDebug           :: Maybe String
@@ -940,7 +940,10 @@ dorequest :: (HStream ty)
 	                   (Result (Response ty))
 dorequest hst rqst = do
   pool <- getBS bsConnectionPool
-  conn <- ioAction $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
+  conn <- ioAction $ filterM isTCPConnected
+                             [ c | (hostname,portnum, c) <- pool
+                                 , hostname == uriRegName hst
+                                 , portnum  == uriAuthPort Nothing hst ]
   rsp <- 
     case conn of
       [] -> do 
@@ -948,7 +951,7 @@ dorequest hst rqst = do
         let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
 	reportEvent OpenConnection (show (rqURI rqst))
         c <- ioAction $ openStream (uriRegName hst) uPort
-	updateConnectionPool c
+	updateConnectionPool (uriRegName hst, uPort, c)
 	dorequest2 c rqst
       (c:_) -> do
         out ("Recovering connection to " ++ uriAuthToString hst)
@@ -978,13 +981,14 @@ dorequest hst rqst = do
 	    dbg
 
 updateConnectionPool :: HStream hTy
-                     => HandleStream hTy
+                     => (String, Int, HandleStream hTy)
 		     -> BrowserAction (HandleStream hTy) ()
 updateConnectionPool c = do
    pool <- getBS bsConnectionPool
    let len_pool = length pool
+       (_,_,last_conn) = last pool
    when (len_pool > maxPoolSize)
-        (ioAction $ close (last pool))
+        (ioAction $ close last_conn)
    let pool' 
 	| len_pool > maxPoolSize = init pool
 	| otherwise              = pool
