@@ -855,7 +855,7 @@ request' nullVal rqState rq = do
 				     }
 			      rq
 
-      (3,0,x) | x /= 5  ->  do
+      (3,0,x) | x `elem` [2,3,1,7]  ->  do
         out ("30" ++ show x ++  " - redirect")
 	allow_redirs <- allowRedirect rqState
 	case allow_redirs of
@@ -912,34 +912,7 @@ request' nullVal rqState rq = do
 				     , reqStopOnDeny = True
 				     }
 				     rq
-      (3,_,_) -> redirect uri rsp
       _       -> return (Right (uri,rsp))
-
-   where      
-     redirect uri rsp = do
-       rd   <- getAllowRedirects
-       mbMxRetries <- getMaxRedirects
-       if not rd || reqRedirects rqState > fromMaybe defaultMaxRetries mbMxRetries
-        then return (Right (uri,rsp))
-	else do
-         case retrieveHeaders HdrLocation rsp of
-          [] -> do 
-	    err "No Location header in redirect response."
-            return (Right (uri,rsp))
-          (Header _ u:_) -> 
-	    case parseURIReference u of
-              Just newURI -> do
-                let newURI_abs = maybe newURI id (newURI `relativeTo` uri)
-                out ("Redirecting to " ++ show newURI_abs ++ " ...") 
-                request' nullVal
-		         rqState{ reqDenies     = 0
-			        , reqRedirects  = succ (reqRedirects rqState)
-			        , reqStopOnDeny = True
-				}
-		         rq{rqURI=newURI_abs}
-              Nothing -> do
-                err ("Parse of Location header in a redirect response failed: " ++ u)
-                return (Right (uri,rsp))
 
 -- | The internal request handling state machine.
 dorequest :: (HStream ty)
