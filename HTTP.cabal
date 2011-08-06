@@ -80,7 +80,7 @@ Library
                  Network.HTTP.MD5Aux,
                  Network.HTTP.Utils
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: base >= 2 && < 4.4, network, parsec, mtl
+  Build-depends: base >= 2 && < 4.5, network, parsec, mtl
   Extensions: FlexibleInstances
   if flag(old-base)
     Build-depends: base < 3
