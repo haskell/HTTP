@@ -10,8 +10,8 @@
 -- Portability :  non-portable (not tested)
 --
 -- Some utility functions for working with the Haskell @network@ package. Mostly
--- for internal use by the @Network.HTTP@ code, but 
---      
+-- for internal use by the @Network.HTTP@ code, but
+--
 -----------------------------------------------------------------------------
 module Network.TCP
    ( Connection
@@ -21,10 +21,10 @@ module Network.TCP
    , openTCPConnection
    , socketConnection
    , isTCPConnectedTo
-   
+
    , HandleStream
    , HStream(..)
-   
+
    , StreamHooks(..)
    , nullHooks
    , setStreamHooks
@@ -77,14 +77,14 @@ newtype Connection = Connection (HandleStream String)
 
 newtype HandleStream a = HandleStream {getRef :: MVar (Conn a)}
 
-data Conn a 
+data Conn a
  = MkConn { connSock      :: ! Socket
-	  , connHandle    :: Handle
+          , connHandle    :: Handle
           , connBuffer    :: BufferOp a
-	  , connInput     :: Maybe a
+          , connInput     :: Maybe a
           , connHost      :: String
-	  , connHooks     :: Maybe (StreamHooks a)
-	  , connCloseEOF  :: Bool -- True => close socket upon reaching end-of-stream.
+          , connHooks     :: Maybe (StreamHooks a)
+          , connCloseEOF  :: Bool -- True => close socket upon reaching end-of-stream.
           }
  | ConnClosed
    deriving(Eq)
@@ -110,7 +110,7 @@ instance Eq ty => Eq (StreamHooks ty) where
   (==) _ _ = True
 
 nullHooks :: StreamHooks ty
-nullHooks = StreamHooks 
+nullHooks = StreamHooks
      { hook_readLine   = \ _ _   -> return ()
      , hook_readBlock  = \ _ _ _ -> return ()
      , hook_writeBlock = \ _ _ _ -> return ()
@@ -132,7 +132,7 @@ getStreamHooks h = readMVar (getRef h) >>= return.connHooks
 -- The library comes with instances for @ByteString@s and @String@, but
 -- should you want to plug in your own payload representation, defining
 -- your own @HStream@ instance _should_ be all that it takes.
--- 
+--
 class BufferType bufType => HStream bufType where
   openStream       :: String -> Int -> IO (HandleStream bufType)
   openSocketStream :: String -> Socket -> IO (HandleStream bufType)
@@ -142,7 +142,7 @@ class BufferType bufType => HStream bufType where
   close            :: HandleStream bufType -> IO ()
   closeQuick       :: HandleStream bufType -> IO ()
   closeOnEnd       :: HandleStream bufType -> Bool -> IO ()
-  
+
 instance HStream Strict.ByteString where
   openStream       = openTCPConnection
   openSocketStream = socketConnection
@@ -166,10 +166,10 @@ instance HStream Lazy.ByteString where
 instance Stream.Stream Connection where
   readBlock (Connection c)     = Network.TCP.readBlock c
   readLine (Connection c)      = Network.TCP.readLine c
-  writeBlock (Connection c)    = Network.TCP.writeBlock c 
+  writeBlock (Connection c)    = Network.TCP.writeBlock c
   close (Connection c)         = Network.TCP.close c
   closeOnEnd (Connection c) f  = Network.TCP.closeEOF c f
-  
+
 instance HStream String where
     openStream      = openTCPConnection
     openSocketStream = socketConnection
@@ -178,7 +178,7 @@ instance HStream String where
     -- This function uses a buffer, at this time the buffer is just 1000 characters.
     -- (however many bytes this is is left to the user to decypher)
     readLine ref = readLineBS ref
-    -- The 'Connection' object allows no outward buffering, 
+    -- The 'Connection' object allows no outward buffering,
     -- since in general messages are serialised in their entirety.
     writeBlock ref str = writeBlockBS ref str -- (stringToBuf str)
 
@@ -187,14 +187,14 @@ instance HStream String where
     -- at any time before a call to this function.  This function is idempotent.
     -- (I think the behaviour here is TCP specific)
     close c = closeIt c null True
-    
+
     -- Closes a Connection without munching the rest of the stream.
     closeQuick c = closeIt c null False
 
     closeOnEnd c f = closeEOF c f
-    
+
 -- | @openTCPPort uri port@  establishes a connection to a remote
--- host, using 'getHostByName' which possibly queries the DNS system, hence 
+-- host, using 'getHostByName' which possibly queries the DNS system, hence
 -- may trigger a network connection.
 openTCPPort :: String -> Int -> IO Connection
 openTCPPort uri port = openTCPConnection uri port >>= return.Connection
@@ -218,41 +218,41 @@ openTCPConnection_ uri port stashInput = withSocket $ \s -> do
   getHostAddr h = do
     catchIO (inet_addr uri)    -- handles ascii IP numbers
             (\ _ -> do
-	        host <- getHostByName_safe uri
+                host <- getHostByName_safe uri
                 case hostAddresses host of
                   []     -> fail ("openTCPConnection: no addresses in host entry for " ++ show h)
                   (ha:_) -> return ha)
 
-  getHostByName_safe h = 
+  getHostByName_safe h =
     catchIO (getHostByName h)
             (\ _ -> fail ("openTCPConnection: host lookup failure for " ++ show h))
 
 -- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
 socketConnection :: BufferType ty
                  => String
-		 -> Socket
-		 -> IO (HandleStream ty)
+                 -> Socket
+                 -> IO (HandleStream ty)
 socketConnection hst sock = socketConnection_ hst sock False
 
 -- Internal function used to control the on-demand streaming of input
 -- for /lazy/ streams.
 socketConnection_ :: BufferType ty
                   => String
-		  -> Socket
-		  -> Bool
-		  -> IO (HandleStream ty)
+                  -> Socket
+                  -> Bool
+                  -> IO (HandleStream ty)
 socketConnection_ hst sock stashInput = do
     h <- socketToHandle sock ReadWriteMode
     mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
-    let conn = MkConn 
+    let conn = MkConn
          { connSock     = sock
-	 , connHandle   = h
-	 , connBuffer   = bufferOps
-	 , connInput    = mb
-	 , connHost     = hst
-	 , connHooks    = Nothing
-	 , connCloseEOF = False
-	 }
+         , connHandle   = h
+         , connBuffer   = bufferOps
+         , connInput    = mb
+         , connHost     = hst
+         , connHooks    = Nothing
+         , connCloseEOF = False
+         }
     v <- newMVar conn
     return (HandleStream v)
 
@@ -291,7 +291,7 @@ isConnectedTo (Connection conn) name = do
    v <- readMVar (getRef conn)
    case v of
      ConnClosed -> print "aa" >> return False
-     _ 
+     _
       | map toLower (connHost v) == map toLower name ->
           catch (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
@@ -301,8 +301,8 @@ isTCPConnectedTo conn name = do
    v <- readMVar (getRef conn)
    case v of
      ConnClosed -> return False
-     _ 
-      | map toLower (connHost v) == map toLower name -> 
+     _
+      | map toLower (connHost v) == map toLower name ->
           catch (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
@@ -311,7 +311,7 @@ readBlockBS ref n = onNonClosedDo ref $ \ conn -> do
    x <- bufferGetBlock ref n
    maybe (return ())
          (\ h -> hook_readBlock h (buf_toStr $ connBuffer conn) n x)
-	 (connHooks' conn)
+         (connHooks' conn)
    return x
 
 -- This function uses a buffer, at this time the buffer is just 1000 characters.
@@ -321,17 +321,17 @@ readLineBS ref = onNonClosedDo ref $ \ conn -> do
    x <- bufferReadLine ref
    maybe (return ())
          (\ h -> hook_readLine h (buf_toStr $ connBuffer conn) x)
-	 (connHooks' conn)
+         (connHooks' conn)
    return x
 
--- The 'Connection' object allows no outward buffering, 
+-- The 'Connection' object allows no outward buffering,
 -- since in general messages are serialised in their entirety.
 writeBlockBS :: HandleStream a -> a -> IO (Result ())
 writeBlockBS ref b = onNonClosedDo ref $ \ conn -> do
   x    <- bufferPutBlock (connBuffer conn) (connHandle conn) b
   maybe (return ())
         (\ h -> hook_writeBlock h (buf_toStr $ connBuffer conn) b x)
-	(connHooks' conn)
+        (connHooks' conn)
   return x
 
 closeIt :: HStream ty => HandleStream ty -> (ty -> Bool) -> Bool -> IO ()
@@ -342,7 +342,7 @@ closeIt c p b = do
    conn <- readMVar (getRef c)
    maybe (return ())
          (hook_close)
-	 (connHooks' conn)
+         (connHooks' conn)
 
 closeEOF :: HandleStream ty -> Bool -> IO ()
 closeEOF c flg = modifyMVar_ (getRef c) (\ co -> return co{connCloseEOF=flg})
@@ -356,15 +356,15 @@ bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
       return (return a)
     _ -> do
       Prelude.catch (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.return)
-                    (\ e -> 
-		       if isEOFError e 
-			then do
-			  when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
-			  return (return (buf_empty (connBuffer conn)))
-			else return (failMisc (show e)))
+                    (\ e ->
+                       if isEOFError e
+                        then do
+                          when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
+                          return (return (buf_empty (connBuffer conn)))
+                        else return (failMisc (show e)))
 
 bufferPutBlock :: BufferOp a -> Handle -> a -> IO (Result ())
-bufferPutBlock ops h b = 
+bufferPutBlock ops h b =
   Prelude.catch (buf_hPut ops h b >> hFlush h >> return (return ()))
                 (\ e -> return (failMisc (show e)))
 
@@ -376,20 +376,20 @@ bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
     let (newl,b1) = buf_splitAt (connBuffer conn) 1 b0
     modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b1})
     return (return (buf_append (connBuffer conn) a newl))
-   _ -> Prelude.catch 
-              (buf_hGetLine (connBuffer conn) (connHandle conn) >>= 
-	            return . return . appendNL (connBuffer conn))
+   _ -> Prelude.catch
+              (buf_hGetLine (connBuffer conn) (connHandle conn) >>=
+                    return . return . appendNL (connBuffer conn))
               (\ e ->
                  if isEOFError e
                   then do
-	  	    when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
-		    return (return   (buf_empty (connBuffer conn)))
+                    when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
+                    return (return   (buf_empty (connBuffer conn)))
                   else return (failMisc (show e)))
  where
    -- yes, this s**ks.. _may_ have to be addressed if perf
    -- suggests worthiness.
   appendNL ops b = buf_snoc ops b nl
-  
+
   nl :: Word8
   nl = fromIntegral (fromEnum '\n')
 
@@ -399,4 +399,4 @@ onNonClosedDo h act = do
   case x of
     ConnClosed{} -> return (failWith ErrorClosed)
     _ -> act x
- 
+

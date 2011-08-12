@@ -3,7 +3,7 @@
 -- Module      :  Data.Digest.MD5
 -- Copyright   :  (c) Dominic Steinitz 2004
 -- License     :  BSD-style (see the file ReadMe.tex)
--- 
+--
 -- Maintainer  :  dominic.steinitz@blueyonder.co.uk
 -- Stability   :  experimental
 -- Portability :  portable
@@ -34,10 +34,10 @@ type Octet = Word8
 --   by the standard.
 
 hash :: [Octet] -> [Octet]
-hash xs = 
+hash xs =
    unfoldr f $ md5s $ Str $ map (toEnum . fromIntegral) xs
       where f :: String -> Maybe (Octet,String)
             f []       = Nothing
-	    f [x]      = f ['0',x]
+            f [x]      = f ['0',x]
             f (x:y:zs) = Just (a,zs)
                          where [(a,_)] = readHex (x:y:[])

@@ -3,14 +3,14 @@
 -- Module      :  Network.HTTP.Cookie
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2005, 2007 Robin Bate Boerop, 2008- Sigbjorn Finne
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
 -- This module provides the data types and functions for working with HTTP cookies.
 -- Right now, it contains mostly functionality needed by 'Network.Browser'.
--- 
+--
 -----------------------------------------------------------------------------
 module Network.HTTP.Cookie
        ( Cookie(..)
@@ -38,8 +38,8 @@ import Text.ParserCombinators.Parsec
 
 -- | @Cookie@ is the Haskell representation of HTTP cookie values.
 -- See its relevant specs for authoritative details.
-data Cookie 
- = MkCookie 
+data Cookie
+ = MkCookie
     { ckDomain  :: String
     , ckName    :: String
     , ckValue   :: String
@@ -50,8 +50,8 @@ data Cookie
     deriving(Show,Read)
 
 instance Eq Cookie where
-    a == b  =  ckDomain a == ckDomain b 
-            && ckName a == ckName b 
+    a == b  =  ckDomain a == ckDomain b
+            && ckName a == ckName b
             && ckPath a == ckPath b
 
 -- | @cookieToHeader ck@ serialises a @Cookie@ to an HTTP request header.
@@ -68,7 +68,7 @@ cookieToHeader ck = Header HdrCookie text
 
 
 -- | @cookieMatch (domain,path) ck@ performs the standard cookie
--- match wrt the given domain and path. 
+-- match wrt the given domain and path.
 cookieMatch :: (String, String) -> Cookie -> Bool
 cookieMatch (dom,path) ck =
  ckDomain ck `isSuffixOf` dom &&
@@ -77,13 +77,13 @@ cookieMatch (dom,path) ck =
    Just p  -> p `isPrefixOf` path
 
 
--- | @processCookieHeaders dom hdrs@ 
+-- | @processCookieHeaders dom hdrs@
 processCookieHeaders :: String -> [Header] -> ([String], [Cookie])
 processCookieHeaders dom hdrs = foldr (headerToCookies dom) ([],[]) hdrs
 
--- | @headerToCookies dom hdr acc@ 
+-- | @headerToCookies dom hdr acc@
 headerToCookies :: String -> Header -> ([String], [Cookie]) -> ([String], [Cookie])
-headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) = 
+headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
     case parse cookies "" val of
         Left{}  -> (val:accErr, accCookie)
         Right x -> (accErr, x ++ accCookie)
@@ -103,11 +103,11 @@ headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
           }
 
    cvalue :: Parser String
-   
+
    spaces_l = many (satisfy isSpace)
 
    cvalue = quotedstring <|> many1 (satisfy $ not . (==';')) <|> return ""
-   
+
    -- all keys in the result list MUST be in lower case
    cdetail :: Parser [(String,String)]
    cdetail = many $
@@ -121,8 +121,8 @@ headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
           })
 
    mkCookie :: String -> String -> [(String,String)] -> Cookie
-   mkCookie nm cval more = 
-	  MkCookie { ckName    = nm
+   mkCookie nm cval more =
+          MkCookie { ckName    = nm
                    , ckValue   = cval
                    , ckDomain  = map toLower (fromMaybe dom (lookup "domain" more))
                    , ckPath    = lookup "path" more
@@ -131,7 +131,7 @@ headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
                    }
 headerToCookies _ _ acc = acc
 
-      
+
 
 
 word, quotedstring :: Parser String

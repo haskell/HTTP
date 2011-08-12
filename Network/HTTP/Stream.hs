@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP.Stream
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2005, 2007 Robin Bate Boerop
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -20,9 +20,9 @@
 -- not perform any kind of normalization prior to transmission (or receipt); you are
 -- responsible for doing any such yourself, or, if you prefer, just switch to using
 -- "Network.HTTP" function instead.
--- 
+--
 -----------------------------------------------------------------------------
-module Network.HTTP.Stream 
+module Network.HTTP.Stream
        ( module Network.Stream
 
        , simpleHTTP      -- :: Request_String -> IO (Result Response_String)
@@ -31,7 +31,7 @@ module Network.HTTP.Stream
        , sendHTTP_notify -- :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
        , receiveHTTP     -- :: Stream s => s -> IO (Result Request_String)
        , respondHTTP     -- :: Stream s => s -> Response_String -> IO ()
-       
+
        ) where
 
 -----------------------------------------------------------------
@@ -67,7 +67,7 @@ httpLogFile = "http-debug.log"
 
 -- | Simple way to transmit a resource across a non-persistent connection.
 simpleHTTP :: Request_String -> IO (Result Response_String)
-simpleHTTP r = do 
+simpleHTTP r = do
    auth <- getAuth r
    c    <- openTCPPort (host auth) (fromMaybe 80 (port auth))
    simpleHTTP_ c r
@@ -102,7 +102,7 @@ sendHTTP_notify conn rq onSendComplete = do
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
 sendMain :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
-sendMain conn rqst onSendComplete =  do 
+sendMain conn rqst onSendComplete =  do
     --let str = if null (rqBody rqst)
     --              then show rqst
     --              else show (insertHeader HdrExpect "100-continue" rqst)
@@ -112,7 +112,7 @@ sendMain conn rqst onSendComplete =  do
    onSendComplete
    rsp <- getResponseHead conn
    switchResponse conn True False rsp rqst
-        
+
 -- reads and parses headers
 getResponseHead :: Stream s => s -> IO (Result ResponseData)
 getResponseHead conn = do
@@ -124,7 +124,7 @@ getResponseHead conn = do
 -- to the RFC.
 switchResponse :: Stream s
                => s
-	       -> Bool {- allow retry? -}
+               -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request_String
@@ -147,7 +147,7 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                            }
                     | otherwise -> {- keep waiting -}
                         do { rsp <- getResponseHead conn
-                           ; switchResponse conn allow_retry bdy_sent rsp rqst                           
+                           ; switchResponse conn allow_retry bdy_sent rsp rqst
                            }
 
                 Retry -> {- Request with "Expect" header failed.
@@ -156,15 +156,15 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                     do { writeBlock conn (show rqst ++ rqBody rqst)
                        ; rsp <- getResponseHead conn
                        ; switchResponse conn False bdy_sent rsp rqst
-                       }   
-                     
+                       }
+
                 Done -> do
-		    when (findConnClose hdrs)
-            	    	 (closeOnEnd conn True)
+                    when (findConnClose hdrs)
+                                 (closeOnEnd conn True)
                     return (Right $ Response cd rn hdrs "")
 
                 DieHorribly str -> do
-		    close conn
+                    close conn
                     return $ responseParseError "sendHTTP" ("Invalid response: " ++ str)
 
                 ExpectEntity ->
@@ -172,24 +172,24 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                         cl = lookupHeader HdrContentLength hdrs
                     in
                     do { rslt <- case tc of
-                          Nothing -> 
+                          Nothing ->
                               case cl of
                                   Just x  -> linearTransfer (readBlock conn) (read x :: Int)
                                   Nothing -> hopefulTransfer stringBufferOp {-null (++) []-} (readLine conn) []
-                          Just x  -> 
+                          Just x  ->
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
-				                               (readLine conn) (readBlock conn)
+                                                               (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "sendHTTP"
                        ; case rslt of
-		           Left e -> close conn >> return (Left e)
-			   Right (ftrs,bdy) -> do
-			    when (findConnClose (hdrs++ftrs))
-			    	 (closeOnEnd conn True)
-			    return (Right (Response cd rn (hdrs++ftrs) bdy))
+                           Left e -> close conn >> return (Left e)
+                           Right (ftrs,bdy) -> do
+                            when (findConnClose (hdrs++ftrs))
+                                     (closeOnEnd conn True)
+                            return (Right (Response cd rn (hdrs++ftrs) bdy))
                        }
 
--- | Receive and parse a HTTP request from the given Stream. Should be used 
+-- | Receive and parse a HTTP request from the given Stream. Should be used
 --   for server side interactions.
 receiveHTTP :: Stream s => s -> IO (Result Request_String)
 receiveHTTP conn = getRequestHead >>= processRequest
@@ -200,13 +200,13 @@ receiveHTTP conn = getRequestHead >>= processRequest
             do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
                ; return $ lor >>= parseRequestHead
                }
-	
+
         processRequest (Left e) = return $ Left e
-	processRequest (Right (rm,uri,hdrs)) = 
-	    do -- FIXME : Also handle 100-continue.
+        processRequest (Right (rm,uri,hdrs)) =
+            do -- FIXME : Also handle 100-continue.
                let tc = lookupHeader HdrTransferEncoding hdrs
                    cl = lookupHeader HdrContentLength hdrs
-	       rslt <- case tc of
+               rslt <- case tc of
                           Nothing ->
                               case cl of
                                   Just x  -> linearTransfer (readBlock conn) (read x :: Int)
@@ -214,17 +214,17 @@ receiveHTTP conn = getRequestHead >>= processRequest
                           Just x  ->
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
-				                               (readLine conn) (readBlock conn)
+                                                               (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "receiveHTTP"
-               
-               return $ do
-	          (ftrs,bdy) <- rslt
-		  return (Request uri rm (hdrs++ftrs) bdy)
 
--- | Very simple function, send a HTTP response over the given stream. This 
+               return $ do
+                  (ftrs,bdy) <- rslt
+                  return (Request uri rm (hdrs++ftrs) bdy)
+
+-- | Very simple function, send a HTTP response over the given stream. This
 --   could be improved on to use different transfer types.
 respondHTTP :: Stream s => s -> Response_String -> IO ()
 respondHTTP conn rsp = do writeBlock conn (show rsp)
                           -- write body immediately, don't wait for 100 CONTINUE
                           writeBlock conn (rspBody rsp)
-			  return ()
+                          return ()

@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP.HandleStream
 -- Copyright   :  (c) 2008- Sigbjorn Finne
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -15,16 +15,16 @@
 -- not perform any kind of normalization prior to transmission (or receipt); you are
 -- responsible for doing any such yourself, or, if you prefer, just switch to using
 -- "Network.HTTP" function instead.
--- 
+--
 -----------------------------------------------------------------------------
-module Network.HTTP.HandleStream 
+module Network.HTTP.HandleStream
        ( simpleHTTP      -- :: Request ty -> IO (Result (Response ty))
        , simpleHTTP_     -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
        , sendHTTP        -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
        , sendHTTP_notify -- :: HStream ty => HandleStream ty -> Request ty -> IO () -> IO (Result (Response ty))
        , receiveHTTP     -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
        , respondHTTP     -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
-       
+
        , simpleHTTP_debug -- :: FilePath -> Request DebugString -> IO (Response DebugString)
        ) where
 
@@ -51,7 +51,7 @@ import Control.Monad (when)
 
 -- | @simpleHTTP@ transmits a resource across a non-persistent connection.
 simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
-simpleHTTP r = do 
+simpleHTTP r = do
   auth <- getAuth r
   c <- openStream (host auth) (fromMaybe 80 (port auth))
   simpleHTTP_ c r
@@ -59,7 +59,7 @@ simpleHTTP r = do
 -- | @simpleHTTP_debug debugFile req@ behaves like 'simpleHTTP', but logs
 -- the HTTP operation via the debug file @debugFile@.
 simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
-simpleHTTP_debug httpLogFile r = do 
+simpleHTTP_debug httpLogFile r = do
   auth <- getAuth r
   c0   <- openStream (host auth) (fromMaybe 80 (port auth))
   c    <- debugByteStream httpLogFile c0
@@ -81,9 +81,9 @@ sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 -- request transmission and its performance.
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
-		-> Request ty
-		-> IO ()
-		-> IO (Result (Response ty))
+                -> Request ty
+                -> IO ()
+                -> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
   when providedClose $ (closeOnEnd conn True)
   catchIO (sendMain conn rq onSendComplete)
@@ -103,9 +103,9 @@ sendHTTP_notify conn rq onSendComplete = do
 -- Since we would wait forever, I have disabled use of 100-continue for now.
 sendMain :: HStream ty
          => HandleStream ty
-	 -> Request ty
-	 -> (IO ())
-	 -> IO (Result (Response ty))
+         -> Request ty
+         -> (IO ())
+         -> IO (Result (Response ty))
 sendMain conn rqst onSendComplete = do
       --let str = if null (rqBody rqst)
       --              then show rqst
@@ -123,7 +123,7 @@ sendMain conn rqst onSendComplete = do
 
 switchResponse :: HStream ty
                => HandleStream ty
-	       -> Bool {- allow retry? -}
+               -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request ty
@@ -133,12 +133,12 @@ switchResponse _ _ _ (Left e) _ = return (Left e)
                 -- if we attempt to use the same socket then there is an excellent
                 -- chance that the socket is not in a completely closed state.
 
-switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst = 
+switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
    case matchResponse (rqMethod rqst) cd of
      Continue
       | not bdy_sent -> do {- Time to send the body -}
         writeBlock conn (rqBody rqst) >>= either (return . Left)
-	   (\ _ -> do
+           (\ _ -> do
               rsp <- getResponseHead conn
               switchResponse conn allow_retry True rsp rqst)
       | otherwise    -> do {- keep waiting -}
@@ -149,11 +149,11 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                     Trouble is the request contains Expects
                     other than "100-Continue" -}
         writeBlock conn ((buf_append bufferOps)
-		                     (buf_fromStr bufferOps (show rqst))
-			             (rqBody rqst))
+                                     (buf_fromStr bufferOps (show rqst))
+                                     (rqBody rqst))
         rsp <- getResponseHead conn
         switchResponse conn False bdy_sent rsp rqst
-                     
+
      Done -> do
        when (findConnClose hdrs)
             (closeOnEnd conn True)
@@ -165,31 +165,31 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
      ExpectEntity -> do
        r <- fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
              maybe (maybe (hopefulTransfer bo (readLine conn) [])
-	               (\ x -> 
-		          readsOne (linearTransfer (readBlock conn))
-		                   (return$responseParseError "unrecognized content-length value" x)
-			  	   x)
-		        cl)
-	           (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
-	                      (uglyDeathTransfer "sendHTTP"))
+                       (\ x ->
+                          readsOne (linearTransfer (readBlock conn))
+                                   (return$responseParseError "unrecognized content-length value" x)
+                                     x)
+                        cl)
+                   (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+                              (uglyDeathTransfer "sendHTTP"))
                    tc
        case r of
          Left{} -> do
-	   close conn
-	   return r
-	 Right (Response _ _ hs _) -> do
-	   when (findConnClose hs)
+           close conn
+           return r
+         Right (Response _ _ hs _) -> do
+           when (findConnClose hs)
                 (closeOnEnd conn True)
-	   return r
+           return r
 
       where
        tc = lookupHeader HdrTransferEncoding hdrs
        cl = lookupHeader HdrContentLength hdrs
        bo = bufferOps
-                    
+
 -- reads and parses headers
 getResponseHead :: HStream ty => HandleStream ty -> IO (Result ResponseData)
-getResponseHead conn = 
+getResponseHead conn =
    fmapE (\es -> parseResponseHead (map (buf_toStr bufferOps) es))
          (readTillEmpty1 bufferOps (readLine conn))
 
@@ -202,18 +202,18 @@ receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
    getRequestHead = do
       fmapE (\es -> parseRequestHead (map (buf_toStr bufferOps) es))
             (readTillEmpty1 bufferOps (readLine conn))
-	
+
    processRequest (rm,uri,hdrs) =
       fmapE (\ (ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)) $
-	     maybe 
-	      (maybe (return (Right ([], buf_empty bo))) -- hopefulTransfer ""
-	             (\ x -> readsOne (linearTransfer (readBlock conn))
-			              (return$responseParseError "unrecognized Content-Length value" x)
-				      x)
-				      
-		     cl)
-  	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
-	                 (uglyDeathTransfer "receiveHTTP"))
+             maybe
+              (maybe (return (Right ([], buf_empty bo))) -- hopefulTransfer ""
+                     (\ x -> readsOne (linearTransfer (readBlock conn))
+                                      (return$responseParseError "unrecognized Content-Length value" x)
+                                      x)
+
+                     cl)
+                (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+                         (uglyDeathTransfer "receiveHTTP"))
               tc
     where
      -- FIXME : Also handle 100-continue.
@@ -225,7 +225,7 @@ receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
 -- the 'HandleStream' @hStream@. It could be used to implement simple web
 -- server interactions, performing the dual role to 'sendHTTP'.
 respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
-respondHTTP conn rsp = do 
+respondHTTP conn rsp = do
   writeBlock conn (buf_fromStr bufferOps $ show rsp)
    -- write body immediately, don't wait for 100 CONTINUE
   writeBlock conn (rspBody rsp)
@@ -237,7 +237,7 @@ headerName :: String -> String
 headerName x = map toLower (trim x)
 
 ifChunked :: a -> a -> String -> a
-ifChunked a b s = 
+ifChunked a b s =
   case headerName s of
     "chunked" -> a
     _ -> b

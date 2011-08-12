@@ -18,10 +18,10 @@
 --
 -- This module provides definitions for the standard buffer types that the
 -- package supports, i.e., for @String@ and @ByteString@ (strict and lazy.)
--- 
+--
 -----------------------------------------------------------------------------
 module Network.BufferType
-       ( 
+       (
          BufferType(..)
 
        , BufferOp(..)
@@ -44,7 +44,7 @@ import Network.HTTP.Utils ( crlf, lf )
 -- that the library requires to operate over data embedded in HTTP
 -- requests and responses. That is, we use explicit dictionaries
 -- for the operations, but overload the name of the dicts themselves.
--- 
+--
 class BufferType bufType where
    bufferOps :: BufferOp bufType
 
@@ -57,7 +57,7 @@ instance BufferType Strict.ByteString where
 instance BufferType String where
    bufferOps = stringBufferOp
 
--- | @BufferOp@ encodes the I/O operations of the underlying buffer over 
+-- | @BufferOp@ encodes the I/O operations of the underlying buffer over
 -- a Handle in an (explicit) dictionary type. May not be needed, but gives
 -- us flexibility in explicit overriding and wrapping up of these methods.
 --
@@ -67,7 +67,7 @@ instance BufferType String where
 --
 -- We supply three default @BufferOp@ values, for @String@ along with the
 -- strict and lazy versions of @ByteString@. To add others, provide @BufferOp@
--- definitions for 
+-- definitions for
 data BufferOp a
  = BufferOp
      { buf_hGet         :: Handle -> Int -> IO a
@@ -92,8 +92,8 @@ instance Eq (BufferOp a) where
 -- | @strictBufferOp@ is the 'BufferOp' definition over @ByteString@s,
 -- the non-lazy kind.
 strictBufferOp :: BufferOp Strict.ByteString
-strictBufferOp = 
-    BufferOp 
+strictBufferOp =
+    BufferOp
       { buf_hGet         = Strict.hGet
       , buf_hGetContents = Strict.hGetContents
       , buf_hPut         = Strict.hPut
@@ -108,7 +108,7 @@ strictBufferOp =
       , buf_empty        = Strict.empty
       , buf_isLineTerm   = \ b -> Strict.length b == 2 && p_crlf == b ||
                                   Strict.length b == 1 && p_lf   == b
-      , buf_isEmpty      = Strict.null 
+      , buf_isEmpty      = Strict.null
       }
    where
     p_crlf = Strict.pack crlf
@@ -117,8 +117,8 @@ strictBufferOp =
 -- | @lazyBufferOp@ is the 'BufferOp' definition over @ByteString@s,
 -- the non-strict kind.
 lazyBufferOp :: BufferOp Lazy.ByteString
-lazyBufferOp = 
-    BufferOp 
+lazyBufferOp =
+    BufferOp
       { buf_hGet         = Lazy.hGet
       , buf_hGetContents = Lazy.hGetContents
       , buf_hPut         = Lazy.hPut
@@ -133,7 +133,7 @@ lazyBufferOp =
       , buf_empty        = Lazy.empty
       , buf_isLineTerm   = \ b -> Lazy.length b == 2 && p_crlf == b ||
                                   Lazy.length b == 1 && p_lf   == b
-      , buf_isEmpty      = Lazy.null 
+      , buf_isEmpty      = Lazy.null
       }
    where
     p_crlf = Lazy.pack crlf
@@ -143,7 +143,7 @@ lazyBufferOp =
 -- It is defined in terms of @strictBufferOp@ operations,
 -- unpacking/converting to @String@ when needed.
 stringBufferOp :: BufferOp String
-stringBufferOp =BufferOp 
+stringBufferOp =BufferOp
       { buf_hGet         = \ h n -> buf_hGet strictBufferOp h n >>= return . Strict.unpack
       , buf_hGetContents = \ h -> buf_hGetContents strictBufferOp h >>= return . Strict.unpack
       , buf_hPut         = \ h s -> buf_hPut strictBufferOp h (Strict.pack s)
@@ -154,11 +154,11 @@ stringBufferOp =BufferOp
       , buf_toStr        = id
       , buf_snoc         = \ a x -> a ++ [toEnum (fromIntegral x)]
       , buf_splitAt      = splitAt
-      , buf_span         = \ p a -> 
+      , buf_span         = \ p a ->
                              case Strict.span p (Strict.pack a) of
-			       (x,y) -> (Strict.unpack x, Strict.unpack y)
+                               (x,y) -> (Strict.unpack x, Strict.unpack y)
       , buf_empty        = []
       , buf_isLineTerm   = \ b -> b == crlf || b == lf
-      , buf_isEmpty      = null 
+      , buf_isEmpty      = null
       }
 
