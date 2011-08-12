@@ -17,15 +17,4 @@ or Hugs (http://www.haskell.org/hugs/) with support for Cabal.
 
 INSTALLATION
 
-
-* Configure:
-
-$ runhaskell Setup.lhs configure
-
-* Compile:
-
-$ runhaskell Setup.lhs build
-
-* Install (as root):
-
-# runhaskell Setup.lhs install
+To install from source, run "cabal install".
