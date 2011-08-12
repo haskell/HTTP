@@ -1,5 +1,5 @@
 Name: HTTP
-Version: 4000.1.1
+Version: 4000.1.2
 Cabal-Version: >= 1.2
 Build-type: Simple
 License: BSD3
@@ -80,7 +80,7 @@ Library
                  Network.HTTP.MD5Aux,
                  Network.HTTP.Utils
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: base >= 2 && < 4.4, network, parsec, mtl
+  Build-depends: base >= 2 && < 4.5, network, parsec, mtl
   Extensions: FlexibleInstances
   if flag(old-base)
     Build-depends: base < 3
