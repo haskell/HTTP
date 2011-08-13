@@ -196,6 +196,8 @@ int4_char3 [a,b] =
     let n = (a `shiftL` 18 .|. b `shiftL` 12)
     in [ (chr (n `shiftR` 16 .&. 0xff)) ]
 
+int4_char3 [_] = error "Network.HTTP.Base64.int4_char3: impossible number of Ints."
+
 int4_char3 [] = []
 
 
@@ -242,6 +244,7 @@ quadruplets :: [Char] -> [Char]
 quadruplets (a:b:c:d:t) = a:b:c:d:quadruplets t
 quadruplets [a,b,c]     = [a,b,c,'=']      -- 16bit tail unit
 quadruplets [a,b]       = [a,b,'=','=']    -- 8bit tail unit
+quadruplets [_]         = error "Network.HTTP.Base64.quadruplets: impossible number of characters."
 quadruplets []          = []               -- 24bit tail unit
 
 
