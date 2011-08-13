@@ -93,14 +93,13 @@ headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
 
    cookie :: Parser Cookie
    cookie =
-       do { name <- word
-          ; spaces_l
-          ; char '='
-          ; spaces_l
-          ; val1 <- cvalue
-          ; args <- cdetail
-          ; return $ mkCookie name val1 args
-          }
+       do name <- word
+          _    <- spaces_l
+          _    <- char '='
+          _    <- spaces_l
+          val1 <- cvalue
+          args <- cdetail
+          return $ mkCookie name val1 args
 
    cvalue :: Parser String
 
@@ -111,14 +110,14 @@ headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
    -- all keys in the result list MUST be in lower case
    cdetail :: Parser [(String,String)]
    cdetail = many $
-       try (do { spaces_l
-          ; char ';'
-          ; spaces_l
-          ; s1 <- word
-          ; spaces_l
-          ; s2 <- option "" (do { char '=' ; spaces_l ; v <- cvalue ; return v })
-          ; return (map toLower s1,s2)
-          })
+       try (do _  <- spaces_l
+               _  <- char ';'
+               _  <- spaces_l
+               s1 <- word
+               _  <- spaces_l
+               s2 <- option "" (char '=' >> spaces_l >> cvalue)
+               return (map toLower s1,s2)
+           )
 
    mkCookie :: String -> String -> [(String,String)] -> Cookie
    mkCookie nm cval more =
@@ -136,10 +135,9 @@ headerToCookies _ _ acc = acc
 
 word, quotedstring :: Parser String
 quotedstring =
-    do { char '"'  -- "
-       ; str <- many (satisfy $ not . (=='"'))
-       ; char '"'
-       ; return str
-       }
+    do _   <- char '"'  -- "
+       str <- many (satisfy $ not . (=='"'))
+       _   <- char '"'
+       return str
 
 word = many1 (satisfy (\x -> isAlphaNum x || x=='_' || x=='.' || x=='-' || x==':'))
