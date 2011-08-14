@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP.Base
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2005, 2007 Robin Bate Boerop, 2008 Sigbjorn Finne
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -26,12 +26,12 @@ module Network.HTTP.Base
        , Request(..)
        , Response(..)
        , RequestMethod(..)
-       
+
        , Request_String
        , Response_String
        , HTTPRequest
        , HTTPResponse
-       
+
           -- ** URL Encoding
        , urlEncode
        , urlDecode
@@ -40,7 +40,7 @@ module Network.HTTP.Base
           -- ** URI authority parsing
        , URIAuthority(..)
        , parseURIAuthority
-       
+
           -- internal
        , uriToAuthorityString   -- :: URI     -> String
        , uriAuthToString        -- :: URIAuth -> String
@@ -55,8 +55,8 @@ module Network.HTTP.Base
        , ResponseData
        , ResponseCode
        , RequestData
-       
-       , NormalizeRequestOptions(..) 
+
+       , NormalizeRequestOptions(..)
        , defaultNormalizeRequestOptions -- :: NormalizeRequestOptions ty
        , RequestNormalizer
 
@@ -76,23 +76,23 @@ module Network.HTTP.Base
        , uglyDeathTransfer
        , readTillEmpty1
        , readTillEmpty2
-       
+
        , defaultGETRequest
        , defaultGETRequest_
        , mkRequest
 
        , defaultUserAgent
        , libUA  {- backwards compatibility, will disappear..soon -}
-       
+
        , catchIO
        , catchIO_
        , responseParseError
-       
+
        , getRequestVersion
        , getResponseVersion
        , setRequestVersion
        , setResponseVersion
-       
+
        ) where
 
 import Network.URI
@@ -124,11 +124,11 @@ import Control.Exception as Exception (IOException)
 ------------------ URI Authority parsing ------------------------
 -----------------------------------------------------------------
 
-data URIAuthority = URIAuthority { user :: Maybe String, 
-				   password :: Maybe String,
-				   host :: String,
-				   port :: Maybe Int
-				 } deriving (Eq,Show)
+data URIAuthority = URIAuthority { user :: Maybe String,
+                                   password :: Maybe String,
+                                   host :: String,
+                                   port :: Maybe Int
+                                 } deriving (Eq,Show)
 
 -- | Parse the authority part of a URL.
 --
@@ -143,18 +143,18 @@ parseURIAuthority s = listToMaybe (map fst (readP_to_S pURIAuthority s))
 
 pURIAuthority :: ReadP URIAuthority
 pURIAuthority = do
-		(u,pw) <- (pUserInfo `before` char '@') 
-			  <++ return (Nothing, Nothing)
-		h <- munch (/=':')
-		p <- orNothing (char ':' >> readDecP)
-		look >>= guard . null 
-		return URIAuthority{ user=u, password=pw, host=h, port=p }
+                (u,pw) <- (pUserInfo `before` char '@')
+                          <++ return (Nothing, Nothing)
+                h <- munch (/=':')
+                p <- orNothing (char ':' >> readDecP)
+                look >>= guard . null
+                return URIAuthority{ user=u, password=pw, host=h, port=p }
 
 pUserInfo :: ReadP (Maybe String, Maybe String)
 pUserInfo = do
-	    u <- orNothing (munch (`notElem` ":@"))
-	    p <- orNothing (char ':' >> munch (/='@'))
-	    return (u,p)
+            u <- orNothing (munch (`notElem` ":@"))
+            p <- orNothing (char ':' >> munch (/='@'))
+            return (u,p)
 
 before :: Monad m => m a -> m b -> m a
 before a b = a >>= \x -> b >> return x
@@ -167,20 +167,20 @@ uriToAuthorityString :: URI -> String
 uriToAuthorityString u = maybe "" uriAuthToString (uriAuthority u)
 
 uriAuthToString :: URIAuth -> String
-uriAuthToString ua = 
-  concat [ uriUserInfo ua 
+uriAuthToString ua =
+  concat [ uriUserInfo ua
          , uriRegName ua
-	 , uriPort ua
-	 ]
+         , uriPort ua
+         ]
 
 uriAuthPort :: Maybe URI -> URIAuth -> Int
-uriAuthPort mbURI u = 
+uriAuthPort mbURI u =
   case uriPort u of
     (':':s) -> readsOne id (default_port mbURI) s
     _       -> default_port mbURI
  where
   default_port Nothing = default_http
-  default_port (Just url) = 
+  default_port (Just url) =
     case map toLower $ uriScheme url of
       "http:" -> default_http
       "https:" -> default_https
@@ -194,17 +194,17 @@ uriAuthPort mbURI u =
 -- the information may either be in the request's URI or inside
 -- the Host: header.
 reqURIAuth :: Request ty -> URIAuth
-reqURIAuth req = 
+reqURIAuth req =
   case uriAuthority (rqURI req) of
     Just ua -> ua
     _ -> case lookupHeader HdrHost (rqHeaders req) of
            Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
-	   Just h  -> 
-	      case toHostPort h of
-	        (ht,p) -> URIAuth { uriUserInfo = ""
-	                          , uriRegName  = ht
-			          , uriPort     = p
-			          }
+           Just h  ->
+              case toHostPort h of
+                (ht,p) -> URIAuth { uriUserInfo = ""
+                                  , uriRegName  = ht
+                                  , uriPort     = p
+                                  }
   where
     -- Note: just in case you're wondering..the convention is to include the ':'
     -- in the port part..
@@ -227,7 +227,7 @@ data RequestMethod = HEAD | PUT | GET | POST | DELETE | OPTIONS | TRACE | CONNEC
     deriving(Eq)
 
 instance Show RequestMethod where
-  show x = 
+  show x =
     case x of
       HEAD     -> "HEAD"
       PUT      -> "PUT"
@@ -241,18 +241,18 @@ instance Show RequestMethod where
 
 rqMethodMap :: [(String, RequestMethod)]
 rqMethodMap = [("HEAD",    HEAD),
-	       ("PUT",     PUT),
-	       ("GET",     GET),
-	       ("POST",    POST),
+               ("PUT",     PUT),
+               ("GET",     GET),
+               ("POST",    POST),
                ("DELETE",  DELETE),
-	       ("OPTIONS", OPTIONS),
-	       ("TRACE",   TRACE),
-	       ("CONNECT", CONNECT)]
+               ("OPTIONS", OPTIONS),
+               ("TRACE",   TRACE),
+               ("CONNECT", CONNECT)]
 
--- 
+--
 -- for backwards-ish compatibility; suggest
 -- migrating to new Req/Resp by adding type param.
--- 
+--
 type Request_String  = Request String
 type Response_String = Response String
 
@@ -285,9 +285,9 @@ instance Show (Request a) where
         show m ++ sp ++ alt_uri ++ sp ++ ver ++ crlf
         ++ foldr (++) [] (map show (dropHttpVersion h)) ++ crlf
         where
-	    ver = fromMaybe httpVersion (getRequestVersion req)
-            alt_uri = show $ if null (uriPath u) || head (uriPath u) /= '/' 
-                        then u { uriPath = '/' : uriPath u } 
+            ver = fromMaybe httpVersion (getRequestVersion req)
+            alt_uri = show $ if null (uriPath u) || head (uriPath u) /= '/'
+                        then u { uriPath = '/' : uriPath u }
                         else u
 
 instance HasHeaders (Request a) where
@@ -318,8 +318,8 @@ data Response a =
              , rspHeaders  :: [Header]
              , rspBody     :: a
              }
-                   
--- This is an invalid representation of a received response, 
+
+-- This is an invalid representation of a received response,
 -- since we have made the assumption that all responses are HTTP/1.1
 instance Show (Response a) where
     show rsp@(Response (a,b,c) reason headers _) =
@@ -346,17 +346,17 @@ defaultGETRequest :: URI -> Request_String
 defaultGETRequest uri = defaultGETRequest_ uri
 
 defaultGETRequest_ :: BufferType a => URI -> Request a
-defaultGETRequest_ uri = mkRequest GET uri 
+defaultGETRequest_ uri = mkRequest GET uri
 
 -- | 'mkRequest method uri' constructs a well formed
 -- request for the given HTTP method and URI. It does not
--- normalize the URI for the request _nor_ add the required 
+-- normalize the URI for the request _nor_ add the required
 -- Host: header. That is done either explicitly by the user
 -- or when requests are normalized prior to transmission.
 mkRequest :: BufferType ty => RequestMethod -> URI -> Request ty
 mkRequest meth uri = req
  where
-  req = 
+  req =
     Request { rqURI      = uri
             , rqBody     = empty
             , rqHeaders  = [ Header HdrContentLength "0"
@@ -371,12 +371,12 @@ mkRequest meth uri = req
     -- stub out the user info.
   updAuth = fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri)
 
-  withHost = 
+  withHost =
     case uriToAuthorityString uri{uriAuthority=updAuth} of
       "" -> id
       h  -> ((Header HdrHost h):)
 
-  uri_req 
+  uri_req
    | forProxy  = uri
    | otherwise = snd (splitRequestURI uri)
 -}
@@ -422,12 +422,12 @@ parseResponseHead (sts:hdrs) = do
  where
   responseStatus _l _yes@(version:code:reason) =
     return (version,match code,concatMap (++" ") reason)
-  responseStatus l _no 
+  responseStatus l _no
     | null l    = failWith ErrorClosed  -- an assumption
     | otherwise = parse_err l
 
-  parse_err l = 
-    responseParseError 
+  parse_err l =
+    responseParseError
         "parseResponseHead"
         ("Response status line parse failure: " ++ l)
 
@@ -445,7 +445,7 @@ parseResponseHead (sts:hdrs) = do
 -- the version info explicitly in their record types. You have to use
 -- {get,set}{Request,Response}Version for that.
 withVersion :: String -> [Header] -> [Header]
-withVersion v hs 
+withVersion v hs
  | v == httpVersion = hs  -- don't bother adding it if the default.
  | otherwise        = (Header (HdrCustom "X-HTTP-Version") v) : hs
 
@@ -461,7 +461,7 @@ setRequestVersion s r = setHttpVersion r s
 
 
 -- | @getResponseVersion rsp@ returns the HTTP protocol version of
--- the response @rsp@. If @Nothing@, the default 'httpVersion' can be 
+-- the response @rsp@. If @Nothing@, the default 'httpVersion' can be
 -- assumed.
 getResponseVersion :: Response a -> Maybe String
 getResponseVersion r = getHttpVersion r
@@ -476,7 +476,7 @@ setResponseVersion s r = setHttpVersion r s
 -- version info is represented internally.
 
 getHttpVersion :: HasHeaders a => a -> Maybe String
-getHttpVersion r = 
+getHttpVersion r =
   fmap toVersion      $
    find isHttpVersion $
     getHeaders r
@@ -484,7 +484,7 @@ getHttpVersion r =
   toVersion (Header _ x) = x
 
 setHttpVersion :: HasHeaders a => a -> String -> a
-setHttpVersion r v = 
+setHttpVersion r v =
   setHeaders r $
    withVersion v  $
     dropHttpVersion $
@@ -495,7 +495,7 @@ dropHttpVersion hs = filter (not.isHttpVersion) hs
 
 isHttpVersion :: Header -> Bool
 isHttpVersion (Header (HdrCustom "X-HTTP-Version") _) = True
-isHttpVersion _ = False    
+isHttpVersion _ = False
 
 
 
@@ -529,9 +529,9 @@ matchResponse rqst rsp =
     where
         ans | rqst == HEAD = Done
             | otherwise    = ExpectEntity
-        
 
-        
+
+
 -----------------------------------------------------------------
 ------------------ A little friendly funtionality ---------------
 -----------------------------------------------------------------
@@ -564,13 +564,13 @@ urlDecode [] = []
 
 urlEncode :: String -> String
 urlEncode     [] = []
-urlEncode (ch:t) 
+urlEncode (ch:t)
   | (isAscii ch && isAlphaNum ch) || ch `elem` "-_.~" = ch : urlEncode t
   | not (isAscii ch) = foldr escape (urlEncode t) (eightBs [] (fromEnum ch))
   | otherwise = escape (fromEnum ch) (urlEncode t)
     where
      escape b rs = '%':showH (b `div` 16) (showH (b `mod` 16) rs)
-     
+
      showH x xs
        | x <= 9    = toEnum (o_0 + x) : xs
        | otherwise = toEnum (o_A + (x-10)) : xs
@@ -599,23 +599,23 @@ urlEncodeVars [] = []
 -- | @getAuth req@ fishes out the authority portion of the URL in a request's @Host@
 -- header.
 getAuth :: Monad m => Request ty -> m URIAuthority
-getAuth r = 
+getAuth r =
    -- ToDo: verify that Network.URI functionality doesn't take care of this (now.)
   case parseURIAuthority auth of
-    Just x -> return x 
+    Just x -> return x
     Nothing -> fail $ "Network.HTTP.Base.getAuth: Error parsing URI authority '" ++ auth ++ "'"
- where 
+ where
   auth = maybe (uriToAuthorityString uri) id (findHeader HdrHost r)
   uri  = rqURI r
 
 {-# DEPRECATED normalizeRequestURI "Please use Network.HTTP.Base.normalizeRequest instead" #-}
 normalizeRequestURI :: Bool{-do close-} -> {-URI-}String -> Request ty -> Request ty
-normalizeRequestURI doClose h r = 
+normalizeRequestURI doClose h r =
   (if doClose then replaceHeader HdrConnection "close" else id) $
   insertHeaderIfMissing HdrHost h $
     r { rqURI = (rqURI r){ uriScheme = ""
                          , uriAuthority = Nothing
-			 }}
+                         }}
 
 -- | @NormalizeRequestOptions@ brings together the various defaulting\/normalization options
 -- over 'Request's. Use 'defaultNormalizeRequestOptions' for the standard selection of option
@@ -644,72 +644,72 @@ defaultNormalizeRequestOptions = NormalizeRequestOptions
 -- via the @NormalizeRequestOptions@ record.
 normalizeRequest :: NormalizeRequestOptions ty
                  -> Request ty
-		 -> Request ty
+                 -> Request ty
 normalizeRequest opts req = foldr (\ f -> f opts) req normalizers
  where
   --normalizers :: [RequestNormalizer ty]
-  normalizers = 
+  normalizers =
      ( normalizeHostURI
      : normalizeConnectionClose
-     : normalizeUserAgent 
+     : normalizeUserAgent
      : normCustoms opts
      )
 
--- | @normalizeUserAgent ua x req@ augments the request @req@ with 
--- a @User-Agent: ua@ header if @req@ doesn't already have a 
+-- | @normalizeUserAgent ua x req@ augments the request @req@ with
+-- a @User-Agent: ua@ header if @req@ doesn't already have a
 -- a @User-Agent:@ set.
 normalizeUserAgent :: RequestNormalizer ty
-normalizeUserAgent opts req = 
+normalizeUserAgent opts req =
   case normUserAgent opts of
     Nothing -> req
-    Just ua -> 
+    Just ua ->
      case findHeader HdrUserAgent req of
        Just u  | u /= defaultUserAgent -> req
        _ -> replaceHeader HdrUserAgent ua req
 
--- | @normalizeConnectionClose opts req@ sets the header @Connection: close@ 
+-- | @normalizeConnectionClose opts req@ sets the header @Connection: close@
 -- to indicate one-shot behavior iff @normDoClose@ is @True@. i.e., it then
 -- _replaces_ any an existing @Connection:@ header in @req@.
 normalizeConnectionClose :: RequestNormalizer ty
-normalizeConnectionClose opts req 
+normalizeConnectionClose opts req
  | normDoClose opts = replaceHeader HdrConnection "close" req
  | otherwise        = req
 
 -- | @normalizeHostURI forProxy req@ rewrites your request to have it
 -- follow the expected formats by the receiving party (proxy or server.)
--- 
+--
 normalizeHostURI :: RequestNormalizer ty
-normalizeHostURI opts req = 
+normalizeHostURI opts req =
   case splitRequestURI uri of
     ("",_uri_abs)
-      | forProxy -> 
+      | forProxy ->
          case findHeader HdrHost req of
-	   Nothing -> req -- no host/authority in sight..not much we can do.
-	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
-	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
-				   }}
-            where 
-	      hst = case span (/='@') user_hst of
-	               (as,'@':bs) -> 
-		          case span (/=':') as of
-			    (_,_:_) -> bs
-			    _ -> user_hst
-		       _ -> user_hst
+           Nothing -> req -- no host/authority in sight..not much we can do.
+           Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
+                                   , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
+                                   }}
+            where
+              hst = case span (/='@') user_hst of
+                       (as,'@':bs) ->
+                          case span (/=':') as of
+                            (_,_:_) -> bs
+                            _ -> user_hst
+                       _ -> user_hst
 
-	      (user_hst, pNum) = 
-	         case span isDigit (reverse h) of
-		   (ds,':':bs) -> (reverse bs, ':':reverse ds)
-		   _ -> (h,"")
-      | otherwise -> 
+              (user_hst, pNum) =
+                 case span isDigit (reverse h) of
+                   (ds,':':bs) -> (reverse bs, ':':reverse ds)
+                   _ -> (h,"")
+      | otherwise ->
          case findHeader HdrHost req of
-	   Nothing -> req -- no host/authority in sight..not much we can do...complain?
-	   Just{}  -> req
-    (h,uri_abs) 
-      | forProxy  -> insertHeaderIfMissing HdrHost h req 
+           Nothing -> req -- no host/authority in sight..not much we can do...complain?
+           Just{}  -> req
+    (h,uri_abs)
+      | forProxy  -> insertHeaderIfMissing HdrHost h req
       | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs} -- Note: _not_ stubbing out user:pass
  where
-   uri0     = rqURI req 
-     -- stub out the user:pass 
+   uri0     = rqURI req
+     -- stub out the user:pass
    uri      = uri0{uriAuthority=fmap (\ x -> x{uriUserInfo=""}) (uriAuthority uri0)}
 
    forProxy = normForProxy opts
@@ -720,7 +720,7 @@ normalizeHostURI opts req =
       resource on an origin server or gateway. In this case the absolute
       path of the URI MUST be transmitted (see section 3.2.1, abs_path) as
       the Request-URI, and the network location of the URI (authority) MUST
-      be transmitted in a Host header field." 
+      be transmitted in a Host header field."
    We assume that this is the case, so we take the host name from
    the Host header if there is one, otherwise from the request-URI.
    Then we make the request-URI an abs_path and make sure that there
@@ -733,18 +733,18 @@ splitRequestURI uri = (uriToAuthorityString uri, uri{uriScheme="", uriAuthority=
 -- Adds a Host header if one is NOT ALREADY PRESENT..
 {-# DEPRECATED normalizeHostHeader "Please use Network.HTTP.Base.normalizeRequest instead" #-}
 normalizeHostHeader :: Request ty -> Request ty
-normalizeHostHeader rq = 
+normalizeHostHeader rq =
   insertHeaderIfMissing HdrHost
                         (uriToAuthorityString $ rqURI rq)
-			rq
-                                     
+                        rq
+
 -- Looks for a "Connection" header with the value "close".
 -- Returns True when this is found.
 findConnClose :: [Header] -> Bool
 findConnClose hdrs =
   maybe False
         (\ x -> map toLower (trim x) == "close")
-	(lookupHeader HdrConnection hdrs)
+        (lookupHeader HdrConnection hdrs)
 
 -- | Used when we know exactly how many bytes to expect.
 linearTransfer :: (Int -> IO (Result a)) -> Int -> IO (Result ([Header],a))
@@ -756,10 +756,10 @@ linearTransfer readBlk n = fmapE (\str -> Right ([],str)) (readBlk n)
 --   take data once and give up the rest.
 hopefulTransfer :: BufferOp a
                 -> IO (Result a)
-		-> [a]
-		-> IO (Result ([Header],a))
-hopefulTransfer bufOps readL strs 
-    = readL >>= 
+                -> [a]
+                -> IO (Result ([Header],a))
+hopefulTransfer bufOps readL strs
+    = readL >>=
       either (\v -> return $ Left v)
              (\more -> if (buf_isEmpty bufOps more)
                          then return (Right ([],foldr (flip (buf_append bufOps)) (buf_empty bufOps) strs))
@@ -769,7 +769,7 @@ hopefulTransfer bufOps readL strs
 --   Also the only transfer variety likely to
 --   return any footers.
 chunkedTransfer :: BufferOp a
-		-> IO (Result a)
+                -> IO (Result a)
                 -> (Int -> IO (Result a))
                 -> IO (Result ([Header], a))
 chunkedTransfer bufOps readL readBlk = chunkedTransferC bufOps readL readBlk [] 0
@@ -777,36 +777,36 @@ chunkedTransfer bufOps readL readBlk = chunkedTransferC bufOps readL readBlk [] 
 chunkedTransferC :: BufferOp a
                  -> IO (Result a)
                  -> (Int -> IO (Result a))
-		 -> [a]
-		 -> Int
-		 -> IO (Result ([Header], a))
+                 -> [a]
+                 -> Int
+                 -> IO (Result ([Header], a))
 chunkedTransferC bufOps readL readBlk acc n = do
   v <- readL
   case v of
     Left e -> return (Left e)
-    Right line 
-     | size == 0 -> 
+    Right line
+     | size == 0 ->
          -- last chunk read; look for trailing headers..
         fmapE (\ strs -> do
-	         ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
-		   -- insert (computed) Content-Length header.
-		 let ftrs' = Header HdrContentLength (show n) : ftrs
+                 ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
+                   -- insert (computed) Content-Length header.
+                 let ftrs' = Header HdrContentLength (show n) : ftrs
                  return (ftrs',buf_concat bufOps (reverse acc)))
 
-	      (readTillEmpty2 bufOps readL [])
+              (readTillEmpty2 bufOps readL [])
 
      | otherwise -> do
          some <- readBlk size
-	 case some of
-	   Left e -> return (Left e)
-	   Right cdata -> do
-	       readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
-	       chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
+         case some of
+           Left e -> return (Left e)
+           Right cdata -> do
+               _ <- readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
+               chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
      where
-      size 
+      size
        | buf_isEmpty bufOps line = 0
-       | otherwise = 
-	 case readHex (buf_toStr bufOps line) of
+       | otherwise =
+         case readHex (buf_toStr bufOps line) of
           (hx,_):_ -> hx
           _        -> 0
 
@@ -818,13 +818,13 @@ uglyDeathTransfer loc = return (responseParseError loc "Unknown Transfer-Encodin
 
 -- | Remove leading crlfs then call readTillEmpty2 (not required by RFC)
 readTillEmpty1 :: BufferOp a
-	       -> IO (Result a)
+               -> IO (Result a)
                -> IO (Result [a])
 readTillEmpty1 bufOps readL =
   readL >>=
     either (return . Left)
-           (\ s -> 
-	       if buf_isLineTerm bufOps s
+           (\ s ->
+               if buf_isLineTerm bufOps s
                 then readTillEmpty1 bufOps readL
                 else readTillEmpty2 bufOps readL [s])
 
@@ -834,14 +834,14 @@ readTillEmpty1 bufOps readL =
 --   thing to do - so probably indicates an
 --   error condition.
 readTillEmpty2 :: BufferOp a
-	       -> IO (Result a)
-	       -> [a]
-	       -> IO (Result [a])
+               -> IO (Result a)
+               -> [a]
+               -> IO (Result [a])
 readTillEmpty2 bufOps readL list =
     readL >>=
       either (return . Left)
              (\ s ->
-	        if buf_isLineTerm bufOps s || buf_isEmpty bufOps s
+                if buf_isLineTerm bufOps s || buf_isEmpty bufOps s
                  then return (Right $ reverse (s:list))
                  else readTillEmpty2 bufOps readL (s:list))
 

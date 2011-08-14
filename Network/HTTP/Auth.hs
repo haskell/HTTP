@@ -3,14 +3,14 @@
 -- Module      :  Network.HTTP.Auth
 -- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2005, 2007 Robin Bate Boerop, 2008- Sigbjorn Finne
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
 -- Representing HTTP Auth values in Haskell.
 -- Right now, it contains mostly functionality needed by 'Network.Browser'.
--- 
+--
 -----------------------------------------------------------------------------
 module Network.HTTP.Auth
        ( Authority(..)
@@ -37,7 +37,7 @@ import Data.Word ( Word8 )
 
 -- | @Authority@ specifies the HTTP Authentication method to use for
 -- a given domain/realm; @Basic@ or @Digest@.
-data Authority 
+data Authority
  = AuthBasic { auRealm    :: String
              , auUsername :: String
              , auPassword :: String
@@ -54,7 +54,7 @@ data Authority
              }
 
 
-data Challenge 
+data Challenge
  = ChalBasic  { chRealm   :: String }
  | ChalDigest { chRealm   :: String
               , chDomain  :: [URI]
@@ -73,29 +73,29 @@ instance Show Algorithm where
     show AlgMD5 = "md5"
     show AlgMD5sess = "md5-sess"
 
--- | 
+-- |
 data Qop = QopAuth | QopAuthInt
     deriving(Eq,Show)
 
 -- | @withAuthority auth req@ generates a credentials value from the @auth@ 'Authority',
 -- in the context of the given request.
--- 
+--
 -- If a client nonce was to be used then this function might need to be of type ... -> BrowserAction String
 withAuthority :: Authority -> Request ty -> String
 withAuthority a rq = case a of
         AuthBasic{}  -> "Basic " ++ base64encode (auUsername a ++ ':' : auPassword a)
         AuthDigest{} ->
             "Digest " ++
-	     concat [ "username="  ++ quo (auUsername a)
-	            , ",realm="    ++ quo (auRealm a)
-		    , ",nonce="    ++ quo (auNonce a)
-		    , ",uri="      ++ quo digesturi
-		    , ",response=" ++ quo rspdigest
+             concat [ "username="  ++ quo (auUsername a)
+                    , ",realm="    ++ quo (auRealm a)
+                    , ",nonce="    ++ quo (auNonce a)
+                    , ",uri="      ++ quo digesturi
+                    , ",response=" ++ quo rspdigest
                        -- plus optional stuff:
-		    , fromMaybe "" (fmap (\ alg -> ",algorithm=" ++ quo (show alg)) (auAlgorithm a))
-		    , fromMaybe "" (fmap (\ o   -> ",opaque=" ++ quo o) (auOpaque a))
-		    , if null (auQop a) then "" else ",qop=auth"
-		    ]
+                    , fromMaybe "" (fmap (\ alg -> ",algorithm=" ++ quo (show alg)) (auAlgorithm a))
+                    , fromMaybe "" (fmap (\ o   -> ",opaque=" ++ quo o) (auOpaque a))
+                    , if null (auQop a) then "" else ",qop=auth"
+                    ]
     where
         quo s = '"':s ++ "\""
 
@@ -103,7 +103,7 @@ withAuthority a rq = case a of
 
         a1, a2 :: String
         a1 = auUsername a ++ ":" ++ auRealm a ++ ":" ++ auPassword a
-        
+
         {-
         If the "qop" directive's value is "auth" or is unspecified, then A2
         is:
@@ -137,7 +137,7 @@ kd a b = md5 (a ++ ":" ++ b)
 
 
 
--- | @headerToChallenge base www_auth@ tries to convert the @WWW-Authenticate@ header 
+-- | @headerToChallenge base www_auth@ tries to convert the @WWW-Authenticate@ header
 -- @www_auth@  into a 'Challenge' value.
 headerToChallenge :: URI -> Header -> Maybe Challenge
 headerToChallenge baseURI (Header _ str) =
@@ -158,11 +158,11 @@ headerToChallenge baseURI (Header _ str) =
 
         cprops = sepBy1 cprop comma
 
-        comma = do { spaces ; char ',' ; spaces }
+        comma = do { spaces ; _ <- char ',' ; spaces }
 
         cprop =
             do { nm <- word
-               ; char '='
+               ; _ <- char '='
                ; val <- quotedstring
                ; return (map toLower nm,val)
                }
@@ -175,12 +175,12 @@ headerToChallenge baseURI (Header _ str) =
             -- with Maybe monad
             do { r <- lookup "realm" params
                ; n <- lookup "nonce" params
-               ; return $ 
+               ; return $
                     ChalDigest { chRealm  = r
-                               , chDomain = (annotateURIs 
+                               , chDomain = (annotateURIs
                                             $ map parseURI
-                                            $ words 
-                                            $ fromMaybe [] 
+                                            $ words
+                                            $ fromMaybe []
                                             $ lookup "domain" params)
                                , chNonce  = n
                                , chOpaque = lookup "opaque" params
@@ -210,9 +210,9 @@ headerToChallenge baseURI (Header _ str) =
 
 word, quotedstring :: Parser String
 quotedstring =
-    do { char '"'  -- "
+    do { _ <- char '"'  -- "
        ; str <- many (satisfy $ not . (=='"'))
-       ; char '"'
+       ; _ <- char '"'
        ; return str
        }
 
