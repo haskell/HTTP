@@ -89,3 +89,17 @@ Library
 
   if os(windows)
     Build-depends: Win32
+
+Test-Suite test
+  type: exitcode-stdio-1.0
+
+  build-tools: ghc >= 6.10 && < 7.2
+
+  main-is: test/httpTests.hs
+
+  build-depends:     HUnit,
+                     http-shed,
+                     unix,
+                     haskell98,
+                     test-framework,
+                     test-framework-hunit
