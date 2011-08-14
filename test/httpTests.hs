@@ -1,3 +1,5 @@
+import Control.Exception
+
 import Data.Functor
 import Data.Maybe
 
@@ -52,5 +54,5 @@ main :: IO ()
 main = do
   pid <- startServer processRequest
   sleep 1 -- Give the server time to start :-(
-  defaultMain tests
-  stopServer pid -- Doesn't actually kill the server :-(
+  finally (defaultMain tests)
+          (stopServer pid)
