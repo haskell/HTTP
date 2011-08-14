@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
 {- |
 
 Module      :  Network.Browser
@@ -132,7 +133,9 @@ import Network.BufferType
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
-import Control.Monad (filterM, liftM, when)
+import Control.Applicative (Applicative)
+import Control.Monad (filterM, when)
+import Control.Monad.State (StateT (..), MonadIO (..), modify, gets, withStateT, evalStateT, MonadState (..))
 
 import qualified System.IO
    ( hSetBuffering, hPutStr, stdout, stdin, hGetChar
@@ -172,18 +175,18 @@ userCookieFilter url cky = do
 
 -- | @addCookie c@ adds a cookie to the browser state, removing duplicates.
 addCookie :: Cookie -> BrowserAction t ()
-addCookie c = alterBS (\b -> b{bsCookies = c : filter (/=c) (bsCookies b) })
+addCookie c = modify (\b -> b{bsCookies = c : filter (/=c) (bsCookies b) })
 
 -- | @setCookies cookies@ replaces the set of cookies known to
 -- the browser to @cookies@. Useful when wanting to restore cookies
 -- used across 'browse' invocations.
 setCookies :: [Cookie] -> BrowserAction t ()
-setCookies cs = alterBS (\b -> b { bsCookies=cs })
+setCookies cs = modify (\b -> b { bsCookies=cs })
 
 -- | @getCookies@ returns the current set of cookies known to
 -- the browser.
 getCookies :: BrowserAction t [Cookie]
-getCookies = getBS bsCookies
+getCookies = gets bsCookies
 
 -- ...get domain specific cookies...
 -- ... this needs changing for consistency with rfc2109...
@@ -199,11 +202,11 @@ getCookiesFor dom path =
 
 -- | @setCookieFilter fn@ sets the cookie acceptance filter to @fn@.
 setCookieFilter :: (URI -> Cookie -> IO Bool) -> BrowserAction t ()
-setCookieFilter f = alterBS (\b -> b { bsCookieFilter=f })
+setCookieFilter f = modify (\b -> b { bsCookieFilter=f })
 
 -- | @getCookieFilter@ returns the current cookie acceptance filter.
 getCookieFilter :: BrowserAction t (URI -> Cookie -> IO Bool)
-getCookieFilter = getBS bsCookieFilter
+getCookieFilter = gets bsCookieFilter
 
 ------------------------------------------------------------------
 ----------------------- Authorisation Stuff ----------------------
@@ -264,55 +267,55 @@ getAuthFor dom pth = getAuthorities >>= return . (filter match)
 -- | @getAuthorities@ return the current set of @Authority@s known
 -- to the browser.
 getAuthorities :: BrowserAction t [Authority]
-getAuthorities = getBS bsAuthorities
+getAuthorities = gets bsAuthorities
 
 -- @setAuthorities as@ replaces the Browser's known set
 -- of 'Authority's to @as@.
 setAuthorities :: [Authority] -> BrowserAction t ()
-setAuthorities as = alterBS (\b -> b { bsAuthorities=as })
+setAuthorities as = modify (\b -> b { bsAuthorities=as })
 
 -- @addAuthority a@ adds 'Authority' @a@ to the Browser's
 -- set of known authorities.
 addAuthority :: Authority -> BrowserAction t ()
-addAuthority a = alterBS (\b -> b { bsAuthorities=a:bsAuthorities b })
+addAuthority a = modify (\b -> b { bsAuthorities=a:bsAuthorities b })
 
 -- | @getAuthorityGen@ returns the current authority generator
 getAuthorityGen :: BrowserAction t (URI -> String -> IO (Maybe (String,String)))
-getAuthorityGen = getBS bsAuthorityGen
+getAuthorityGen = gets bsAuthorityGen
 
 -- | @setAuthorityGen genAct@ sets the auth generator to @genAct@.
 setAuthorityGen :: (URI -> String -> IO (Maybe (String,String))) -> BrowserAction t ()
-setAuthorityGen f = alterBS (\b -> b { bsAuthorityGen=f })
+setAuthorityGen f = modify (\b -> b { bsAuthorityGen=f })
 
 -- | @setAllowBasicAuth onOff@ enables\/disables HTTP Basic Authentication.
 setAllowBasicAuth :: Bool -> BrowserAction t ()
-setAllowBasicAuth ba = alterBS (\b -> b { bsAllowBasicAuth=ba })
+setAllowBasicAuth ba = modify (\b -> b { bsAllowBasicAuth=ba })
 
 getAllowBasicAuth :: BrowserAction t Bool
-getAllowBasicAuth = getBS bsAllowBasicAuth
+getAllowBasicAuth = gets bsAllowBasicAuth
 
 -- | @setMaxAuthAttempts mbMax@ sets the maximum number of authentication attempts
 -- to do. If @Nothing@, rever to default max.
 setMaxAuthAttempts :: Maybe Int -> BrowserAction t ()
 setMaxAuthAttempts mb 
  | fromMaybe 0 mb < 0 = return ()
- | otherwise          = alterBS (\ b -> b{bsMaxAuthAttempts=mb})
+ | otherwise          = modify (\ b -> b{bsMaxAuthAttempts=mb})
 
 -- | @getMaxAuthAttempts@ returns the current max auth attempts. If @Nothing@,
 -- the browser's default is used.
 getMaxAuthAttempts :: BrowserAction t (Maybe Int)
-getMaxAuthAttempts = getBS bsMaxAuthAttempts
+getMaxAuthAttempts = gets bsMaxAuthAttempts
 
 -- | @setMaxErrorRetries mbMax@ sets the maximum number of attempts at
 -- transmitting a request. If @Nothing@, rever to default max.
 setMaxErrorRetries :: Maybe Int -> BrowserAction t ()
 setMaxErrorRetries mb
  | fromMaybe 0 mb < 0 = return ()
- | otherwise          = alterBS (\ b -> b{bsMaxErrorRetries=mb})
+ | otherwise          = modify (\ b -> b{bsMaxErrorRetries=mb})
 
 -- | @getMaxErrorRetries@ returns the current max number of error retries.
 getMaxErrorRetries :: BrowserAction t (Maybe Int)
-getMaxErrorRetries = getBS bsMaxErrorRetries
+getMaxErrorRetries = gets bsMaxErrorRetries
 
 -- TO BE CHANGED!!!
 pickChallenge :: Bool -> [Challenge] -> Maybe Challenge
@@ -335,7 +338,7 @@ challengeToAuthority uri ch
  | otherwise = do
       -- prompt user for authority
     prompt <- getAuthorityGen
-    userdetails <- ioAction $ prompt uri (chRealm ch)
+    userdetails <- liftIO $ prompt uri (chRealm ch)
     case userdetails of
      Nothing    -> return Nothing
      Just (u,p) -> return (Just $ buildAuth ch u p)
@@ -401,22 +404,17 @@ instance Show (BrowserState t) where
             ++ "AllowRedirects: " ++ shows (bsAllowRedirects bs) "} ")
 
 -- | @BrowserAction@ is the IO monad, but carrying along a 'BrowserState'.
-data BrowserAction conn a 
- = BA { lift :: BrowserState conn -> IO (BrowserState conn,a) }
+newtype BrowserAction conn a
+ = BA { unBA :: StateT (BrowserState conn) IO a }
+ deriving (Functor, Applicative, Monad, MonadIO, MonadState (BrowserState conn))
 
-instance Monad (BrowserAction conn) where
-    a >>= f  =  BA (\b -> do { (nb,v) <- lift a b ; lift (f v) nb})
-    return x =  BA (\b -> return (b,x))
-    fail x   =  BA (\_ -> fail x)
-
-instance Functor (BrowserAction conn) where
-    fmap f   = liftM f
+runBA :: BrowserState conn -> BrowserAction conn a -> IO a
+runBA bs = flip evalStateT bs . unBA
 
 -- | @browse act@ is the toplevel action to perform a 'BrowserAction'.
 -- Example use: @browse (request (getRequest yourURL))@.
 browse :: BrowserAction conn a -> IO a
-browse act = do x <- lift act defaultBrowserState
-                return (snd x)
+browse = runBA defaultBrowserState
 
 -- | The default browser state has the settings 
 defaultBrowserState :: BrowserState t
@@ -446,21 +444,15 @@ defaultBrowserState = res
      , bsUserAgent        = Nothing
      }
 
--- | Alter browser state
-alterBS :: (BrowserState t -> BrowserState t) -> BrowserAction t ()
-alterBS f = BA (\b -> return (f b,()))
-
-getBS :: (BrowserState t -> a) -> BrowserAction t a
-getBS f = BA (\b -> return (b,f b))
-
+{-# DEPRECATED getBrowserState "Use Control.Monad.State.get instead." #-}
 -- | @getBrowserState@ returns the current browser config. Useful
 -- for restoring state across 'BrowserAction's.
 getBrowserState :: BrowserAction t (BrowserState t)
-getBrowserState = getBS id
+getBrowserState = get
 
 -- | @withBrowserAction st act@ performs @act@ with 'BrowserState' @st@.
 withBrowserState :: BrowserState t -> BrowserAction t a -> BrowserAction t a
-withBrowserState bs act = BA $ \ _ -> lift act bs
+withBrowserState bs = BA . withStateT (const bs) . unBA
 
 -- | @nextRequest act@ performs the browser action @act@ as
 -- the next request, i.e., setting up a new request context
@@ -472,37 +464,38 @@ nextRequest act = do
         rid = succ (bsRequestID st)
        in
        rid `seq` st{bsRequestID=rid}
-  alterBS updReqID
+  modify updReqID
   act
 
 -- | Lifts an IO action into the 'BrowserAction' monad.
+{-# DEPRECATED ioAction "Use Control.Monad.Trans.liftIO instead." #-}
 ioAction :: IO a -> BrowserAction t a
-ioAction a = BA (\b -> a >>= \v -> return (b,v))
+ioAction = liftIO
 
 -- | @setErrHandler@ sets the IO action to call when
 -- the browser reports running errors. To disable any
 -- such, set it to @const (return ())@.
 setErrHandler :: (String -> IO ()) -> BrowserAction t ()
-setErrHandler h = alterBS (\b -> b { bsErr=h })
+setErrHandler h = modify (\b -> b { bsErr=h })
 
 -- | @setErrHandler@ sets the IO action to call when
 -- the browser chatters info on its running. To disable any
 -- such, set it to @const (return ())@.
 setOutHandler :: (String -> IO ()) -> BrowserAction t ()
-setOutHandler h = alterBS (\b -> b { bsOut=h })
+setOutHandler h = modify (\b -> b { bsOut=h })
 
 out, err :: String -> BrowserAction t ()
-out s = do { f <- getBS bsOut ; ioAction $ f s }
-err s = do { f <- getBS bsErr ; ioAction $ f s }
+out s = do { f <- gets bsOut ; liftIO $ f s }
+err s = do { f <- gets bsErr ; liftIO $ f s }
 
 -- | @setAllowRedirects onOff@ toggles the willingness to
 -- follow redirects (HTTP responses with 3xx status codes).
 setAllowRedirects :: Bool -> BrowserAction t ()
-setAllowRedirects bl = alterBS (\b -> b {bsAllowRedirects=bl})
+setAllowRedirects bl = modify (\b -> b {bsAllowRedirects=bl})
 
 -- | @getAllowRedirects@ returns current setting of the do-chase-redirects flag.
 getAllowRedirects :: BrowserAction t Bool
-getAllowRedirects = getBS bsAllowRedirects
+getAllowRedirects = gets bsAllowRedirects
 
 -- | @setMaxRedirects maxCount@ sets the maxiumum number of forwarding hops
 -- we are willing to jump through. A no-op if the count is negative; if zero,
@@ -512,12 +505,12 @@ getAllowRedirects = getBS bsAllowRedirects
 setMaxRedirects :: Maybe Int -> BrowserAction t ()
 setMaxRedirects c 
  | fromMaybe 0 c < 0  = return ()
- | otherwise          = alterBS (\b -> b{bsMaxRedirects=c})
+ | otherwise          = modify (\b -> b{bsMaxRedirects=c})
 
 -- | @getMaxRedirects@ returns the current setting for the max-redirect count.
 -- If @Nothing@, the "Network.Browser"'s default is used.
 getMaxRedirects :: BrowserAction t (Maybe Int)
-getMaxRedirects = getBS bsMaxRedirects
+getMaxRedirects = gets bsMaxRedirects
 
 -- | @setProxy p@ will disable proxy usage if @p@ is @NoProxy@.
 -- If @p@ is @Proxy proxyURL mbAuth@, then @proxyURL@ is interpreted
@@ -527,24 +520,24 @@ setProxy :: Proxy -> BrowserAction t ()
 setProxy p =
    -- Note: if user _explicitly_ sets the proxy, we turn
    -- off any auto-detection of proxies.
-  alterBS (\b -> b {bsProxy = p, bsCheckProxy=False})
+  modify (\b -> b {bsProxy = p, bsCheckProxy=False})
 
 -- | @getProxy@ returns the current proxy settings. If
 -- the auto-proxy flag is set to @True@, @getProxy@ will
 -- perform the necessary 
 getProxy :: BrowserAction t Proxy
 getProxy = do
-  p <- getBS bsProxy
+  p <- gets bsProxy
   case p of
       -- Note: if there is a proxy, no need to perform any auto-detect.
       -- Presumably this is the user's explicit and preferred proxy server.
     Proxy{} -> return p
     NoProxy{} -> do
-     flg <- getBS bsCheckProxy
+     flg <- gets bsCheckProxy
      if not flg
       then return p 
       else do
-       np <- ioAction $ fetchProxy True{-issue warning on stderr if ill-formed...-}
+       np <- liftIO $ fetchProxy True{-issue warning on stderr if ill-formed...-}
         -- note: this resets the check-proxy flag; a one-off affair.
        setProxy np
        return np
@@ -554,7 +547,7 @@ getProxy = do
 -- the proxy server is locally configured. See 'Network.HTTP.Proxy.fetchProxy'
 -- for details of how this done.
 setCheckForProxy :: Bool -> BrowserAction t ()
-setCheckForProxy flg = alterBS (\ b -> b{bsCheckProxy=flg})
+setCheckForProxy flg = modify (\ b -> b{bsCheckProxy=flg})
 
 -- | @getCheckForProxy@ returns the current check-proxy setting.
 -- Notice that this may not be equal to @True@ if the session has
@@ -563,24 +556,24 @@ setCheckForProxy flg = alterBS (\ b -> b{bsCheckProxy=flg})
 -- whether a proxy will be checked for again before any future protocol
 -- interactions.
 getCheckForProxy :: BrowserAction t Bool
-getCheckForProxy = getBS bsCheckProxy
+getCheckForProxy = gets bsCheckProxy
 
 -- | @setDebugLog mbFile@ turns off debug logging iff @mbFile@
 -- is @Nothing@. If set to @Just fStem@, logs of browser activity
 -- is appended to files of the form @fStem-url-authority@, i.e.,
 -- @fStem@ is just the prefix for a set of log files, one per host/authority.
 setDebugLog :: Maybe String -> BrowserAction t ()
-setDebugLog v = alterBS (\b -> b {bsDebug=v})
+setDebugLog v = modify (\b -> b {bsDebug=v})
 
 -- | @setUserAgent ua@ sets the current @User-Agent:@ string to @ua@. It
 -- will be used if no explicit user agent header is found in subsequent requests.
 setUserAgent :: String -> BrowserAction t ()
-setUserAgent ua = alterBS (\b -> b{bsUserAgent=Just ua})
+setUserAgent ua = modify (\b -> b{bsUserAgent=Just ua})
 
 -- | @getUserAgent@ returns the current @User-Agent:@ default string.
 getUserAgent :: BrowserAction t String
 getUserAgent  = do
-  n <- getBS bsUserAgent
+  n <- gets bsUserAgent
   return (maybe defaultUserAgent id n)
 
 -- | @RequestState@ is an internal tallying type keeping track of various 
@@ -636,7 +629,7 @@ data BrowserEventType
 -- notified of browser events during the processing of a request
 -- by the Browser pipeline.
 setEventHandler :: Maybe (BrowserEvent -> BrowserAction ty ()) -> BrowserAction ty ()
-setEventHandler mbH = alterBS (\b -> b { bsEvent=mbH})
+setEventHandler mbH = modify (\b -> b { bsEvent=mbH})
 
 buildBrowserEvent :: BrowserEventType -> {-URI-}String -> RequestID -> IO BrowserEvent
 buildBrowserEvent bt uri reqID = do
@@ -650,11 +643,11 @@ buildBrowserEvent bt uri reqID = do
 
 reportEvent :: BrowserEventType -> {-URI-}String -> BrowserAction t ()
 reportEvent bt uri = do
-  st <- getBrowserState
+  st <- get
   case bsEvent st of
     Nothing -> return ()
     Just evH -> do
-       evt <- ioAction $ buildBrowserEvent bt uri (bsRequestID st)
+       evt <- liftIO $ buildBrowserEvent bt uri (bsRequestID st)
        evH evt -- if it fails, we fail.
 
 -- | The default number of hops we are willing not to go beyond for 
@@ -735,7 +728,7 @@ request' nullVal rqState rq = do
          Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
    let rq'' = if not $ null cookies then insertHeaders [cookiesToHeader cookies] rq' else rq'
    p <- getProxy
-   def_ua <- getBS bsUserAgent
+   def_ua <- gets bsUserAgent
    let defaultOpts = 
          case p of 
 	   NoProxy     -> defaultNormalizeRequestOptions{normUserAgent=def_ua}
@@ -832,7 +825,7 @@ request' nullVal rqState rq = do
               case au of
                Nothing  -> return (Right (uri,rsp))  {- do nothing -}
                Just au' -> do
-                 pxy <- getBS bsProxy
+                 pxy <- gets bsProxy
                  case pxy of
                    NoProxy -> do
                      err "Proxy authentication required without proxy!"
@@ -939,15 +932,15 @@ dorequest :: (HStream ty)
 	  -> BrowserAction (HandleStream ty)
 	                   (Result (Response ty))
 dorequest hst rqst = do
-  pool <- getBS bsConnectionPool
-  conn <- ioAction $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
+  pool <- gets bsConnectionPool
+  conn <- liftIO $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
   rsp <- 
     case conn of
       [] -> do 
         out ("Creating new connection to " ++ uriAuthToString hst)
         let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
 	reportEvent OpenConnection (show (rqURI rqst))
-        c <- ioAction $ openStream (uriRegName hst) uPort
+        c <- liftIO $ openStream (uriRegName hst) uPort
 	updateConnectionPool c
 	dorequest2 c rqst
       (c:_) -> do
@@ -960,17 +953,17 @@ dorequest hst rqst = do
   return rsp
  where
   dorequest2 c r = do
-    dbg <- getBS bsDebug
-    st  <- getBrowserState
+    dbg <- gets bsDebug
+    st  <- get
     let 
      onSendComplete =
        maybe (return ())
              (\evh -> do
 	        x <- buildBrowserEvent RequestSent (show (rqURI r)) (bsRequestID st)
-		(lift (evh x)) st
+		runBA st (evh x)
 		return ())
              (bsEvent st)
-    ioAction $ 
+    liftIO $ 
       maybe (sendHTTP_notify c r onSendComplete)
             (\ f -> do
                c' <- debugByteStream (f++'-': uriAuthToString hst) c
@@ -981,14 +974,14 @@ updateConnectionPool :: HStream hTy
                      => HandleStream hTy
 		     -> BrowserAction (HandleStream hTy) ()
 updateConnectionPool c = do
-   pool <- getBS bsConnectionPool
+   pool <- gets bsConnectionPool
    let len_pool = length pool
    when (len_pool > maxPoolSize)
-        (ioAction $ close (last pool))
+        (liftIO $ close (last pool))
    let pool' 
 	| len_pool > maxPoolSize = init pool
 	| otherwise              = pool
-   alterBS (\b -> b { bsConnectionPool=c:pool' })
+   modify (\b -> b { bsConnectionPool=c:pool' })
    return ()
                              
 -- | Maximum number of open connections we are willing to have active.
@@ -1003,7 +996,7 @@ handleCookies uri dom cookieHeaders = do
   when (not $ null newCookies)
        (out $ foldl (\x y -> x ++ "\n  " ++ show y) "Cookies received:" newCookies)
   filterfn    <- getCookieFilter
-  newCookies' <- ioAction (filterM (filterfn uri) newCookies)
+  newCookies' <- liftIO (filterM (filterfn uri) newCookies)
   when (not $ null newCookies')
        (out $ "Accepting cookies with names: " ++ unwords (map ckName newCookies'))
   mapM_ addCookie newCookies'
