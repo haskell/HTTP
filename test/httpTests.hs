@@ -37,6 +37,7 @@ stopServer pid = signalProcess sigTERM pid
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/test")    -> return $ Httpd.Response 200 [] "It works."
+    _                   -> return $ Httpd.Response 500 [] "Unknown request"
 
 basicGetRequest :: Assertion
 basicGetRequest = do 
