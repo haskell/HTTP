@@ -1,10 +1,8 @@
-import Control.Exception
+import Control.Concurrent
 
 import Data.Functor
 
 import System.Posix.Unistd (sleep)
-import System.Posix.Process (forkProcess)
-import System.Posix.Signals (sigTERM, signalProcess)
 
 import qualified Network.Shed.Httpd as Httpd
 
@@ -48,10 +46,7 @@ testUrl p = "http://localhost:" ++ show portNum ++ p
 
 main :: IO ()
 main = do
-  pid <- forkProcess (() <$ Httpd.initServer portNum processRequest)
-  _   <- sleep 1 -- Give the server time to start :-(
-  finally (defaultMain tests)
-          (stopServer pid)
-  where
-    stopServer = signalProcess sigTERM
+  _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
+  _ <- sleep 1 -- Give the server time to start :-(
+  defaultMain tests
 
