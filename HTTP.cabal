@@ -98,7 +98,7 @@ Test-Suite test
   main-is: test/httpTests.hs
 
   build-depends:     HUnit,
-                     http-shed,
+                     httpd-shed,
                      haskell98,
                      test-framework,
                      test-framework-hunit
