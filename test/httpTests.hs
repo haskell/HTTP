@@ -2,7 +2,7 @@ import Control.Concurrent
 
 import Data.Functor
 
-import System.Posix.Unistd (sleep)
+import Control.Concurrent (threadDelay)
 
 import qualified Network.Shed.Httpd as Httpd
 
@@ -47,6 +47,6 @@ testUrl p = "http://localhost:" ++ show portNum ++ p
 main :: IO ()
 main = do
   _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
-  _ <- sleep 1 -- Give the server time to start :-(
+  _ <- threadDelay 1000000 -- Give the server time to start :-(
   defaultMain tests
 

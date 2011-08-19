@@ -99,7 +99,6 @@ Test-Suite test
 
   build-depends:     HUnit,
                      http-shed,
-                     unix,
                      haskell98,
                      test-framework,
                      test-framework-hunit
