@@ -23,7 +23,8 @@ module Network.StreamDebugger
 
 import Network.Stream (Stream(..))
 import System.IO
-   ( Handle, hFlush, hPutStrLn, IOMode(AppendMode), hClose, openFile
+   ( Handle, hFlush, hPutStrLn, IOMode(AppendMode), hClose, openFile,
+     hSetBuffering, BufferMode(NoBuffering)
    )
 import Network.TCP ( HandleStream, HStream, 
        		     StreamHooks(..), setStreamHooks, getStreamHooks )
@@ -75,6 +76,7 @@ debugByteStream file stream = do
       | hook_name h == file -> return stream -- reuse the stream hooks.
      _ -> do
        h <- openFile file AppendMode
+       hSetBuffering h NoBuffering
        hPutStrLn h ("File \"" ++ file ++ "\" opened for appending.")
        setStreamHooks stream (debugStreamHooks h file)
        return stream
