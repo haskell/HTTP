@@ -35,6 +35,29 @@ browserNoCookie = do
   assertEqual "HTTP status code" (2, 0, 0) code
 
 
+-- Regression test
+--  * Browser sends vanilla request to server
+--  * Server sets one cookie "hello=world"
+--  * Browser sends a second request
+--
+-- Expected: Server gets single cookie with "hello=world"
+-- Actual:   Server gets 3 extra cookies, which are actually cookie attributes:
+--           "$Version=0;hello=world;$Domain=localhost:8080\r"
+browserOneCookie :: Assertion
+browserOneCookie = do
+  (_, response) <- browse $ do
+    setOutHandler (const $ return ())
+    -- This first requests returns a single Set-Cookie: hello=world
+    _ <- request $ getRequest (testUrl "/browser/one-cookie/1")
+
+    -- This second request should send a single Cookie: hello=world
+    request $ getRequest (testUrl "/browser/one-cookie/2")
+  let body = rspBody response
+  assertEqual "Receiving expected response" "" body
+  let code = rspCode response
+  assertEqual "HTTP status code" (2, 0, 0) code
+
+
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
@@ -43,6 +66,14 @@ processRequest req = do
       case lookup "Cookie" (Httpd.reqHeaders req) of
         Nothing -> return $ Httpd.Response 200 [] ""
         Just s  -> return $ Httpd.Response 500 [] s
+    ("GET", "/browser/one-cookie/1") ->
+      return $ Httpd.Response 200 [("Set-Cookie", "hello=world")] ""
+    ("GET", "/browser/one-cookie/2") ->
+      case lookup "Cookie" (Httpd.reqHeaders req) of
+        -- TODO: is it correct to expect the \r at the end?
+        Just "hello=world\r" -> return $ Httpd.Response 200 [] ""
+        Just s               -> return $ Httpd.Response 500 [] s
+        Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
     _                     -> return $ Httpd.Response 500 [] "Unknown request"
 
 getResponseCode :: Result (Response a) -> IO ResponseCode
@@ -55,6 +86,7 @@ tests =
     ]
   , testGroup "Browser tests"
     [ testCase "No cookie header" browserNoCookie
+    , testCase "One cookie" browserOneCookie
     ]
   ]
 
