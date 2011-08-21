@@ -158,11 +158,11 @@ headerToChallenge baseURI (Header _ str) =
 
         cprops = sepBy1 cprop comma
 
-        comma = do { spaces ; char ',' ; spaces }
+        comma = do { spaces ; _ <- char ',' ; spaces }
 
         cprop =
             do { nm <- word
-               ; char '='
+               ; _ <- char '='
                ; val <- quotedstring
                ; return (map toLower nm,val)
                }
@@ -210,9 +210,9 @@ headerToChallenge baseURI (Header _ str) =
 
 word, quotedstring :: Parser String
 quotedstring =
-    do { char '"'  -- "
+    do { _ <- char '"'  -- "
        ; str <- many (satisfy $ not . (=='"'))
-       ; char '"'
+       ; _ <- char '"'
        ; return str
        }
 

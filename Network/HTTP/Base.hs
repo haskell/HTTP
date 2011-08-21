@@ -800,7 +800,7 @@ chunkedTransferC bufOps readL readBlk acc n = do
 	 case some of
 	   Left e -> return (Left e)
 	   Right cdata -> do
-	       readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
+	       _ <- readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
 	       chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
      where
       size 
