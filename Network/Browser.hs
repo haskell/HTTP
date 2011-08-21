@@ -733,7 +733,7 @@ request' nullVal rqState rq = do
        case auth of
          Nothing -> return rq
          Just x  -> return (insertHeader HdrAuthorization (withAuthority x rq) rq)
-   let rq'' = insertHeaders (map cookieToHeader cookies) rq'
+   let rq'' = if not $ null cookies then insertHeaders [cookiesToHeader cookies] rq' else rq'
    p <- getProxy
    def_ua <- getBS bsUserAgent
    let defaultOpts = 

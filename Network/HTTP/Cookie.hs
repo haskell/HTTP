@@ -17,7 +17,7 @@ module Network.HTTP.Cookie
        , cookieMatch          -- :: (String,String) -> Cookie -> Bool
 
           -- functions for translating cookies and headers.
-       , cookieToHeader       -- :: Cookie -> Header
+       , cookiesToHeader      -- :: [Cookie] -> Header
        , processCookieHeaders -- :: String -> [Header] -> ([String], [Cookie])
        ) where
 
@@ -54,18 +54,16 @@ instance Eq Cookie where
             && ckName a == ckName b 
             && ckPath a == ckPath b
 
--- | @cookieToHeader ck@ serialises a @Cookie@ to an HTTP request header.
-cookieToHeader :: Cookie -> Header
-cookieToHeader ck = Header HdrCookie text
-    where
-        path = maybe "" (";$Path="++) (ckPath ck)
-        text = "$Version=" ++ fromMaybe "0" (ckVersion ck)
-             ++ ';' : ckName ck ++ "=" ++ ckValue ck ++ path
-             ++ (case ckPath ck of
-                     Nothing -> ""
-                     Just x  -> ";$Path=" ++ x)
-             ++ ";$Domain=" ++ ckDomain ck
+-- | @cookieToHeaders ck@ serialises @Cookie@s to an HTTP request header.
+cookiesToHeader :: [Cookie] -> Header
+cookiesToHeader cs = Header HdrCookie (mkCookieHeaderValue cs)
 
+-- | Turn a list of cookies into a key=value pair list, separated by
+-- semicolons.
+mkCookieHeaderValue :: [Cookie] -> String
+mkCookieHeaderValue = intercalate ";" . map mkCookieHeaderValue1
+  where
+    mkCookieHeaderValue1 c = ckName c ++ "=" ++ ckValue c
 
 -- | @cookieMatch (domain,path) ck@ performs the standard cookie
 -- match wrt the given domain and path. 
