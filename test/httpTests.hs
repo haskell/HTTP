@@ -11,6 +11,9 @@ import Network.HTTP
 import Network.Stream (Result)
 import Network.URI (uriPath)
 
+import System.Environment (getArgs)
+import System.IO (getChar)
+
 import Test.Framework (defaultMain, testGroup)
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -98,7 +101,16 @@ testUrl p = "http://localhost:" ++ show portNum ++ p
 
 main :: IO ()
 main = do
-  _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
-  _ <- threadDelay 1000000 -- Give the server time to start :-(
-  defaultMain tests
+  args <- getArgs
+  case args of
+     ["server"] -> do -- run only the harness server for diagnostic/debug purposes
+                      -- halt on any keypress
+        _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
+        _ <- getChar
+        return ()
+     [] -> do -- run the test harness as normal
+        _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
+        _ <- threadDelay 1000000 -- Give the server time to start :-(
+        defaultMain tests
+     _ -> error "Unknown arguments to test harness"
 
