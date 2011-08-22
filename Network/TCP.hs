@@ -205,14 +205,16 @@ openTCPConnection :: BufferType ty => String -> Int -> IO (HandleStream ty)
 openTCPConnection uri port = openTCPConnection_ uri port False
 
 openTCPConnection_ :: BufferType ty => String -> Int -> Bool -> IO (HandleStream ty)
-openTCPConnection_ uri port stashInput = do
-    s <- socket AF_INET Stream 6
+openTCPConnection_ uri port stashInput = withSocket $ \s -> do
     setSocketOption s KeepAlive 1
     hostA <- getHostAddr uri
     let a = SockAddrInet (toEnum port) hostA
-    catchIO (connect s a) (\e -> sClose s >> ioError e)
+    connect s a
     socketConnection_ uri s stashInput
  where
+  withSocket action = do
+    s <- socket AF_INET Stream 6
+    catchIO (action s) (\e -> sClose s >> ioError e)
   getHostAddr h = do
     catchIO (inet_addr uri)    -- handles ascii IP numbers
             (\ _ -> do
