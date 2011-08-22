@@ -60,6 +60,19 @@ browserOneCookie = do
   let code = rspCode response
   assertEqual "HTTP status code" (2, 0, 0) code
 
+browserTwoCookies :: Assertion
+browserTwoCookies = do
+  (_, response) <- browse $ do
+    setOutHandler (const $ return ())
+    -- This first request returns two cookies
+    _ <- request $ getRequest (testUrl "/browser/two-cookies/1")
+
+    -- This second request should send them back
+    request $ getRequest (testUrl "/browser/two-cookies/2")
+  let body = rspBody response
+  assertEqual "Receiving expected response" "" body
+  let code = rspCode response
+  assertEqual "HTTP status code" (2, 0, 0) code
 
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
@@ -77,6 +90,18 @@ processRequest req = do
         Just "hello=world\r" -> return $ Httpd.Response 200 [] ""
         Just s               -> return $ Httpd.Response 500 [] s
         Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
+    ("GET", "/browser/two-cookies/1") ->
+      return $ Httpd.Response 200
+                              [("Set-Cookie", "hello=world")
+                              ,("Set-Cookie", "goodbye=cruelworld")]
+                              ""
+    ("GET", "/browser/two-cookies/2") ->
+      case lookup "Cookie" (Httpd.reqHeaders req) of
+        -- TODO: is it correct to expect the \r at the end?
+        -- TODO generalise the cookie parsing to allow for whitespace/ordering variations
+        Just "goodbye=cruelworld; hello=world\r" -> return $ Httpd.Response 200 [] ""
+        Just s               -> return $ Httpd.Response 500 [] s
+        Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
     _                     -> return $ Httpd.Response 500 [] "Unknown request"
 
 getResponseCode :: Result (Response a) -> IO ResponseCode
@@ -90,6 +115,7 @@ tests =
   , testGroup "Browser tests"
     [ testCase "No cookie header" browserNoCookie
     , testCase "One cookie" browserOneCookie
+    , testCase "Two cookies" browserTwoCookies
     ]
   ]
 
