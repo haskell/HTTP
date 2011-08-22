@@ -120,7 +120,7 @@ tests =
   ]
 
 portNum :: Int
-portNum = 8080
+portNum = 5812
 
 testUrl :: String -> String
 testUrl p = "http://localhost:" ++ show portNum ++ p
