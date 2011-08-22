@@ -61,7 +61,7 @@ cookiesToHeader cs = Header HdrCookie (mkCookieHeaderValue cs)
 -- | Turn a list of cookies into a key=value pair list, separated by
 -- semicolons.
 mkCookieHeaderValue :: [Cookie] -> String
-mkCookieHeaderValue = intercalate ";" . map mkCookieHeaderValue1
+mkCookieHeaderValue = intercalate "; " . map mkCookieHeaderValue1
   where
     mkCookieHeaderValue1 c = ckName c ++ "=" ++ ckValue c
 
