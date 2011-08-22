@@ -1,6 +1,6 @@
 import Control.Concurrent
 
-import Data.Functor
+import Control.Applicative ((<$))
 
 import Control.Concurrent (threadDelay)
 
