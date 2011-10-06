@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses, GeneralizedNewtypeDeriving, CPP #-}
 {- |
 
 Module      :  Network.Browser
@@ -136,8 +136,12 @@ import Network.BufferType
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
-import Control.Applicative (Applicative, (<$>))
+import Control.Applicative (Applicative (..), (<$>))
+#ifdef MTL1
+import Control.Monad (filterM, when, ap)
+#else
 import Control.Monad (filterM, when)
+#endif
 import Control.Monad.State (StateT (..), MonadIO (..), modify, gets, withStateT, evalStateT, MonadState (..))
 
 import qualified System.IO
@@ -410,7 +414,15 @@ instance Show (BrowserState t) where
 -- | @BrowserAction@ is the IO monad, but carrying along a 'BrowserState'.
 newtype BrowserAction conn a
  = BA { unBA :: StateT (BrowserState conn) IO a }
+#ifdef MTL1
+ deriving (Functor, Monad, MonadIO, MonadState (BrowserState conn))
+
+instance Applicative (BrowserAction conn) where
+  pure  = return
+  (<*>) = ap
+#else
  deriving (Functor, Applicative, Monad, MonadIO, MonadState (BrowserState conn))
+#endif
 
 runBA :: BrowserState conn -> BrowserAction conn a -> IO a
 runBA bs = flip evalStateT bs . unBA
@@ -430,8 +442,7 @@ defaultBrowserState = res
      , bsCookies          = []
      , bsCookieFilter     = defaultCookieFilter
      , bsAuthorityGen     = \ _uri _realm -> do
-          bsErr res "No action for prompting/generating user+password credentials \
-                     \ provided (use: setAuthorityGen); returning Nothing"
+          bsErr res "No action for prompting/generating user+password credentials provided (use: setAuthorityGen); returning Nothing"
           return Nothing
      , bsAuthorities      = []
      , bsAllowRedirects   = True
