@@ -949,12 +949,12 @@ dorequest :: (HStream ty)
 	                   (Result (Response ty))
 dorequest hst rqst = do
   pool <- gets bsConnectionPool
-  conn <- liftIO $ filterM (\c -> c `isTCPConnectedTo` uriAuthToString hst) pool
+  let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
+  conn <- liftIO $ filterM (\c -> c `isTCPConnectedTo` EndPoint (uriRegName hst) uPort) pool
   rsp <- 
     case conn of
       [] -> do 
         out ("Creating new connection to " ++ uriAuthToString hst)
-        let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
 	reportEvent OpenConnection (show (rqURI rqst))
         c <- liftIO $ openStream (uriRegName hst) uPort
 	updateConnectionPool c

@@ -15,6 +15,7 @@
 -----------------------------------------------------------------------------
 module Network.TCP
    ( Connection
+   , EndPoint(..)
    , openTCPPort
    , isConnectedTo
 
@@ -77,12 +78,18 @@ newtype Connection = Connection (HandleStream String)
 
 newtype HandleStream a = HandleStream {getRef :: MVar (Conn a)}
 
+data EndPoint = EndPoint { epHost :: String, epPort :: Int }
+
+instance Eq EndPoint where
+   EndPoint host1 port1 == EndPoint host2 port2 =
+     map toLower host1 == map toLower host2 && port1 == port2
+
 data Conn a 
  = MkConn { connSock      :: ! Socket
 	  , connHandle    :: Handle
           , connBuffer    :: BufferOp a
 	  , connInput     :: Maybe a
-          , connHost      :: String
+          , connEndPoint  :: EndPoint
 	  , connHooks     :: Maybe (StreamHooks a)
 	  , connCloseEOF  :: Bool -- True => close socket upon reaching end-of-stream.
           }
@@ -135,7 +142,7 @@ getStreamHooks h = readMVar (getRef h) >>= return.connHooks
 -- 
 class BufferType bufType => HStream bufType where
   openStream       :: String -> Int -> IO (HandleStream bufType)
-  openSocketStream :: String -> Socket -> IO (HandleStream bufType)
+  openSocketStream :: String -> Int -> Socket -> IO (HandleStream bufType)
   readLine         :: HandleStream bufType -> IO (Result bufType)
   readBlock        :: HandleStream bufType -> Int -> IO (Result bufType)
   writeBlock       :: HandleStream bufType -> bufType -> IO (Result ())
@@ -155,7 +162,7 @@ instance HStream Strict.ByteString where
 
 instance HStream Lazy.ByteString where
     openStream       = \ a b -> openTCPConnection_ a b True
-    openSocketStream = \ a b -> socketConnection_ a b True
+    openSocketStream = \ a b c -> socketConnection_ a b c True
     readBlock c n    = readBlockBS c n
     readLine c       = readLineBS c
     writeBlock c str = writeBlockBS c str
@@ -210,7 +217,7 @@ openTCPConnection_ uri port stashInput = withSocket $ \s -> do
     hostA <- getHostAddr uri
     let a = SockAddrInet (toEnum port) hostA
     connect s a
-    socketConnection_ uri s stashInput
+    socketConnection_ uri port s stashInput
  where
   withSocket action = do
     s <- socket AF_INET Stream 6
@@ -230,18 +237,20 @@ openTCPConnection_ uri port stashInput = withSocket $ \s -> do
 -- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
 socketConnection :: BufferType ty
                  => String
+                 -> Int
 		 -> Socket
 		 -> IO (HandleStream ty)
-socketConnection hst sock = socketConnection_ hst sock False
+socketConnection hst port sock = socketConnection_ hst port sock False
 
 -- Internal function used to control the on-demand streaming of input
 -- for /lazy/ streams.
 socketConnection_ :: BufferType ty
                   => String
+                  -> Int
 		  -> Socket
 		  -> Bool
 		  -> IO (HandleStream ty)
-socketConnection_ hst sock stashInput = do
+socketConnection_ hst port sock stashInput = do
     h <- socketToHandle sock ReadWriteMode
     mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
     let conn = MkConn 
@@ -249,7 +258,7 @@ socketConnection_ hst sock stashInput = do
 	 , connHandle   = h
 	 , connBuffer   = bufferOps
 	 , connInput    = mb
-	 , connHost     = hst
+	 , connEndPoint = EndPoint hst port
 	 , connHooks    = Nothing
 	 , connCloseEOF = False
 	 }
@@ -286,23 +295,23 @@ closeConnection ref readL = do
 -- | Checks both that the underlying Socket is connected
 -- and that the connection peer matches the given
 -- host name (which is recorded locally).
-isConnectedTo :: Connection -> String -> IO Bool
-isConnectedTo (Connection conn) name = do
+isConnectedTo :: Connection -> EndPoint -> IO Bool
+isConnectedTo (Connection conn) endPoint = do
    v <- readMVar (getRef conn)
    case v of
      ConnClosed -> print "aa" >> return False
      _ 
-      | map toLower (connHost v) == map toLower name ->
+      | connEndPoint v == endPoint ->
           catch (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
-isTCPConnectedTo :: HandleStream ty -> String -> IO Bool
-isTCPConnectedTo conn name = do
+isTCPConnectedTo :: HandleStream ty -> EndPoint -> IO Bool
+isTCPConnectedTo conn endPoint = do
    v <- readMVar (getRef conn)
    case v of
      ConnClosed -> return False
      _ 
-      | map toLower (connHost v) == map toLower name -> 
+      | connEndPoint v == endPoint ->
           catch (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
