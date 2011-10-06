@@ -14,7 +14,7 @@ import Network.URI (uriPath)
 import System.Environment (getArgs)
 import System.IO (getChar)
 
-import Test.Framework (defaultMain, testGroup)
+import Test.Framework (defaultMainWithArgs, testGroup)
 import Test.Framework.Providers.HUnit
 import Test.HUnit
 
@@ -74,10 +74,133 @@ browserTwoCookies = do
   let code = rspCode response
   assertEqual "HTTP status code" (2, 0, 0) code
 
+browserAlt :: Assertion
+browserAlt = do
+  (response) <- browse $ do
+
+    setOutHandler (const $ return ())
+
+    (_, response1) <- request $ getRequest (altTestUrl "/basic/get")
+
+    return response1
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server.")
+              (rspCode response, rspBody response)
+
+-- test that requests to multiple servers on the same host
+-- don't get confused with each other
+browserBoth :: Assertion
+browserBoth = do
+  (response1, response2) <- browse $ do
+    setOutHandler (const $ return ())
+
+    (_, response1) <- request $ getRequest (testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (altTestUrl "/basic/get")
+
+    return (response1, response2)
+
+  assertEqual "Receiving expected response from main server"
+              ((2, 0, 0), "It works.")
+              (rspCode response1, rspBody response1)
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server.")
+              (rspCode response2, rspBody response2)
+
+-- test that requests to multiple servers on the same host
+-- don't get confused with each other
+browserBothReversed :: Assertion
+browserBothReversed = do
+  (response1, response2) <- browse $ do
+    setOutHandler (const $ return ())
+
+    (_, response2) <- request $ getRequest (altTestUrl "/basic/get")
+    (_, response1) <- request $ getRequest (testUrl "/basic/get")
+
+    return (response1, response2)
+
+  assertEqual "Receiving expected response from main server"
+              ((2, 0, 0), "It works.")
+              (rspCode response1, rspBody response1)
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server.")
+              (rspCode response2, rspBody response2)
+
+
+browserTwoRequests :: Assertion
+browserTwoRequests = do
+  (response1, response2) <- browse $ do
+    setOutHandler (const $ return ())
+
+    (_, response1) <- request $ getRequest (testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (testUrl "/basic/get2")
+
+    return (response1, response2)
+
+  assertEqual "Receiving expected response from main server"
+              ((2, 0, 0), "It works.")
+              (rspCode response1, rspBody response1)
+
+  assertEqual "Receiving expected response from main server"
+              ((2, 0, 0), "It works (2).")
+              (rspCode response2, rspBody response2)
+
+
+browserTwoRequestsAlt :: Assertion
+browserTwoRequestsAlt = do
+  (response1, response2) <- browse $ do
+
+    setOutHandler (const $ return ())
+
+    (_, response1) <- request $ getRequest (altTestUrl "/basic/get")
+    (_, response2) <- request $ getRequest (altTestUrl "/basic/get2")
+
+    return (response1, response2)
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server.")
+              (rspCode response1, rspBody response1)
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server (2).")
+              (rspCode response2, rspBody response2)
+
+browserTwoRequestsBoth :: Assertion
+browserTwoRequestsBoth = do
+  (response1, response2, response3, response4) <- browse $ do
+    setOutHandler (const $ return ())
+
+    (_, response1) <- request $ getRequest (testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (altTestUrl "/basic/get")
+    (_, response3) <- request $ getRequest (testUrl "/basic/get2")
+    (_, response4) <- request $ getRequest (altTestUrl "/basic/get2")
+
+    return (response1, response2, response3, response4)
+
+  assertEqual "Receiving expected response from main server"
+              ((2, 0, 0), "It works.")
+              (rspCode response1, rspBody response1)
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server.")
+              (rspCode response2, rspBody response2)
+
+  assertEqual "Receiving expected response from main server"
+              ((2, 0, 0), "It works (2).")
+              (rspCode response3, rspBody response3)
+
+  assertEqual "Receiving expected response from alternate server"
+              ((2, 0, 0), "This is the alternate server (2).")
+              (rspCode response4, rspBody response4)
+
+
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "It works."
+    ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "It works (2)."
     ("GET", "/browser/no-cookie") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
         Nothing -> return $ Httpd.Response 200 [] ""
@@ -104,11 +227,21 @@ processRequest req = do
         Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
     _                     -> return $ Httpd.Response 500 [] "Unknown request"
 
+altProcessRequest :: Httpd.Request -> IO Httpd.Response
+altProcessRequest req = do
+  case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
+    ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "This is the alternate server."
+    ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "This is the alternate server (2)."
+    _                     -> return $ Httpd.Response 500 [] "Unknown request"
+
 getResponseCode :: Result (Response a) -> IO ResponseCode
 getResponseCode (Left err) = fail (show err)
 getResponseCode (Right r)  = return (rspCode r)
 
-tests =
+maybeTestGroup True name xs = testGroup name xs
+maybeTestGroup False name _ = testGroup name []
+
+tests port80Server =
   [ testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
     ]
@@ -116,27 +249,52 @@ tests =
     [ testCase "No cookie header" browserNoCookie
     , testCase "One cookie" browserOneCookie
     , testCase "Two cookies" browserTwoCookies
+    -- github issue 14
+    -- , testCase "Two requests" browserTwoRequests
+    ]
+  , maybeTestGroup port80Server "Multiple servers"
+    [ testCase "Alternate server" browserAlt
+    , testCase "Both servers" browserBoth
+    , testCase "Both servers (reversed)" browserBothReversed
+    -- github issue 14
+    -- , testCase "Two requests - alternate server" browserTwoRequestsAlt
+    -- , testCase "Two requests - both servers" browserTwoRequestsBoth
     ]
   ]
 
 portNum :: Int
 portNum = 5812
 
+altPortNum :: Int
+altPortNum = 80
+
+urlRoot :: Int -> String
+urlRoot 80 = "http://localhost"
+urlRoot n = "http://localhost:" ++ show n
+
 testUrl :: String -> String
-testUrl p = "http://localhost:" ++ show portNum ++ p
+testUrl p = urlRoot portNum ++ p
+
+altTestUrl :: String -> String
+altTestUrl p = urlRoot altPortNum ++ p
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
-     ["server"] -> do -- run only the harness server for diagnostic/debug purposes
+     ["server"] -> do -- run only the harness servers for diagnostic/debug purposes
                       -- halt on any keypress
         _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
+        _ <- forkIO (() <$ Httpd.initServer altPortNum altProcessRequest)
         _ <- getChar
         return ()
-     [] -> do -- run the test harness as normal
+     ("--withport80":args) -> do
+        _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
+        _ <- forkIO (() <$ Httpd.initServer altPortNum altProcessRequest)
+        _ <- threadDelay 1000000 -- Give the server time to start :-(
+        defaultMainWithArgs (tests True) args
+     args -> do -- run the test harness as normal
         _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMain tests
-     _ -> error "Unknown arguments to test harness"
+        defaultMainWithArgs (tests False) args
 
