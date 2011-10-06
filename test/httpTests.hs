@@ -50,6 +50,7 @@ browserOneCookie :: Assertion
 browserOneCookie = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
+    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     -- This first requests returns a single Set-Cookie: hello=world
     _ <- request $ getRequest (testUrl "/browser/one-cookie/1")
 
@@ -64,6 +65,7 @@ browserTwoCookies :: Assertion
 browserTwoCookies = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
+    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     -- This first request returns two cookies
     _ <- request $ getRequest (testUrl "/browser/two-cookies/1")
 
