@@ -67,6 +67,9 @@ module Network.Browser
        , setMaxErrorRetries  -- :: Maybe Int -> BrowserAction t ()
        , getMaxErrorRetries  -- :: BrowserAction t (Maybe Int)
 
+       , setMaxPoolSize     -- :: Int -> BrowserAction t ()
+       , getMaxPoolSize     -- :: BrowserAction t (Maybe Int)
+
        , setMaxAuthAttempts  -- :: Maybe Int -> BrowserAction t ()
        , getMaxAuthAttempts  -- :: BrowserAction t (Maybe Int)
 
@@ -133,7 +136,7 @@ import Network.BufferType
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
-import Control.Applicative (Applicative)
+import Control.Applicative (Applicative, (<$>))
 import Control.Monad (filterM, when)
 import Control.Monad.State (StateT (..), MonadIO (..), modify, gets, withStateT, evalStateT, MonadState (..))
 
@@ -388,6 +391,7 @@ data BrowserState connection
       , bsMaxRedirects    :: Maybe Int
       , bsMaxErrorRetries :: Maybe Int
       , bsMaxAuthAttempts :: Maybe Int
+      , bsMaxPoolSize     :: Maybe Int
       , bsConnectionPool  :: [connection]
       , bsCheckProxy      :: Bool
       , bsProxy           :: Proxy
@@ -435,6 +439,7 @@ defaultBrowserState = res
      , bsMaxRedirects     = Nothing
      , bsMaxErrorRetries  = Nothing
      , bsMaxAuthAttempts  = Nothing
+     , bsMaxPoolSize      = Nothing
      , bsConnectionPool   = []
      , bsCheckProxy       = defaultAutoProxyDetect
      , bsProxy            = noProxy
@@ -511,6 +516,17 @@ setMaxRedirects c
 -- If @Nothing@, the "Network.Browser"'s default is used.
 getMaxRedirects :: BrowserAction t (Maybe Int)
 getMaxRedirects = gets bsMaxRedirects
+
+-- | @setMaxPoolSize maxCount@ sets the maximum size of the connection pool
+-- that is used to cache connections between requests
+setMaxPoolSize :: Maybe Int -> BrowserAction t ()
+setMaxPoolSize c = modify (\b -> b{bsMaxPoolSize=c})
+
+-- | @getMaxPoolSize@ gets the maximum size of the connection pool
+-- that is used to cache connections between requests.
+-- If @Nothing@, the "Network.Browser"'s default is used.
+getMaxPoolSize :: BrowserAction t (Maybe Int)
+getMaxPoolSize = gets bsMaxPoolSize
 
 -- | @setProxy p@ will disable proxy usage if @p@ is @NoProxy@.
 -- If @p@ is @Proxy proxyURL mbAuth@, then @proxyURL@ is interpreted
@@ -976,17 +992,18 @@ updateConnectionPool :: HStream hTy
 updateConnectionPool c = do
    pool <- gets bsConnectionPool
    let len_pool = length pool
+   maxPoolSize <- fromMaybe defaultMaxPoolSize <$> gets bsMaxPoolSize
    when (len_pool > maxPoolSize)
         (liftIO $ close (last pool))
    let pool' 
 	| len_pool > maxPoolSize = init pool
 	| otherwise              = pool
-   modify (\b -> b { bsConnectionPool=c:pool' })
+   when (maxPoolSize > 0) $ modify (\b -> b { bsConnectionPool=c:pool' })
    return ()
                              
--- | Maximum number of open connections we are willing to have active.
-maxPoolSize :: Int
-maxPoolSize = 5
+-- | Default maximum number of open connections we are willing to have active.
+defaultMaxPoolSize :: Int
+defaultMaxPoolSize = 5
 
 handleCookies :: URI -> String -> [Header] -> BrowserAction t ()
 handleCookies _   _              [] = return () -- cut short the silliness.
