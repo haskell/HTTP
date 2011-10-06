@@ -248,11 +248,16 @@ tests port80Server =
     [ testCase "Basic GET request" basicGetRequest
     ]
   , testGroup "Browser tests"
-    [ testCase "No cookie header" browserNoCookie
-    , testCase "One cookie" browserOneCookie
-    , testCase "Two cookies" browserTwoCookies
-    -- github issue 14
-    -- , testCase "Two requests" browserTwoRequests
+    [ testGroup "Basic"
+      [
+        -- github issue 14
+        -- testCase "Two requests" browserTwoRequests
+      ]
+    , testGroup "Cookies"
+      [ testCase "No cookie header" browserNoCookie
+      , testCase "One cookie" browserOneCookie
+      , testCase "Two cookies" browserTwoCookies
+      ]
     ]
   , maybeTestGroup port80Server "Multiple servers"
     [ testCase "Alternate server" browserAlt
