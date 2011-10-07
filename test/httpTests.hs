@@ -1,3 +1,4 @@
+{-# LANGUAGE ViewPatterns #-}
 import Control.Concurrent
 
 import Control.Applicative ((<$))
@@ -75,6 +76,27 @@ browserTwoCookies = do
   assertEqual "Receiving expected response" "" body
   let code = rspCode response
   assertEqual "HTTP status code" (2, 0, 0) code
+
+
+browserFollowsRedirect :: Int -> Assertion
+browserFollowsRedirect n = do
+  (_, response) <- browse $ do
+    setOutHandler (const $ return ())
+    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
+    request $ getRequest (testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
+  assertEqual "Receiving expected response from server"
+              ((2, 0, 0), "It works.")
+              (rspCode response, rspBody response)
+
+browserReturnsRedirect :: Int -> Assertion
+browserReturnsRedirect n = do
+  (_, response) <- browse $ do
+    setOutHandler (const $ return ())
+    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
+    request $ getRequest (testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
+  assertEqual "Receiving expected response from server"
+              ((n `div` 100, n `mod` 100 `div` 10, n `mod` 10), "")
+              (rspCode response, rspBody response)
 
 browserAlt :: Assertion
 browserAlt = do
@@ -197,6 +219,16 @@ browserTwoRequestsBoth = do
               ((2, 0, 0), "This is the alternate server (2).")
               (rspCode response4, rspBody response4)
 
+hasPrefix :: String -> String -> Maybe String
+hasPrefix [] ys = Just ys
+hasPrefix (x:xs) (y:ys) | x == y = hasPrefix xs ys
+hasPrefix _ _ = Nothing
+
+maybeRead :: Read a => String -> Maybe a
+maybeRead s =
+   case reads s of
+     [(v, "")] -> Just v
+     _ -> Nothing
 
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
@@ -227,6 +259,8 @@ processRequest req = do
         Just "goodbye=cruelworld; hello=world\r" -> return $ Httpd.Response 200 [] ""
         Just s               -> return $ Httpd.Response 500 [] s
         Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
+    ("GET", hasPrefix "/browser/redirect/relative/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
+      return $ Httpd.Response n [("Location", rest)] ""
     _                     -> return $ Httpd.Response 500 [] "Unknown request"
 
 altProcessRequest :: Httpd.Request -> IO Httpd.Response
@@ -257,6 +291,27 @@ tests port80Server =
       [ testCase "No cookie header" browserNoCookie
       , testCase "One cookie" browserOneCookie
       , testCase "Two cookies" browserTwoCookies
+      ]
+    , testGroup "Redirection"
+      [ -- See http://en.wikipedia.org/wiki/List_of_HTTP_status_codes#3xx_Redirection
+        -- 300 Multiple Choices: client has to handle this
+        testCase "300" (browserReturnsRedirect 300)
+        -- 301 Moved Permanently: should follow
+      , testCase "301" (browserFollowsRedirect 301)
+        -- 302 Found: should follow
+      , testCase "302" (browserFollowsRedirect 302)
+        -- 303 See Other: should follow (directly for GETs)
+      , testCase "303" (browserFollowsRedirect 303)
+        -- 304 Not Modified: maybe Browser could do something intelligent based on
+        -- being given locally cached content and sending If-Modified-Since, but it
+        -- doesn't at the moment
+      , testCase "304" (browserReturnsRedirect 304)
+      -- 305 Use Proxy: test harness doesn't have a proxy (yet)
+      -- 306 Switch Proxy: obsolete
+      -- 307 Temporary Redirect: should follow
+      , testCase "307" (browserFollowsRedirect 307)
+      -- 308 Resume Incomplete: no support for Resumable HTTP so client has to handle this
+      , testCase "308" (browserReturnsRedirect 308)
       ]
     ]
   , maybeTestGroup port80Server "Multiple servers"
