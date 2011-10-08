@@ -594,6 +594,13 @@ setDebugLog v = modify (\b -> b {bsDebug=v})
 
 -- | @setUserAgent ua@ sets the current @User-Agent:@ string to @ua@. It
 -- will be used if no explicit user agent header is found in subsequent requests.
+--
+-- A common form of user agent string is @\"name\/version (details)\"@. For
+-- example @\"cabal-install/0.10.2 (HTTP 4000.1.2)\"@. Including the version
+-- of this HTTP package can be helpful if you ever need to track down HTTP
+-- compatability quirks. This version is available via 'httpPackageVersion'.
+-- For more info see <http://en.wikipedia.org/wiki/User_agent>.
+--
 setUserAgent :: String -> BrowserAction t ()
 setUserAgent ua = modify (\b -> b{bsUserAgent=Just ua})
 

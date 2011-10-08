@@ -82,6 +82,7 @@ module Network.HTTP.Base
        , mkRequest
 
        , defaultUserAgent
+       , httpPackageVersion
        , libUA  {- backwards compatibility, will disappear..soon -}
        
        , catchIO
@@ -119,6 +120,9 @@ import Text.ParserCombinators.ReadP
    ( ReadP, readP_to_S, char, (<++), look, munch )
 
 import Control.Exception as Exception (IOException)
+
+import qualified Paths_HTTP as Self (version)
+import Data.Version (showVersion)
 
 -----------------------------------------------------------------
 ------------------ URI Authority parsing ------------------------
@@ -336,11 +340,25 @@ instance HasHeaders (Response a) where
 ------------------------------------------------------------------
 ------------------ Request Building ------------------------------
 ------------------------------------------------------------------
+
+-- | Deprecated. Use 'defaultUserAgent'
 libUA :: String
 libUA = "hs-HTTP-4000.0.9"
+{-# DEPRECATED libUA "Use defaultUserAgent instead (but note the user agent name change)" #-}
 
+-- | A default user agent string. The string is @\"haskell-HTTP/$version\"@
+-- where @$version@ is the version of this HTTP package.
+--
 defaultUserAgent :: String
-defaultUserAgent = libUA
+defaultUserAgent = "haskell-HTTP/" ++ httpPackageVersion
+
+-- | The version of this HTTP package as a string, e.g. @\"4000.1.2\"@. This
+-- may be useful to include in a user agent string so that you can determine
+-- from server logs what version of this package HTTP clients are using.
+-- This can be useful for tracking down HTTP compatibility quirks.
+--
+httpPackageVersion :: String
+httpPackageVersion = showVersion Self.version
 
 defaultGETRequest :: URI -> Request_String
 defaultGETRequest uri = defaultGETRequest_ uri
