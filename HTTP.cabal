@@ -1,6 +1,6 @@
 Name: HTTP
 Version: 4000.1.2
-Cabal-Version: >= 1.2
+Cabal-Version: >= 1.8
 Build-type: Simple
 License: BSD3
 License-file: LICENSE
@@ -15,7 +15,7 @@ Copyright:
   Copyright 2008- Sigbjorn Finne
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Ganesh Sittampalam <ganesh@earth.li>
-Homepage: http://projects.haskell.org/http/
+Homepage: https://github.com/haskell/HTTP
 Category: Network
 Synopsis: A library for client-side HTTP
 Description: 
@@ -49,10 +49,12 @@ Description:
  >               request $ getRequest "http://google.com/"
  >      fmap (take 100) (getResponseBody rsp)
  > 
- .
- Git repository available at <git://github.com/haskell/HTTP.git>
 
 Extra-Source-Files: CHANGES
+
+Source-Repository head
+  type: git
+  location: https://github.com/haskell/HTTP.git
 
 Flag old-base
   description: Old, monolithic base
