@@ -100,5 +100,6 @@ Test-Suite test
   build-depends:     HUnit,
                      httpd-shed,
                      haskell98,
+                     split >= 0.1 && < 0.2,
                      test-framework,
                      test-framework-hunit

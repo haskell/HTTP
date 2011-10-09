@@ -2,15 +2,19 @@
 import Control.Concurrent
 
 import Control.Applicative ((<$))
-
 import Control.Concurrent (threadDelay)
+import Data.Char (isSpace)
+import Data.List.Split (splitOn)
+import Data.Maybe (fromJust)
 
 import qualified Network.Shed.Httpd as Httpd
 
 import Network.Browser
 import Network.HTTP
+import Network.HTTP.Auth
+import Network.HTTP.Headers
 import Network.Stream (Result)
-import Network.URI (uriPath)
+import Network.URI (uriPath, parseURI)
 
 import System.Environment (getArgs)
 import System.IO (getChar)
@@ -28,6 +32,26 @@ basicGetRequest = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
 
+
+basicAuthFailure :: Assertion
+basicAuthFailure = do
+  response <- simpleHTTP (getRequest (testUrl "/auth/basic"))
+  code <- getResponseCode response
+  body <- getResponseBody response
+  assertEqual "HTTP status code" ((4, 0, 1), "Nothing") (code, body)
+
+credentialsBasic = AuthBasic "Testing realm" "test" "password"
+                             (fromJust . parseURI . testUrl $ "/auth/basic")
+
+basicAuthSuccess :: Assertion
+basicAuthSuccess = do
+  let req = getRequest (testUrl "/auth/basic")
+  let authString = withAuthority credentialsBasic req
+  let reqWithAuth = req { rqHeaders = mkHeader HdrAuthorization authString:rqHeaders req }
+  response <- simpleHTTP reqWithAuth
+  code <- getResponseCode response
+  body <- getResponseBody response
+  assertEqual "Receiving expected response" ((2, 0, 0), "Here's the secret") (code, body)
 
 -- A vanilla HTTP request using Browser shouln't send a cookie header
 browserNoCookie :: Assertion
@@ -97,6 +121,42 @@ browserReturnsRedirect n = do
   assertEqual "Receiving expected response from server"
               ((n `div` 100, n `mod` 100 `div` 10, n `mod` 10), "")
               (rspCode response, rspBody response)
+
+authGenBasic _ "Testing realm" = return $ Just ("test", "password")
+authGenBasic _ realm = fail $ "Unexpected realm " ++ realm
+
+browserBasicAuth :: Assertion
+browserBasicAuth = do
+  (_, response) <- browse $ do
+    setOutHandler (const $ return ())
+    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
+
+    setAuthorityGen authGenBasic
+
+    request $ getRequest (testUrl "/auth/basic")
+
+  assertEqual "Receiving expected response from server"
+              ((2, 0, 0), "Here's the secret")
+              (rspCode response, rspBody response)
+
+authGenDigest _ "Digest testing realm" = return $ Just ("test", "digestpassword")
+authGenDigest _ realm = fail $ "Unexpected digest realm " ++ realm
+
+browserDigestAuth :: Assertion
+browserDigestAuth = do
+  (_, response) <- browse $ do
+    setOutHandler (const $ return ())
+    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
+
+    setAuthorityGen authGenDigest
+
+    request $ getRequest (testUrl "/auth/digest")
+
+  assertEqual "Receiving expected response from server"
+              ((2, 0, 0), "Here's the digest secret")
+              (rspCode response, rspBody response)
+
+
 
 browserAlt :: Assertion
 browserAlt = do
@@ -230,11 +290,43 @@ maybeRead s =
      [(v, "")] -> Just v
      _ -> Nothing
 
+splitFields = map (toPair '=' . trim isSpace) . splitOn ","
+
+toPair c str = case break (==c) str of
+                 (left, _:right) -> (left, right)
+                 _ -> error $ "No " ++ show c ++ " in " ++ str
+trim f = dropWhile f . reverse . dropWhile f . reverse
+
+isSubsetOf xs ys = all (`elem` ys) xs
+
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "It works."
     ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "It works (2)."
+
+    ("GET", "/auth/basic") ->
+      case lookup "Authorization" (Httpd.reqHeaders req) of
+        Just "Basic dGVzdDpwYXNzd29yZA==\r" -> return $ Httpd.Response 200 [] "Here's the secret"
+        x -> return $ Httpd.Response 401 [("WWW-Authenticate", "Basic realm=\"Testing realm\"")] (show x)
+
+    ("GET", "/auth/digest") ->
+      case lookup "Authorization" (Httpd.reqHeaders req) of
+        Just (hasPrefix "Digest " -> Just (splitFields -> items))
+          | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
+             ("uri", show (testUrl "/auth/digest")), ("opaque", show "057d"),
+             ("response", show "ace810a3cfb830489a3b48e90a02b2ae")] `isSubsetOf` items
+          -> return $ Httpd.Response 200 [] "Here's the digest secret"
+          | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
+             ("uri", show "/auth/digest"), ("opaque", show "057d"),
+             ("response", show "4845c3faf4dcb125b8dcc88b5c20bb89")] `isSubsetOf` items
+          -> return $ Httpd.Response 200 [] "Here's the digest secret"
+        x -> return $ Httpd.Response
+                        401
+                        [("WWW-Authenticate",
+                          "Digest realm=\"Digest testing realm\", opaque=\"057d\", nonce=\"87e4\"")]
+                        (show x)
+
     ("GET", "/browser/no-cookie") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
         Nothing -> return $ Httpd.Response 200 [] ""
@@ -280,6 +372,8 @@ maybeTestGroup False name _ = testGroup name []
 tests port80Server =
   [ testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
+    , testCase "Basic Auth failure" basicAuthFailure
+    , testCase "Basic Auth success" basicAuthSuccess
     ]
   , testGroup "Browser tests"
     [ testGroup "Basic"
@@ -312,6 +406,10 @@ tests port80Server =
       , testCase "307" (browserFollowsRedirect 307)
       -- 308 Resume Incomplete: no support for Resumable HTTP so client has to handle this
       , testCase "308" (browserReturnsRedirect 308)
+      ]
+    , testGroup "Authentication"
+      [ testCase "Basic" browserBasicAuth
+      , testCase "Digest" browserDigestAuth
       ]
     ]
   , maybeTestGroup port80Server "Multiple servers"
