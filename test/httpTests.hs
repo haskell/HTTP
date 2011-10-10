@@ -32,6 +32,14 @@ basicGetRequest = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
 
+basicPostRequest :: Assertion
+basicPostRequest = do
+  let sendBody = "body"
+  response <- simpleHTTP (postRequest (testUrl "/basic/post") sendBody)
+  code <- getResponseCode response
+  assertEqual "HTTP status code" (2, 0, 0) code
+  body <- getResponseBody response
+  assertEqual "Receiving expected response" sendBody body
 
 basicAuthFailure :: Assertion
 basicAuthFailure = do
@@ -304,6 +312,7 @@ processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "It works."
     ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "It works (2)."
+    ("POST", "/basic/post") -> return $ Httpd.Response 200 [] (Httpd.reqBody req)
 
     ("GET", "/auth/basic") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
@@ -372,6 +381,7 @@ maybeTestGroup False name _ = testGroup name []
 tests port80Server =
   [ testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
+    , testCase "Basic POST request" basicPostRequest
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
     ]
