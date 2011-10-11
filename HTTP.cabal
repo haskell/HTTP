@@ -84,6 +84,7 @@ Library
                  Network.HTTP.Base64,
                  Network.HTTP.MD5Aux,
                  Network.HTTP.Utils
+                 Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
   Build-depends: base >= 2 && < 4.5, network, parsec
   Extensions: FlexibleInstances
@@ -105,11 +106,14 @@ Test-Suite test
 
   build-tools: ghc >= 6.10 && < 7.2
 
-  main-is: test/httpTests.hs
+  hs-source-dirs: test
+  main-is: httpTests.hs
 
-  build-depends:     HUnit,
+  build-depends:     HTTP,
+                     HUnit,
                      httpd-shed,
-                     haskell98,
+                     base >= 2 && < 4.5,
+                     network,
                      split >= 0.1 && < 0.2,
                      test-framework,
                      test-framework-hunit
