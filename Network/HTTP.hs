@@ -148,11 +148,11 @@ getRequest urlString =
 
 -- | @postRequest urlString@ is convenience constructor for POST 'Request's. If
 -- @urlString@ isn\'t a syntactically valid URL, the function raises an error.
-postRequest :: String -> Request_String
-postRequest urlString = 
+postRequest :: String -> String -> Request_String
+postRequest urlString body = 
   case parseURI urlString of
     Nothing -> error ("postRequest: Not a valid URL - " ++ urlString)
-    Just u  -> mkRequest POST u
+    Just u  -> setRequestBody (mkRequest POST u) body
 
 -- | @getResponseBody response@ takes the response of a HTTP requesting action and
 -- tries to extricate the body of the 'Response' @response@. If the request action
