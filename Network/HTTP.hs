@@ -38,6 +38,7 @@
 -- export the same functions, but leaves construction and any normalization of 
 -- @Request@s to the user.
 --
+-- /NOTE:/ This package only supports HTTP; it does not support HTTPS.
 -----------------------------------------------------------------------------
 module Network.HTTP 
        ( module Network.HTTP.Base
