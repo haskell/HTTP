@@ -10,6 +10,8 @@ of the use of @ByteString@s (lazy and strict) was inspired in part by
 Jonas Aadahl et al's experimental work on @ByteString@'ifying the HTTP 
 package a couple of years ago.
 
+This only supports HTTP; it does not support HTTPS.
+
 REQUIREMENTS
 
 * A Haskell implementation such as GHC (http://www.haskell.org/ghc/)
