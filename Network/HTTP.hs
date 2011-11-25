@@ -39,6 +39,7 @@
 -- @Request@s to the user.
 --
 -- /NOTE:/ This package only supports HTTP; it does not support HTTPS.
+-- Attempts to use HTTPS result in an error.
 -----------------------------------------------------------------------------
 module Network.HTTP 
        ( module Network.HTTP.Base
