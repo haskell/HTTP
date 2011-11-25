@@ -59,6 +59,7 @@ module Network.HTTP
        
        , getRequest      -- :: String -> Request_String
        , postRequest     -- :: String -> Request_String
+       , postRequestWithBody -- :: String -> String -> String -> Request_String
        
        , getResponseBody -- :: Requesty ty -> ty
        ) where
@@ -155,6 +156,18 @@ postRequest urlString =
   case parseURI urlString of
     Nothing -> error ("postRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest POST u
+
+-- | @postRequestWithBody urlString typ body@ is convenience constructor for
+-- POST 'Request's. It constructs a request and sets the body as well as
+-- the Content-Type and Content-Length headers. The contents of the body
+-- are forced to calculate the value for the Content-Length header.
+-- If @urlString@ isn\'t a syntactically valid URL, the function raises
+-- an error.
+postRequestWithBody :: String -> String -> String -> Request_String
+postRequestWithBody urlString typ body = 
+  case parseURI urlString of
+    Nothing -> error ("postRequestWithBody: Not a valid URL - " ++ urlString)
+    Just u  -> setRequestBody (mkRequest POST u) (typ, body)
 
 -- | @getResponseBody response@ takes the response of a HTTP requesting action and
 -- tries to extricate the body of the 'Response' @response@. If the request action

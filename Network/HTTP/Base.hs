@@ -80,6 +80,7 @@ module Network.HTTP.Base
        , defaultGETRequest
        , defaultGETRequest_
        , mkRequest
+       , setRequestBody
 
        , defaultUserAgent
        , httpPackageVersion
@@ -391,6 +392,14 @@ mkRequest meth uri = req
             }
 
   empty = buf_empty (toBufOps req)
+
+-- set rqBody, Content-Type and Content-Length headers.
+setRequestBody :: Request_String -> (String, String) -> Request_String
+setRequestBody req (typ, body) = req' { rqBody=body }
+  where
+    req' = replaceHeader HdrContentType typ .
+           replaceHeader HdrContentLength (show $ length body) $
+           req
 
 {-
     -- stub out the user info.

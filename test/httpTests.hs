@@ -41,6 +41,19 @@ secureGetRequest = do
               (Left (userError "https not supported"))
               (fmap show response) -- fmap show because Response isn't in Eq
 
+basicPostRequest :: Assertion
+basicPostRequest = do
+  let sendBody = "body"
+  response <- simpleHTTP $ postRequestWithBody (testUrl "/basic/post")
+                                               "text/plain"
+                                               sendBody
+  code <- getResponseCode response
+  assertEqual "HTTP status code" (2, 0, 0) code
+  body <- getResponseBody response
+  assertEqual "Receiving expected response"
+              (show (Just "text/plain\r", Just "4\r", sendBody))
+              body
+
 basicAuthFailure :: Assertion
 basicAuthFailure = do
   response <- simpleHTTP (getRequest (testUrl "/auth/basic"))
@@ -347,6 +360,11 @@ processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "It works."
     ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "It works (2)."
+    ("POST", "/basic/post") ->
+        let typ = lookup "Content-Type" (Httpd.reqHeaders req)
+            len = lookup "Content-Length" (Httpd.reqHeaders req)
+            body = Httpd.reqBody req
+        in return $ Httpd.Response 200 [] (show (typ, len, body))
 
     ("GET", "/auth/basic") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
@@ -420,6 +438,7 @@ tests port80Server =
   [ testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
     , testCase "Secure GET request" secureGetRequest
+    , testCase "Basic POST request" basicPostRequest
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
     ]
