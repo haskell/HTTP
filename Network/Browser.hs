@@ -733,6 +733,7 @@ request' :: HStream ty
 	 -> BrowserAction (HandleStream ty) (Result (URI,Response ty))
 request' nullVal rqState rq = do
    let uri = rqURI rq
+   failHTTPS uri
    let uria = reqURIAuth rq 
      -- add cookies to request
    cookies <- getCookiesFor (uriAuthToString uria) (uriPath uri)

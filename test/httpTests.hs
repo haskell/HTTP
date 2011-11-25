@@ -3,9 +3,11 @@ import Control.Concurrent
 
 import Control.Applicative ((<$))
 import Control.Concurrent (threadDelay)
+import Control.Exception (try)
 import Data.Char (isSpace)
 import Data.List.Split (splitOn)
 import Data.Maybe (fromJust)
+import System.IO.Error (userError)
 
 import qualified Network.Shed.Httpd as Httpd
 
@@ -32,6 +34,12 @@ basicGetRequest = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
 
+secureGetRequest :: Assertion
+secureGetRequest = do
+  response <- try $ simpleHTTP (getRequest (secureTestUrl "/anything"))
+  assertEqual "Threw expected exception"
+              (Left (userError "https not supported"))
+              (fmap show response) -- fmap show because Response isn't in Eq
 
 basicAuthFailure :: Assertion
 basicAuthFailure = do
@@ -212,6 +220,41 @@ browserBothReversed = do
               ((2, 0, 0), "This is the alternate server.")
               (rspCode response2, rspBody response2)
 
+browserSecureRequest :: Assertion
+browserSecureRequest = do
+  res <- try $ browse $ do
+    setOutHandler (const $ return ())
+
+    request $ getRequest (secureTestUrl "/anything")
+
+  assertEqual "Threw expected exception"
+              (Left (userError "https not supported"))
+              (fmap show res) -- fmap show because Response isn't in Eq
+
+-- in case it tries to reuse the connection
+browserSecureRequestAfterInsecure :: Assertion
+browserSecureRequestAfterInsecure = do
+  res <- try $ browse $ do
+    setOutHandler (const $ return ())
+
+    request $ getRequest (testUrl "/basic/get")
+    request $ getRequest (secureTestUrl "/anything")
+
+  assertEqual "Threw expected exception"
+              (Left (userError "https not supported"))
+              (fmap show res) -- fmap show because Response isn't in Eq
+
+browserRedirectToSecure :: Assertion
+browserRedirectToSecure = do
+  res <- try $ browse $ do
+    setOutHandler (const $ return ())
+    setErrHandler fail
+
+    request $ getRequest (testUrl "/browser/redirect/secure/301/anything")
+
+  assertEqual "Threw expected exception"
+              (Left (userError $ "Unable to handle redirect, unsupported scheme: " ++ secureTestUrl "/anything"))
+              (fmap show res) -- fmap show because Response isn't in Eq
 
 browserTwoRequests :: Assertion
 browserTwoRequests = do
@@ -353,6 +396,10 @@ processRequest req = do
         Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
     ("GET", hasPrefix "/browser/redirect/relative/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
       return $ Httpd.Response n [("Location", rest)] ""
+    ("GET", hasPrefix "/browser/redirect/absolute/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
+      return $ Httpd.Response n [("Location", testUrl rest)] ""
+    ("GET", hasPrefix "/browser/redirect/secure/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
+      return $ Httpd.Response n [("Location", secureTestUrl rest)] ""
     _                     -> return $ Httpd.Response 500 [] "Unknown request"
 
 altProcessRequest :: Httpd.Request -> IO Httpd.Response
@@ -372,6 +419,7 @@ maybeTestGroup False name _ = testGroup name []
 tests port80Server =
   [ testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
+    , testCase "Secure GET request" secureGetRequest
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
     ]
@@ -380,6 +428,12 @@ tests port80Server =
       [
         -- github issue 14
         -- testCase "Two requests" browserTwoRequests
+      ]
+    , testGroup "Secure"
+      [
+        testCase "Secure request" browserSecureRequest
+      , testCase "After insecure" browserSecureRequestAfterInsecure
+      , testCase "Redirection" browserRedirectToSecure
       ]
     , testGroup "Cookies"
       [ testCase "No cookie header" browserNoCookie
@@ -432,11 +486,18 @@ urlRoot :: Int -> String
 urlRoot 80 = "http://localhost"
 urlRoot n = "http://localhost:" ++ show n
 
+secureRoot :: Int -> String
+secureRoot 443 = "https://localhost"
+secureRoot n = "https://localhost:" ++ show n
+
 testUrl :: String -> String
 testUrl p = urlRoot portNum ++ p
 
 altTestUrl :: String -> String
 altTestUrl p = urlRoot altPortNum ++ p
+
+secureTestUrl :: String -> String
+secureTestUrl p = secureRoot portNum ++ p
 
 main :: IO ()
 main = do

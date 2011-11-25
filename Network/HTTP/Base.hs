@@ -93,6 +93,8 @@ module Network.HTTP.Base
        , getResponseVersion
        , setRequestVersion
        , setResponseVersion
+
+       , failHTTPS
        
        ) where
 
@@ -193,6 +195,11 @@ uriAuthPort mbURI u =
 
   default_http  = 80
   default_https = 443
+
+failHTTPS :: Monad m => URI -> m ()
+failHTTPS uri
+  | map toLower (uriScheme uri) == "https:" = fail "https not supported"
+  | otherwise = return ()
 
 -- Fish out the authority from a possibly normalized Request, i.e.,
 -- the information may either be in the request's URI or inside

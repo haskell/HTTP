@@ -53,6 +53,7 @@ import Control.Monad (when)
 simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do 
   auth <- getAuth r
+  failHTTPS (rqURI r)
   c <- openStream (host auth) (fromMaybe 80 (port auth))
   simpleHTTP_ c r
 
@@ -61,6 +62,7 @@ simpleHTTP r = do
 simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
 simpleHTTP_debug httpLogFile r = do 
   auth <- getAuth r
+  failHTTPS (rqURI r)
   c0   <- openStream (host auth) (fromMaybe 80 (port auth))
   c    <- debugByteStream httpLogFile c0
   simpleHTTP_ c r
