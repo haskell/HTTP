@@ -4,15 +4,6 @@ Cabal-Version: >= 1.8
 Build-type: Simple
 License: BSD3
 License-file: LICENSE
-Copyright: 
-  Copyright (c) 2002, Warrick Gray
-  Copyright (c) 2002-2005, Ian Lynagh
-  Copyright (c) 2003-2006, Bjorn Bringert
-  Copyright (c) 2004, Andre Furtado
-  Copyright (c) 2004, Ganesh Sittampalam
-  Copyright (c) 2004-2005, Dominic Steinitz
-  Copyright 2007 Robin Bate Boerop
-  Copyright 2008- Sigbjorn Finne
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Ganesh Sittampalam <http@projects.haskell.org>
 Homepage: https://github.com/haskell/HTTP
