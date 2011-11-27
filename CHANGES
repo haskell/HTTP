@@ -1,6 +1,24 @@
+ * Add a test harness.
+ * Don't leak a socket when getHostAddr throws an exception.
+ * Send cookies in request format, not response format.
+ * Moved BrowserAction to be a StateT IO, with instances for
+   Applicative, MonadIO, MonadState.
+ * Add method to control size of connection pool.
+ * Consider both host and port when reusing connections.
+ * Handle response code 304 "not modified" properly.
+ * Fix digest authentication by fixing md5 output string rep.
+ * Make the default user agent string follow the package version.
+ * Document lack of HTTPS support and fail when clients try
+   to use it instead of silently falling back to HTTP.
+ * Add helper to set the request type and body.
+
+Version 4000.1.2: release 2011-08-11
+ * Turn off buffering for the debug log.
+ * Update installation instructions.
+ * Bump base dependency to support GHC 7.2.
+
 Version 4000.1.1: release 2010-11-28
- * Be tolerant of LF (instead of CRLF which is the spec) in responses
-   Patch by Chris Pettitt <cpettitt@gmail.com>.
+ * Be tolerant of LF (instead of CRLF which is the spec) in responses.
 
 Version 4000.1.0: release 2010-11-09
  * Retroactively fixed CHANGES to refer to 4000.x.x instead of
