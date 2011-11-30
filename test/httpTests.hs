@@ -34,6 +34,13 @@ basicGetRequest = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
 
+basicExample :: Assertion
+basicExample = do
+  result <-
+    -- sample code from Network.HTTP haddock, with URL changed
+    simpleHTTP (getRequest (testUrl "/basic/example")) >>= fmap (take 100) . getResponseBody
+  assertEqual "Receiving expected response" (take 100 haskellOrgText) result
+
 secureGetRequest :: Assertion
 secureGetRequest = do
   response <- try $ simpleHTTP (getRequest (secureTestUrl "/anything"))
@@ -73,6 +80,18 @@ basicAuthSuccess = do
   code <- getResponseCode response
   body <- getResponseBody response
   assertEqual "Receiving expected response" ((2, 0, 0), "Here's the secret") (code, body)
+
+browserExample :: Assertion
+browserExample = do
+  result <-
+    -- sample code from Network.Browser haddock, with URL changed
+    do 
+      (_, rsp)
+         <- Network.Browser.browse $ do
+               setAllowRedirects True -- handle HTTP redirects
+               request $ getRequest (testUrl "/browser/example")
+      return (take 100 (rspBody rsp))
+  assertEqual "Receiving expected response" (take 100 haskellOrgText) result
 
 -- A vanilla HTTP request using Browser shouln't send a cookie header
 browserNoCookie :: Assertion
@@ -355,6 +374,14 @@ trim f = dropWhile f . reverse . dropWhile f . reverse
 
 isSubsetOf xs ys = all (`elem` ys) xs
 
+-- first bits of result text from haskell.org (just to give some representative text)
+haskellOrgText =
+  "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\
+\<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\" dir=\"ltr\">\
+\\t<head>\
+\\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\
+\\t\t\t\t<meta name=\"keywords\" content=\"Haskell,Applications and libraries,Books,Foreign Function Interface,Functional programming,Hac Boston,HakkuTaikai,HaskellImplementorsWorkshop/2011,Haskell Communities and Activities Report,Haskell in education,Haskell in industry\" />"
+
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
@@ -365,6 +392,9 @@ processRequest req = do
             len = lookup "Content-Length" (Httpd.reqHeaders req)
             body = Httpd.reqBody req
         in return $ Httpd.Response 200 [] (show (typ, len, body))
+
+    ("GET", "/basic/example") ->
+      return $ Httpd.Response 200 [] haskellOrgText
 
     ("GET", "/auth/basic") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
@@ -388,6 +418,8 @@ processRequest req = do
                           "Digest realm=\"Digest testing realm\", opaque=\"057d\", nonce=\"87e4\"")]
                         (show x)
 
+    ("GET", "/browser/example") ->
+      return $ Httpd.Response 200 [] haskellOrgText
     ("GET", "/browser/no-cookie") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
         Nothing -> return $ Httpd.Response 200 [] ""
@@ -437,6 +469,7 @@ maybeTestGroup False name _ = testGroup name []
 tests port80Server =
   [ testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
+    , testCase "Network.HTTP example code" basicExample
     , testCase "Secure GET request" secureGetRequest
     , testCase "Basic POST request" basicPostRequest
     , testCase "Basic Auth failure" basicAuthFailure
@@ -447,6 +480,7 @@ tests port80Server =
       [
         -- github issue 14
         -- testCase "Two requests" browserTwoRequests
+        testCase "Network.Browser example code" browserExample
       ]
     , testGroup "Secure"
       [
