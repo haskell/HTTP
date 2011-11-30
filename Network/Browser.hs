@@ -31,7 +31,7 @@ Example use:
 >      (_, rsp)
 >         <- Network.Browser.browse $ do
 >               setAllowRedirects True -- handle HTTP redirects
->               request $ getRequest "www.haskell.org"
+>               request $ getRequest "http://www.haskell.org/"
 >      return (take 100 (rspBody rsp))
  
 -}
