@@ -34,12 +34,12 @@ Description:
  >              -- fetch document and return it (as a 'String'.)
  >      fmap (take 100) (getResponseBody rsp)
  >
- >    do 
- >      rsp <- Network.Browser.browse $ do
+ >    do
+ >      (_, rsp)
+ >         <- Network.Browser.browse $ do
  >               setAllowRedirects True -- handle HTTP redirects
- >               request $ getRequest "http://google.com/"
- >      fmap (take 100) (getResponseBody rsp)
- > 
+ >               request $ getRequest "http://www.haskell.org/"
+ >      return (take 100 (rspBody rsp))
 
 Extra-Source-Files: CHANGES
 

@@ -38,6 +38,7 @@ basicExample :: Assertion
 basicExample = do
   result <-
     -- sample code from Network.HTTP haddock, with URL changed
+    -- Note there's also a copy of the example in the .cabal file
     simpleHTTP (getRequest (testUrl "/basic/example")) >>= fmap (take 100) . getResponseBody
   assertEqual "Receiving expected response" (take 100 haskellOrgText) result
 
@@ -85,6 +86,7 @@ browserExample :: Assertion
 browserExample = do
   result <-
     -- sample code from Network.Browser haddock, with URL changed
+    -- Note there's also a copy of the example in the .cabal file
     do 
       (_, rsp)
          <- Network.Browser.browse $ do
