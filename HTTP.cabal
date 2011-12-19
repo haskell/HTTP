@@ -77,7 +77,7 @@ Library
                  Network.HTTP.Utils
                  Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: base >= 2 && < 4.5, network, parsec
+  Build-depends: base >= 2 && < 4.6, network, parsec
   Extensions: FlexibleInstances
   if flag(old-base)
     Build-depends: base < 3
@@ -95,7 +95,7 @@ Library
 Test-Suite test
   type: exitcode-stdio-1.0
 
-  build-tools: ghc >= 6.10 && < 7.4
+  build-tools: ghc >= 6.10 && < 7.5
 
   hs-source-dirs: test
   main-is: httpTests.hs
@@ -103,7 +103,7 @@ Test-Suite test
   build-depends:     HTTP,
                      HUnit,
                      httpd-shed,
-                     base >= 2 && < 4.5,
+                     base >= 2 && < 4.6,
                      network,
                      split >= 0.1 && < 0.2,
                      test-framework,
