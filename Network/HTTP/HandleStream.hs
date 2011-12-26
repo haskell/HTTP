@@ -1,10 +1,10 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.HandleStream
--- Copyright   :  (c) 2008- Sigbjorn Finne
+-- Copyright   :  See LICENSE file
 -- License     :  BSD
 -- 
--- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
+-- Maintainer  :  Ganesh Sittampalam <http@projects.haskell.org>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --

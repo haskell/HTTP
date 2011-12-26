@@ -1,10 +1,10 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.Stream
--- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004, 2007 Robin Bate Boerop
+-- Copyright   :  See LICENSE file
 -- License     :  BSD
 --
--- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
+-- Maintainer  :  Ganesh Sittampalam <http@projects.haskell.org>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --

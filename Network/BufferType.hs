@@ -3,10 +3,10 @@
 -- |
 -- Module      :  Network.BufferType
 -- Description :  Abstract representation of request and response buffer types.
--- Copyright   :  (c) Warrick Gray 2002, Bjorn Bringert 2003-2004, Simon Foster 2004, 2007 Robin Bate Boerop, 2008 Sigbjorn Finne
+-- Copyright   :  See LICENSE file
 -- License     :  BSD
 --
--- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
+-- Maintainer  :  Ganesh Sittampalam <http@projects.haskell.org>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --

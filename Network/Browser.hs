@@ -2,10 +2,10 @@
 {- |
 
 Module      :  Network.Browser
-Copyright   :  (c) Warrick Gray 2002
+Copyright   :  See LICENSE file
 License     :  BSD
  
-Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
+Maintainer  :  Ganesh Sittampalam <http@projects.haskell.org>
 Stability   :  experimental
 Portability :  non-portable (not tested)
 

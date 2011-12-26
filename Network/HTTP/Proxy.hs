@@ -2,11 +2,10 @@
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Proxy
--- Copyright   :  (c) 2009 Eric Kow
+-- Copyright   :  See LICENSE file
 -- License     :  BSD
 -- 
--- Maintainer  :  Sigbjorn Finne <sigbjorn.finne@gmail.com>
--- Author      :  Eric Kow <E.Y.Kow@brighton.ac.uk>
+-- Maintainer  :  Ganesh Sittampalam <http@projects.haskell.org>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
