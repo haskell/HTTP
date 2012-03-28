@@ -809,7 +809,9 @@ request' nullVal rqState rq = do
    case e_rsp of
     Left v 
      | (reqRetries rqState < fromMaybe defaultMaxErrorRetries mbMx) && 
-       (v == ErrorReset || v == ErrorClosed) ->
+       (v == ErrorReset || v == ErrorClosed) -> do
+       --empty connnection pool in case connection has become invalid
+       modify (\b -> b { bsConnectionPool=[] })       
        request' nullVal rqState{reqRetries=succ (reqRetries rqState)} rq
      | otherwise -> 
        return (Left v)
