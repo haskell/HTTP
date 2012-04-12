@@ -87,7 +87,7 @@ Library
     Build-depends: mtl >= 1.1 && < 1.2
     CPP-Options: -DMTL1
   else
-    Build-depends: mtl >= 2.0 && < 2.1
+    Build-depends: mtl >= 2.0 && < 2.2
 
   if os(windows)
     Build-depends: Win32
