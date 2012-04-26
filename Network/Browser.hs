@@ -495,7 +495,7 @@ ioAction = liftIO
 setErrHandler :: (String -> IO ()) -> BrowserAction t ()
 setErrHandler h = modify (\b -> b { bsErr=h })
 
--- | @setErrHandler@ sets the IO action to call when
+-- | @setOutHandler@ sets the IO action to call when
 -- the browser chatters info on its running. To disable any
 -- such, set it to @const (return ())@.
 setOutHandler :: (String -> IO ()) -> BrowserAction t ()
