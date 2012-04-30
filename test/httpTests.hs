@@ -560,17 +560,17 @@ main = do
   case args of
      ["server"] -> do -- run only the harness servers for diagnostic/debug purposes
                       -- halt on any keypress
-        _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
-        _ <- forkIO (() <$ Httpd.initServer altPortNum altProcessRequest)
+        _ <- forkIO $ Httpd.initServer portNum processRequest
+        _ <- forkIO $ Httpd.initServer altPortNum altProcessRequest
         _ <- getChar
         return ()
      ("--withport80":args) -> do
-        _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
-        _ <- forkIO (() <$ Httpd.initServer altPortNum altProcessRequest)
+        _ <- forkIO $ Httpd.initServer portNum processRequest
+        _ <- forkIO $ Httpd.initServer altPortNum altProcessRequest
         _ <- threadDelay 1000000 -- Give the server time to start :-(
         defaultMainWithArgs (tests True) args
      args -> do -- run the test harness as normal
-        _ <- forkIO (() <$ Httpd.initServer portNum processRequest)
+        _ <- forkIO $ Httpd.initServer portNum processRequest
         _ <- threadDelay 1000000 -- Give the server time to start :-(
         defaultMainWithArgs (tests False) args
 
