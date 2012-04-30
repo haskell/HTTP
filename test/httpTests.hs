@@ -387,21 +387,21 @@ haskellOrgText =
 processRequest :: Httpd.Request -> IO Httpd.Response
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
-    ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "It works."
-    ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "It works (2)."
+    ("GET", "/basic/get") -> return $ Httpd.mkResponse 200 [] "It works."
+    ("GET", "/basic/get2") -> return $ Httpd.mkResponse 200 [] "It works (2)."
     ("POST", "/basic/post") ->
         let typ = lookup "Content-Type" (Httpd.reqHeaders req)
             len = lookup "Content-Length" (Httpd.reqHeaders req)
             body = Httpd.reqBody req
-        in return $ Httpd.Response 200 [] (show (typ, len, body))
+        in return $ Httpd.mkResponse 200 [] (show (typ, len, body))
 
     ("GET", "/basic/example") ->
-      return $ Httpd.Response 200 [] haskellOrgText
+      return $ Httpd.mkResponse 200 [] haskellOrgText
 
     ("GET", "/auth/basic") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
-        Just "Basic dGVzdDpwYXNzd29yZA==\r" -> return $ Httpd.Response 200 [] "Here's the secret"
-        x -> return $ Httpd.Response 401 [("WWW-Authenticate", "Basic realm=\"Testing realm\"")] (show x)
+        Just "Basic dGVzdDpwYXNzd29yZA==\r" -> return $ Httpd.mkResponse 200 [] "Here's the secret"
+        x -> return $ Httpd.mkResponse 401 [("WWW-Authenticate", "Basic realm=\"Testing realm\"")] (show x)
 
     ("GET", "/auth/digest") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
@@ -409,33 +409,33 @@ processRequest req = do
           | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
              ("uri", show (testUrl "/auth/digest")), ("opaque", show "057d"),
              ("response", show "ace810a3cfb830489a3b48e90a02b2ae")] `isSubsetOf` items
-          -> return $ Httpd.Response 200 [] "Here's the digest secret"
+          -> return $ Httpd.mkResponse 200 [] "Here's the digest secret"
           | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
              ("uri", show "/auth/digest"), ("opaque", show "057d"),
              ("response", show "4845c3faf4dcb125b8dcc88b5c20bb89")] `isSubsetOf` items
-          -> return $ Httpd.Response 200 [] "Here's the digest secret"
-        x -> return $ Httpd.Response
+          -> return $ Httpd.mkResponse 200 [] "Here's the digest secret"
+        x -> return $ Httpd.mkResponse
                         401
                         [("WWW-Authenticate",
                           "Digest realm=\"Digest testing realm\", opaque=\"057d\", nonce=\"87e4\"")]
                         (show x)
 
     ("GET", "/browser/example") ->
-      return $ Httpd.Response 200 [] haskellOrgText
+      return $ Httpd.mkResponse 200 [] haskellOrgText
     ("GET", "/browser/no-cookie") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
-        Nothing -> return $ Httpd.Response 200 [] ""
-        Just s  -> return $ Httpd.Response 500 [] s
+        Nothing -> return $ Httpd.mkResponse 200 [] ""
+        Just s  -> return $ Httpd.mkResponse 500 [] s
     ("GET", "/browser/one-cookie/1") ->
-      return $ Httpd.Response 200 [("Set-Cookie", "hello=world")] ""
+      return $ Httpd.mkResponse 200 [("Set-Cookie", "hello=world")] ""
     ("GET", "/browser/one-cookie/2") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
         -- TODO: is it correct to expect the \r at the end?
-        Just "hello=world\r" -> return $ Httpd.Response 200 [] ""
-        Just s               -> return $ Httpd.Response 500 [] s
-        Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
+        Just "hello=world\r" -> return $ Httpd.mkResponse 200 [] ""
+        Just s               -> return $ Httpd.mkResponse 500 [] s
+        Nothing              -> return $ Httpd.mkResponse 500 [] (show $ Httpd.reqHeaders req)
     ("GET", "/browser/two-cookies/1") ->
-      return $ Httpd.Response 200
+      return $ Httpd.mkResponse 200
                               [("Set-Cookie", "hello=world")
                               ,("Set-Cookie", "goodbye=cruelworld")]
                               ""
@@ -443,23 +443,23 @@ processRequest req = do
       case lookup "Cookie" (Httpd.reqHeaders req) of
         -- TODO: is it correct to expect the \r at the end?
         -- TODO generalise the cookie parsing to allow for whitespace/ordering variations
-        Just "goodbye=cruelworld; hello=world\r" -> return $ Httpd.Response 200 [] ""
-        Just s               -> return $ Httpd.Response 500 [] s
-        Nothing              -> return $ Httpd.Response 500 [] (show $ Httpd.reqHeaders req)
+        Just "goodbye=cruelworld; hello=world\r" -> return $ Httpd.mkResponse 200 [] ""
+        Just s               -> return $ Httpd.mkResponse 500 [] s
+        Nothing              -> return $ Httpd.mkResponse 500 [] (show $ Httpd.reqHeaders req)
     ("GET", hasPrefix "/browser/redirect/relative/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
-      return $ Httpd.Response n [("Location", rest)] ""
+      return $ Httpd.mkResponse n [("Location", rest)] ""
     ("GET", hasPrefix "/browser/redirect/absolute/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
-      return $ Httpd.Response n [("Location", testUrl rest)] ""
+      return $ Httpd.mkResponse n [("Location", testUrl rest)] ""
     ("GET", hasPrefix "/browser/redirect/secure/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
-      return $ Httpd.Response n [("Location", secureTestUrl rest)] ""
-    _                     -> return $ Httpd.Response 500 [] "Unknown request"
+      return $ Httpd.mkResponse n [("Location", secureTestUrl rest)] ""
+    _                     -> return $ Httpd.mkResponse 500 [] "Unknown request"
 
 altProcessRequest :: Httpd.Request -> IO Httpd.Response
 altProcessRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
-    ("GET", "/basic/get") -> return $ Httpd.Response 200 [] "This is the alternate server."
-    ("GET", "/basic/get2") -> return $ Httpd.Response 200 [] "This is the alternate server (2)."
-    _                     -> return $ Httpd.Response 500 [] "Unknown request"
+    ("GET", "/basic/get") -> return $ Httpd.mkResponse 200 [] "This is the alternate server."
+    ("GET", "/basic/get2") -> return $ Httpd.mkResponse 200 [] "This is the alternate server (2)."
+    _                     -> return $ Httpd.mkResponse 500 [] "Unknown request"
 
 getResponseCode :: Result (Response a) -> IO ResponseCode
 getResponseCode (Left err) = fail (show err)
