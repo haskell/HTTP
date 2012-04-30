@@ -9,7 +9,7 @@ import Data.List.Split (splitOn)
 import Data.Maybe (fromJust)
 import System.IO.Error (userError)
 
-import qualified Network.Shed.Httpd as Httpd
+import qualified Httpd
 
 import Network.Browser
 import Network.HTTP
