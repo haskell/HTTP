@@ -1,7 +1,8 @@
 module Httpd
-    ( Request, Response, initServer
+    ( Request, Response, Server
     , mkResponse
     , reqMethod, reqURI, reqHeaders, reqBody
+    , shed
     )
     where
 
@@ -32,8 +33,10 @@ data Response = Response
 mkResponse :: Int -> [(String, String)] -> String -> Response
 mkResponse = Response
 
-initServer :: Int -> (Request -> IO Response) -> IO ()
-initServer port handler =
+type Server = Int -> (Request -> IO Response) -> IO ()
+
+shed :: Server
+shed port handler =
     () <$ Shed.initServer
            port
            (liftM responseToShed . handler . requestFromShed)
