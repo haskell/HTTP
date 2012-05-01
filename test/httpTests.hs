@@ -59,7 +59,7 @@ basicPostRequest = do
   assertEqual "HTTP status code" (2, 0, 0) code
   body <- getResponseBody response
   assertEqual "Receiving expected response"
-              (show (Just "text/plain\r", Just "4\r", sendBody))
+              (show (Just "text/plain", Just "4", sendBody))
               body
 
 basicAuthFailure :: Assertion
@@ -400,7 +400,7 @@ processRequest req = do
 
     ("GET", "/auth/basic") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
-        Just "Basic dGVzdDpwYXNzd29yZA==\r" -> return $ Httpd.mkResponse 200 [] "Here's the secret"
+        Just "Basic dGVzdDpwYXNzd29yZA==" -> return $ Httpd.mkResponse 200 [] "Here's the secret"
         x -> return $ Httpd.mkResponse 401 [("WWW-Authenticate", "Basic realm=\"Testing realm\"")] (show x)
 
     ("GET", "/auth/digest") ->
@@ -430,8 +430,7 @@ processRequest req = do
       return $ Httpd.mkResponse 200 [("Set-Cookie", "hello=world")] ""
     ("GET", "/browser/one-cookie/2") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
-        -- TODO: is it correct to expect the \r at the end?
-        Just "hello=world\r" -> return $ Httpd.mkResponse 200 [] ""
+        Just "hello=world" -> return $ Httpd.mkResponse 200 [] ""
         Just s               -> return $ Httpd.mkResponse 500 [] s
         Nothing              -> return $ Httpd.mkResponse 500 [] (show $ Httpd.reqHeaders req)
     ("GET", "/browser/two-cookies/1") ->
@@ -441,9 +440,8 @@ processRequest req = do
                               ""
     ("GET", "/browser/two-cookies/2") ->
       case lookup "Cookie" (Httpd.reqHeaders req) of
-        -- TODO: is it correct to expect the \r at the end?
         -- TODO generalise the cookie parsing to allow for whitespace/ordering variations
-        Just "goodbye=cruelworld; hello=world\r" -> return $ Httpd.mkResponse 200 [] ""
+        Just "goodbye=cruelworld; hello=world" -> return $ Httpd.mkResponse 200 [] ""
         Just s               -> return $ Httpd.mkResponse 500 [] s
         Nothing              -> return $ Httpd.mkResponse 500 [] (show $ Httpd.reqHeaders req)
     ("GET", hasPrefix "/browser/redirect/relative/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->

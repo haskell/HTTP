@@ -7,6 +7,7 @@ module Httpd
     where
 
 import Control.Applicative
+import Control.Arrow ( (***) )
 import Control.Monad
 import Control.Monad.Trans ( lift )
 import Data.ByteString as B ( empty, concat )
@@ -59,12 +60,15 @@ shed port handler =
   where
      responseToShed (Response status hdrs body) =
          Shed.Response status hdrs body
+     chomp = reverse . strip '\r' . reverse
+     strip c (c':str) | c == c' = str
+     strip c str = str
      requestFromShed request =
          Request
          {
           reqMethod = Shed.reqMethod request,
           reqURI = Shed.reqURI request,
-          reqHeaders = Shed.reqHeaders request,
+          reqHeaders = map (id *** chomp) $ Shed.reqHeaders request,
           reqBody = Shed.reqBody request
          }
 
