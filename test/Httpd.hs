@@ -2,18 +2,34 @@ module Httpd
     ( Request, Response, Server
     , mkResponse
     , reqMethod, reqURI, reqHeaders, reqBody
-    , shed
+    , shed, warp
     )
     where
 
 import Control.Applicative
 import Control.Monad
-import Network.URI ( URI )
+import Control.Monad.Trans ( lift )
+import Data.ByteString as B ( empty, concat )
+import Data.ByteString.Char8 as BC ( pack, unpack )
+import Data.ByteString.Lazy.Char8 as BLC ( pack )
+import qualified Data.CaseInsensitive as CI ( mk, original )
+import Data.Maybe ( fromJust )
+import Network.URI ( URI, parseRelativeReference )
 
 import qualified Network.Shed.Httpd as Shed
     ( Request, Response(Response), initServer
     , reqMethod, reqURI, reqHeaders, reqBody
     )
+
+import qualified Data.Conduit.Lazy as Warp
+    ( lazyConsume )
+import qualified Network.HTTP.Types as Warp
+    ( Status(..) )
+import qualified Network.Wai as Warp
+    ( Request(requestMethod, requestHeaders, rawPathInfo, requestBody)
+    , responseLBS )
+import qualified Network.Wai.Handler.Warp as Warp
+    ( run )
 
 data Request = Request
     {
@@ -52,3 +68,30 @@ shed port handler =
           reqBody = Shed.reqBody request
          }
 
+warp :: Server
+warp port handler =
+    Warp.run port $ \warpRequest -> do
+       request <- requestFromWarp warpRequest
+       response <- lift $ handler request
+       return (responseToWarp response)
+  where
+     responseToWarp (Response status hdrs body) =
+         Warp.responseLBS
+                 (Warp.Status status B.empty)
+                 (map headerToWarp hdrs)
+                 (BLC.pack body)
+     headerToWarp (name, value) = (CI.mk (BC.pack name), BC.pack value)
+     headerFromWarp (name, value) =
+         (BC.unpack (CI.original name), BC.unpack value)
+     requestFromWarp request = do
+         body <- Warp.lazyConsume (Warp.requestBody request)
+         return $
+                Request
+                {
+                 reqMethod = BC.unpack (Warp.requestMethod request),
+                 reqURI = fromJust . parseRelativeReference .
+                          BC.unpack . Warp.rawPathInfo $
+                          request,
+                 reqHeaders = map headerFromWarp (Warp.requestHeaders request),
+                 reqBody = BC.unpack (B.concat body)
+                }
