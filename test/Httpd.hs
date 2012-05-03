@@ -8,9 +8,10 @@ module Httpd
 
 import Control.Applicative
 import Control.Arrow ( (***) )
+import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans ( lift )
-import Data.ByteString as B ( empty, concat )
+import Data.ByteString as B ( empty, concat, length, ByteString )
 import Data.ByteString.Char8 as BC ( pack, unpack )
 import Data.ByteString.Lazy.Char8 as BLC ( pack )
 import qualified Data.CaseInsensitive as CI ( mk, original )
@@ -72,6 +73,9 @@ shed port handler =
           reqBody = Shed.reqBody request
          }
 
+instance NFData B.ByteString where
+    rnf = rnf . B.length
+
 warp :: Server
 warp port handler =
     Warp.run port $ \warpRequest -> do
@@ -89,6 +93,7 @@ warp port handler =
          (BC.unpack (CI.original name), BC.unpack value)
      requestFromWarp request = do
          body <- Warp.lazyConsume (Warp.requestBody request)
+         body `deepseq` return ()
          return $
                 Request
                 {
