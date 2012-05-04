@@ -1,4 +1,4 @@
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ImplicitParams, ViewPatterns #-}
 import Control.Concurrent
 
 import Control.Applicative ((<$))
@@ -26,33 +26,33 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit
 
 
-basicGetRequest :: Assertion
+basicGetRequest :: (?testUrl :: ServerAddress) => Assertion
 basicGetRequest = do
-  response <- simpleHTTP (getRequest (testUrl "/basic/get"))
+  response <- simpleHTTP (getRequest (?testUrl "/basic/get"))
   code <- getResponseCode response
   assertEqual "HTTP status code" (2, 0, 0) code
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
 
-basicExample :: Assertion
+basicExample :: (?testUrl :: ServerAddress) => Assertion
 basicExample = do
   result <-
     -- sample code from Network.HTTP haddock, with URL changed
     -- Note there's also a copy of the example in the .cabal file
-    simpleHTTP (getRequest (testUrl "/basic/example")) >>= fmap (take 100) . getResponseBody
+    simpleHTTP (getRequest (?testUrl "/basic/example")) >>= fmap (take 100) . getResponseBody
   assertEqual "Receiving expected response" (take 100 haskellOrgText) result
 
-secureGetRequest :: Assertion
+secureGetRequest :: (?secureTestUrl :: ServerAddress) => Assertion
 secureGetRequest = do
-  response <- try $ simpleHTTP (getRequest (secureTestUrl "/anything"))
+  response <- try $ simpleHTTP (getRequest (?secureTestUrl "/anything"))
   assertEqual "Threw expected exception"
               (Left (userError "https not supported"))
               (fmap show response) -- fmap show because Response isn't in Eq
 
-basicPostRequest :: Assertion
+basicPostRequest :: (?testUrl :: ServerAddress) => Assertion
 basicPostRequest = do
   let sendBody = "body"
-  response <- simpleHTTP $ postRequestWithBody (testUrl "/basic/post")
+  response <- simpleHTTP $ postRequestWithBody (?testUrl "/basic/post")
                                                "text/plain"
                                                sendBody
   code <- getResponseCode response
@@ -62,19 +62,20 @@ basicPostRequest = do
               (show (Just "text/plain", Just "4", sendBody))
               body
 
-basicAuthFailure :: Assertion
+basicAuthFailure :: (?testUrl :: ServerAddress) => Assertion
 basicAuthFailure = do
-  response <- simpleHTTP (getRequest (testUrl "/auth/basic"))
+  response <- simpleHTTP (getRequest (?testUrl "/auth/basic"))
   code <- getResponseCode response
   body <- getResponseBody response
   assertEqual "HTTP status code" ((4, 0, 1), "Nothing") (code, body)
 
+credentialsBasic :: (?testUrl :: ServerAddress) => Authority
 credentialsBasic = AuthBasic "Testing realm" "test" "password"
-                             (fromJust . parseURI . testUrl $ "/auth/basic")
+                             (fromJust . parseURI . ?testUrl $ "/auth/basic")
 
-basicAuthSuccess :: Assertion
+basicAuthSuccess :: (?testUrl :: ServerAddress) => Assertion
 basicAuthSuccess = do
-  let req = getRequest (testUrl "/auth/basic")
+  let req = getRequest (?testUrl "/auth/basic")
   let authString = withAuthority credentialsBasic req
   let reqWithAuth = req { rqHeaders = mkHeader HdrAuthorization authString:rqHeaders req }
   response <- simpleHTTP reqWithAuth
@@ -82,7 +83,7 @@ basicAuthSuccess = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" ((2, 0, 0), "Here's the secret") (code, body)
 
-browserExample :: Assertion
+browserExample :: (?testUrl :: ServerAddress) => Assertion
 browserExample = do
   result <-
     -- sample code from Network.Browser haddock, with URL changed
@@ -91,16 +92,16 @@ browserExample = do
       (_, rsp)
          <- Network.Browser.browse $ do
                setAllowRedirects True -- handle HTTP redirects
-               request $ getRequest (testUrl "/browser/example")
+               request $ getRequest (?testUrl "/browser/example")
       return (take 100 (rspBody rsp))
   assertEqual "Receiving expected response" (take 100 haskellOrgText) result
 
 -- A vanilla HTTP request using Browser shouln't send a cookie header
-browserNoCookie :: Assertion
+browserNoCookie :: (?testUrl :: ServerAddress) => Assertion
 browserNoCookie = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    request $ getRequest (testUrl "/browser/no-cookie")
+    request $ getRequest (?testUrl "/browser/no-cookie")
   let code = rspCode response
   assertEqual "HTTP status code" (2, 0, 0) code
 
@@ -113,53 +114,53 @@ browserNoCookie = do
 -- Expected: Server gets single cookie with "hello=world"
 -- Actual:   Server gets 3 extra cookies, which are actually cookie attributes:
 --           "$Version=0;hello=world;$Domain=localhost:8080\r"
-browserOneCookie :: Assertion
+browserOneCookie :: (?testUrl :: ServerAddress) => Assertion
 browserOneCookie = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
     setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     -- This first requests returns a single Set-Cookie: hello=world
-    _ <- request $ getRequest (testUrl "/browser/one-cookie/1")
+    _ <- request $ getRequest (?testUrl "/browser/one-cookie/1")
 
     -- This second request should send a single Cookie: hello=world
-    request $ getRequest (testUrl "/browser/one-cookie/2")
+    request $ getRequest (?testUrl "/browser/one-cookie/2")
   let body = rspBody response
   assertEqual "Receiving expected response" "" body
   let code = rspCode response
   assertEqual "HTTP status code" (2, 0, 0) code
 
-browserTwoCookies :: Assertion
+browserTwoCookies :: (?testUrl :: ServerAddress) => Assertion
 browserTwoCookies = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
     setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     -- This first request returns two cookies
-    _ <- request $ getRequest (testUrl "/browser/two-cookies/1")
+    _ <- request $ getRequest (?testUrl "/browser/two-cookies/1")
 
     -- This second request should send them back
-    request $ getRequest (testUrl "/browser/two-cookies/2")
+    request $ getRequest (?testUrl "/browser/two-cookies/2")
   let body = rspBody response
   assertEqual "Receiving expected response" "" body
   let code = rspCode response
   assertEqual "HTTP status code" (2, 0, 0) code
 
 
-browserFollowsRedirect :: Int -> Assertion
+browserFollowsRedirect :: (?testUrl :: ServerAddress) => Int -> Assertion
 browserFollowsRedirect n = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
     setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
-    request $ getRequest (testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
+    request $ getRequest (?testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
   assertEqual "Receiving expected response from server"
               ((2, 0, 0), "It works.")
               (rspCode response, rspBody response)
 
-browserReturnsRedirect :: Int -> Assertion
+browserReturnsRedirect :: (?testUrl :: ServerAddress) => Int -> Assertion
 browserReturnsRedirect n = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
     setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
-    request $ getRequest (testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
+    request $ getRequest (?testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
   assertEqual "Receiving expected response from server"
               ((n `div` 100, n `mod` 100 `div` 10, n `mod` 10), "")
               (rspCode response, rspBody response)
@@ -167,7 +168,7 @@ browserReturnsRedirect n = do
 authGenBasic _ "Testing realm" = return $ Just ("test", "password")
 authGenBasic _ realm = fail $ "Unexpected realm " ++ realm
 
-browserBasicAuth :: Assertion
+browserBasicAuth :: (?testUrl :: ServerAddress) => Assertion
 browserBasicAuth = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
@@ -175,7 +176,7 @@ browserBasicAuth = do
 
     setAuthorityGen authGenBasic
 
-    request $ getRequest (testUrl "/auth/basic")
+    request $ getRequest (?testUrl "/auth/basic")
 
   assertEqual "Receiving expected response from server"
               ((2, 0, 0), "Here's the secret")
@@ -184,7 +185,7 @@ browserBasicAuth = do
 authGenDigest _ "Digest testing realm" = return $ Just ("test", "digestpassword")
 authGenDigest _ realm = fail $ "Unexpected digest realm " ++ realm
 
-browserDigestAuth :: Assertion
+browserDigestAuth :: (?testUrl :: ServerAddress) => Assertion
 browserDigestAuth = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
@@ -192,7 +193,7 @@ browserDigestAuth = do
 
     setAuthorityGen authGenDigest
 
-    request $ getRequest (testUrl "/auth/digest")
+    request $ getRequest (?testUrl "/auth/digest")
 
   assertEqual "Receiving expected response from server"
               ((2, 0, 0), "Here's the digest secret")
@@ -200,13 +201,13 @@ browserDigestAuth = do
 
 
 
-browserAlt :: Assertion
+browserAlt :: (?altTestUrl :: ServerAddress) => Assertion
 browserAlt = do
   (response) <- browse $ do
 
     setOutHandler (const $ return ())
 
-    (_, response1) <- request $ getRequest (altTestUrl "/basic/get")
+    (_, response1) <- request $ getRequest (?altTestUrl "/basic/get")
 
     return response1
 
@@ -216,13 +217,13 @@ browserAlt = do
 
 -- test that requests to multiple servers on the same host
 -- don't get confused with each other
-browserBoth :: Assertion
+browserBoth :: (?testUrl :: ServerAddress, ?altTestUrl :: ServerAddress) => Assertion
 browserBoth = do
   (response1, response2) <- browse $ do
     setOutHandler (const $ return ())
 
-    (_, response1) <- request $ getRequest (testUrl "/basic/get")
-    (_, response2) <- request $ getRequest (altTestUrl "/basic/get")
+    (_, response1) <- request $ getRequest (?testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (?altTestUrl "/basic/get")
 
     return (response1, response2)
 
@@ -236,13 +237,13 @@ browserBoth = do
 
 -- test that requests to multiple servers on the same host
 -- don't get confused with each other
-browserBothReversed :: Assertion
+browserBothReversed :: (?testUrl :: ServerAddress, ?altTestUrl :: ServerAddress) => Assertion
 browserBothReversed = do
   (response1, response2) <- browse $ do
     setOutHandler (const $ return ())
 
-    (_, response2) <- request $ getRequest (altTestUrl "/basic/get")
-    (_, response1) <- request $ getRequest (testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (?altTestUrl "/basic/get")
+    (_, response1) <- request $ getRequest (?testUrl "/basic/get")
 
     return (response1, response2)
 
@@ -254,49 +255,49 @@ browserBothReversed = do
               ((2, 0, 0), "This is the alternate server.")
               (rspCode response2, rspBody response2)
 
-browserSecureRequest :: Assertion
+browserSecureRequest :: (?secureTestUrl :: ServerAddress) => Assertion
 browserSecureRequest = do
   res <- try $ browse $ do
     setOutHandler (const $ return ())
 
-    request $ getRequest (secureTestUrl "/anything")
+    request $ getRequest (?secureTestUrl "/anything")
 
   assertEqual "Threw expected exception"
               (Left (userError "https not supported"))
               (fmap show res) -- fmap show because Response isn't in Eq
 
 -- in case it tries to reuse the connection
-browserSecureRequestAfterInsecure :: Assertion
+browserSecureRequestAfterInsecure :: (?testUrl :: ServerAddress, ?secureTestUrl :: ServerAddress) => Assertion
 browserSecureRequestAfterInsecure = do
   res <- try $ browse $ do
     setOutHandler (const $ return ())
 
-    request $ getRequest (testUrl "/basic/get")
-    request $ getRequest (secureTestUrl "/anything")
+    request $ getRequest (?testUrl "/basic/get")
+    request $ getRequest (?secureTestUrl "/anything")
 
   assertEqual "Threw expected exception"
               (Left (userError "https not supported"))
               (fmap show res) -- fmap show because Response isn't in Eq
 
-browserRedirectToSecure :: Assertion
+browserRedirectToSecure :: (?testUrl :: ServerAddress, ?secureTestUrl :: ServerAddress) => Assertion
 browserRedirectToSecure = do
   res <- try $ browse $ do
     setOutHandler (const $ return ())
     setErrHandler fail
 
-    request $ getRequest (testUrl "/browser/redirect/secure/301/anything")
+    request $ getRequest (?testUrl "/browser/redirect/secure/301/anything")
 
   assertEqual "Threw expected exception"
-              (Left (userError $ "Unable to handle redirect, unsupported scheme: " ++ secureTestUrl "/anything"))
+              (Left (userError $ "Unable to handle redirect, unsupported scheme: " ++ ?secureTestUrl "/anything"))
               (fmap show res) -- fmap show because Response isn't in Eq
 
-browserTwoRequests :: Assertion
+browserTwoRequests :: (?testUrl :: ServerAddress) => Assertion
 browserTwoRequests = do
   (response1, response2) <- browse $ do
     setOutHandler (const $ return ())
 
-    (_, response1) <- request $ getRequest (testUrl "/basic/get")
-    (_, response2) <- request $ getRequest (testUrl "/basic/get2")
+    (_, response1) <- request $ getRequest (?testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (?testUrl "/basic/get2")
 
     return (response1, response2)
 
@@ -309,14 +310,14 @@ browserTwoRequests = do
               (rspCode response2, rspBody response2)
 
 
-browserTwoRequestsAlt :: Assertion
+browserTwoRequestsAlt :: (?altTestUrl :: ServerAddress) => Assertion
 browserTwoRequestsAlt = do
   (response1, response2) <- browse $ do
 
     setOutHandler (const $ return ())
 
-    (_, response1) <- request $ getRequest (altTestUrl "/basic/get")
-    (_, response2) <- request $ getRequest (altTestUrl "/basic/get2")
+    (_, response1) <- request $ getRequest (?altTestUrl "/basic/get")
+    (_, response2) <- request $ getRequest (?altTestUrl "/basic/get2")
 
     return (response1, response2)
 
@@ -328,15 +329,15 @@ browserTwoRequestsAlt = do
               ((2, 0, 0), "This is the alternate server (2).")
               (rspCode response2, rspBody response2)
 
-browserTwoRequestsBoth :: Assertion
+browserTwoRequestsBoth :: (?testUrl :: ServerAddress, ?altTestUrl :: ServerAddress) => Assertion
 browserTwoRequestsBoth = do
   (response1, response2, response3, response4) <- browse $ do
     setOutHandler (const $ return ())
 
-    (_, response1) <- request $ getRequest (testUrl "/basic/get")
-    (_, response2) <- request $ getRequest (altTestUrl "/basic/get")
-    (_, response3) <- request $ getRequest (testUrl "/basic/get2")
-    (_, response4) <- request $ getRequest (altTestUrl "/basic/get2")
+    (_, response1) <- request $ getRequest (?testUrl "/basic/get")
+    (_, response2) <- request $ getRequest (?altTestUrl "/basic/get")
+    (_, response3) <- request $ getRequest (?testUrl "/basic/get2")
+    (_, response4) <- request $ getRequest (?altTestUrl "/basic/get2")
 
     return (response1, response2, response3, response4)
 
@@ -384,7 +385,9 @@ haskellOrgText =
 \\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\
 \\t\t\t\t<meta name=\"keywords\" content=\"Haskell,Applications and libraries,Books,Foreign Function Interface,Functional programming,Hac Boston,HakkuTaikai,HaskellImplementorsWorkshop/2011,Haskell Communities and Activities Report,Haskell in education,Haskell in industry\" />"
 
-processRequest :: Httpd.Request -> IO Httpd.Response
+processRequest :: (?testUrl :: ServerAddress, ?secureTestUrl :: ServerAddress)
+               => Httpd.Request
+               -> IO Httpd.Response
 processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/basic/get") -> return $ Httpd.mkResponse 200 [] "It works."
@@ -407,7 +410,7 @@ processRequest req = do
       case lookup "Authorization" (Httpd.reqHeaders req) of
         Just (hasPrefix "Digest " -> Just (splitFields -> items))
           | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
-             ("uri", show (testUrl "/auth/digest")), ("opaque", show "057d"),
+             ("uri", show (?testUrl "/auth/digest")), ("opaque", show "057d"),
              ("response", show "ace810a3cfb830489a3b48e90a02b2ae")] `isSubsetOf` items
           -> return $ Httpd.mkResponse 200 [] "Here's the digest secret"
           | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
@@ -447,9 +450,9 @@ processRequest req = do
     ("GET", hasPrefix "/browser/redirect/relative/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
       return $ Httpd.mkResponse n [("Location", rest)] ""
     ("GET", hasPrefix "/browser/redirect/absolute/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
-      return $ Httpd.mkResponse n [("Location", testUrl rest)] ""
+      return $ Httpd.mkResponse n [("Location", ?testUrl rest)] ""
     ("GET", hasPrefix "/browser/redirect/secure/" -> Just (break (=='/') -> (maybeRead -> Just n, rest))) ->
-      return $ Httpd.mkResponse n [("Location", secureTestUrl rest)] ""
+      return $ Httpd.mkResponse n [("Location", ?secureTestUrl rest)] ""
     _                     -> return $ Httpd.mkResponse 500 [] "Unknown request"
 
 altProcessRequest :: Httpd.Request -> IO Httpd.Response
@@ -549,19 +552,13 @@ httpAddress, httpsAddress :: Int -> ServerAddress
 httpAddress port p = urlRoot port ++ p
 httpsAddress port p = secureRoot port ++ p
 
-testUrl :: ServerAddress
-testUrl = httpAddress portNum
-
-altTestUrl :: ServerAddress
-altTestUrl = httpAddress altPortNum
-
-secureTestUrl :: ServerAddress
-secureTestUrl = httpsAddress portNum
-
 main :: IO ()
 main = do
   args <- getArgs
   let server = Httpd.shed
+  let ?testUrl = httpAddress portNum
+      ?altTestUrl = httpAddress altPortNum
+      ?secureTestUrl = httpsAddress portNum
   case args of
      ["server"] -> do -- run only the harness servers for diagnostic/debug purposes
                       -- halt on any keypress
