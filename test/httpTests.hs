@@ -1,4 +1,4 @@
-{-# LANGUAGE ImplicitParams, ViewPatterns #-}
+{-# LANGUAGE ImplicitParams, ViewPatterns, NoMonomorphismRestriction #-}
 import Control.Concurrent
 
 import Control.Applicative ((<$))
@@ -469,8 +469,8 @@ getResponseCode (Right r)  = return (rspCode r)
 maybeTestGroup True name xs = testGroup name xs
 maybeTestGroup False name _ = testGroup name []
 
-tests port80Server =
-  [ testGroup "Basic tests"
+basicTests =
+    testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
     , testCase "Network.HTTP example code" basicExample
     , testCase "Secure GET request" secureGetRequest
@@ -478,7 +478,9 @@ tests port80Server =
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
     ]
-  , testGroup "Browser tests"
+
+browserTests =
+    testGroup "Browser tests"
     [ testGroup "Basic"
       [
         -- github issue 14
@@ -522,7 +524,9 @@ tests port80Server =
       , testCase "Digest" browserDigestAuth
       ]
     ]
-  , maybeTestGroup port80Server "Multiple servers"
+
+port80Tests =
+    testGroup "Multiple servers"
     [ testCase "Alternate server" browserAlt
     , testCase "Both servers" browserBoth
     , testCase "Both servers (reversed)" browserBothReversed
@@ -530,7 +534,6 @@ tests port80Server =
     -- , testCase "Two requests - alternate server" browserTwoRequestsAlt
     -- , testCase "Two requests - both servers" browserTwoRequestsBoth
     ]
-  ]
 
 portNum :: Int
 portNum = 5812
@@ -570,9 +573,9 @@ main = do
         _ <- forkIO $ server portNum processRequest
         _ <- forkIO $ server altPortNum altProcessRequest
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs (tests True) args
+        defaultMainWithArgs [basicTests, browserTests, port80Tests] args
      args -> do -- run the test harness as normal
         _ <- forkIO $ server portNum processRequest
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs (tests False) args
+        defaultMainWithArgs [basicTests, browserTests] args
 
