@@ -543,14 +543,20 @@ secureRoot :: Int -> String
 secureRoot 443 = "https://localhost"
 secureRoot n = "https://localhost:" ++ show n
 
-testUrl :: String -> String
-testUrl p = urlRoot portNum ++ p
+type ServerAddress = String -> String
 
-altTestUrl :: String -> String
-altTestUrl p = urlRoot altPortNum ++ p
+httpAddress, httpsAddress :: Int -> ServerAddress
+httpAddress port p = urlRoot port ++ p
+httpsAddress port p = secureRoot port ++ p
 
-secureTestUrl :: String -> String
-secureTestUrl p = secureRoot portNum ++ p
+testUrl :: ServerAddress
+testUrl = httpAddress portNum
+
+altTestUrl :: ServerAddress
+altTestUrl = httpAddress altPortNum
+
+secureTestUrl :: ServerAddress
+secureTestUrl = httpsAddress portNum
 
 main :: IO ()
 main = do
