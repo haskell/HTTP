@@ -571,7 +571,7 @@ main :: IO ()
 main = do
   args <- getArgs
 
-  let servers = [("httpd-shed", Httpd.shed)]
+  let servers = [("httpd-shed", Httpd.shed), ("warp", Httpd.warp)]
       basePortNum, altPortNum :: Int
       basePortNum = 5812
       altPortNum = 80
