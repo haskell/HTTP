@@ -552,26 +552,40 @@ httpsAddress port p = secureRoot port ++ p
 main :: IO ()
 main = do
   args <- getArgs
-  let server = Httpd.shed
-      portNum, altPortNum :: Int
-      portNum = 5812
+
+  let servers = [("httpd-shed", Httpd.shed)]
+      basePortNum, altPortNum :: Int
+      basePortNum = 5812
       altPortNum = 80
-  let ?testUrl = httpAddress portNum
-      ?altTestUrl = httpAddress altPortNum
-      ?secureTestUrl = httpsAddress portNum
+      numberedServers = zip [basePortNum..] servers
+
+  let setupNormalTests = do
+      flip mapM numberedServers $ \(portNum, (serverName, server)) -> do
+         let ?testUrl = httpAddress portNum
+             ?secureTestUrl = httpsAddress portNum
+         _ <- forkIO $ server portNum processRequest
+         return $ testGroup serverName [basicTests, browserTests]
+
+  let setupAltTests = do
+      let (portNum, (_, server)) = head numberedServers
+      let ?testUrl = httpAddress portNum
+          ?altTestUrl = httpAddress altPortNum
+      _ <- forkIO $ server altPortNum altProcessRequest
+      return port80Tests
+
   case args of
      ["server"] -> do -- run only the harness servers for diagnostic/debug purposes
                       -- halt on any keypress
-        _ <- forkIO $ server portNum processRequest
-        _ <- forkIO $ server altPortNum altProcessRequest
+        _ <- setupNormalTests
+        _ <- setupAltTests
         _ <- getChar
         return ()
      ("--withport80":args) -> do
-        _ <- forkIO $ server portNum processRequest
-        _ <- forkIO $ server altPortNum altProcessRequest
+        normalTests <- setupNormalTests
+        altTests <- setupAltTests
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs [basicTests, browserTests, port80Tests] args
+        defaultMainWithArgs (normalTests ++ [altTests]) args
      args -> do -- run the test harness as normal
-        _ <- forkIO $ server portNum processRequest
+        normalTests <- setupNormalTests
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs [basicTests, browserTests] args
+        defaultMainWithArgs normalTests args
