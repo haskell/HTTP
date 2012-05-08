@@ -535,12 +535,6 @@ port80Tests =
     -- , testCase "Two requests - both servers" browserTwoRequestsBoth
     ]
 
-portNum :: Int
-portNum = 5812
-
-altPortNum :: Int
-altPortNum = 80
-
 urlRoot :: Int -> String
 urlRoot 80 = "http://localhost"
 urlRoot n = "http://localhost:" ++ show n
@@ -559,6 +553,9 @@ main :: IO ()
 main = do
   args <- getArgs
   let server = Httpd.shed
+      portNum, altPortNum :: Int
+      portNum = 5812
+      altPortNum = 80
   let ?testUrl = httpAddress portNum
       ?altTestUrl = httpAddress altPortNum
       ?secureTestUrl = httpsAddress portNum
@@ -578,4 +575,3 @@ main = do
         _ <- forkIO $ server portNum processRequest
         _ <- threadDelay 1000000 -- Give the server time to start :-(
         defaultMainWithArgs [basicTests, browserTests] args
-
