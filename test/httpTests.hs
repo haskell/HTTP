@@ -4,7 +4,9 @@ import Control.Concurrent
 import Control.Applicative ((<$))
 import Control.Concurrent (threadDelay)
 import Control.Exception (try)
+import qualified Data.ByteString.Lazy.Char8 as BL (pack)
 import Data.Char (isSpace)
+import qualified Data.Digest.Pure.MD5 as MD5 (md5)
 import Data.List.Split (splitOn)
 import Data.Maybe (fromJust)
 import System.IO.Error (userError)
@@ -385,6 +387,25 @@ haskellOrgText =
 \\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\
 \\t\t\t\t<meta name=\"keywords\" content=\"Haskell,Applications and libraries,Books,Foreign Function Interface,Functional programming,Hac Boston,HakkuTaikai,HaskellImplementorsWorkshop/2011,Haskell Communities and Activities Report,Haskell in education,Haskell in industry\" />"
 
+digestMatch
+  username realm password
+  nonce opaque
+  method relativeURI makeAbsolute
+  headers
+  =
+  common `isSubsetOf` headers && (relative `isSubsetOf` headers || absolute `isSubsetOf` headers)
+ where
+   common = [("username", show username), ("realm", show realm), ("nonce", show nonce),
+             ("opaque", show opaque)]
+   md5 = show . MD5.md5 . BL.pack
+   ha1 = md5 (username++":"++realm++":"++password)
+   ha2 uri = md5 (method++":"++uri)
+   response uri = md5 (ha1 ++ ":" ++ nonce ++ ":" ++ ha2 uri)
+   mkUncommon uri hash = [("uri", show uri), ("response", show hash)]
+   relative = mkUncommon relativeURI (response relativeURI)
+   absoluteURI = makeAbsolute relativeURI
+   absolute = mkUncommon absoluteURI (response absoluteURI)
+
 processRequest :: (?testUrl :: ServerAddress, ?secureTestUrl :: ServerAddress)
                => Httpd.Request
                -> IO Httpd.Response
@@ -409,13 +430,10 @@ processRequest req = do
     ("GET", "/auth/digest") ->
       case lookup "Authorization" (Httpd.reqHeaders req) of
         Just (hasPrefix "Digest " -> Just (splitFields -> items))
-          | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
-             ("uri", show (?testUrl "/auth/digest")), ("opaque", show "057d"),
-             ("response", show "ace810a3cfb830489a3b48e90a02b2ae")] `isSubsetOf` items
-          -> return $ Httpd.mkResponse 200 [] "Here's the digest secret"
-          | [("username", show "test"), ("realm", show "Digest testing realm"), ("nonce", show "87e4"),
-             ("uri", show "/auth/digest"), ("opaque", show "057d"),
-             ("response", show "4845c3faf4dcb125b8dcc88b5c20bb89")] `isSubsetOf` items
+          | digestMatch "test" "Digest testing realm" "digestpassword"
+                        "87e4" "057d"
+                        "GET" "/auth/digest" ?testUrl
+                        items
           -> return $ Httpd.mkResponse 200 [] "Here's the digest secret"
         x -> return $ Httpd.mkResponse
                         401

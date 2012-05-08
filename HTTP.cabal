@@ -111,6 +111,7 @@ Test-Suite test
                      conduit >= 0.4 && < 0.5,
                      wai >= 1.2 && < 1.3,
                      warp >= 1.2 && < 1.3,
+                     pureMD5 >= 2.1 && < 2.2,
                      base >= 2 && < 4.6,
                      network,
                      split >= 0.1 && < 0.2,
