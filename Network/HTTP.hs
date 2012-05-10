@@ -59,6 +59,7 @@ module Network.HTTP
        , module Network.TCP
        
        , getRequest      -- :: String -> Request_String
+       , headRequest     -- :: String -> Request_String
        , postRequest     -- :: String -> Request_String
        , postRequestWithBody -- :: String -> String -> String -> Request_String
        
@@ -149,6 +150,14 @@ getRequest urlString =
   case parseURI urlString of
     Nothing -> error ("getRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest GET u
+
+-- | @headRequest urlString@ is convenience constructor for basic HEAD 'Request's. If
+-- @urlString@ isn't a syntactically valid URL, the function raises an error.
+headRequest :: String -> Request_String
+headRequest urlString = 
+  case parseURI urlString of
+    Nothing -> error ("headRequest: Not a valid URL - " ++ urlString)
+    Just u  -> mkRequest HEAD u
 
 -- | @postRequest urlString@ is convenience constructor for POST 'Request's. If
 -- @urlString@ isn\'t a syntactically valid URL, the function raises an error.

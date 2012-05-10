@@ -36,6 +36,15 @@ basicGetRequest = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
 
+basicHeadRequest :: (?testUrl :: ServerAddress) => Assertion
+basicHeadRequest = do
+  response <- simpleHTTP (headRequest (?testUrl "/basic/head"))
+  code <- getResponseCode response
+  assertEqual "HTTP status code" (2, 0, 0) code
+  body <- getResponseBody response
+  -- the body should be empty, since this is a HEAD request
+  assertEqual "Receiving expected response" "" body
+
 basicExample :: (?testUrl :: ServerAddress) => Assertion
 basicExample = do
   result <-
@@ -413,6 +422,8 @@ processRequest req = do
   case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
     ("GET", "/basic/get") -> return $ Httpd.mkResponse 200 [] "It works."
     ("GET", "/basic/get2") -> return $ Httpd.mkResponse 200 [] "It works (2)."
+    ("GET", "/basic/head") -> return $ Httpd.mkResponse 200 [] "Body for /basic/head."
+    ("HEAD", "/basic/head") -> return $ Httpd.mkResponse 200 [] "Body for /basic/head."
     ("POST", "/basic/post") ->
         let typ = lookup "Content-Type" (Httpd.reqHeaders req)
             len = lookup "Content-Length" (Httpd.reqHeaders req)
@@ -493,6 +504,7 @@ basicTests =
     , testCase "Network.HTTP example code" basicExample
     , testCase "Secure GET request" secureGetRequest
     , testCase "Basic POST request" basicPostRequest
+    , testCase "Basic HEAD request" basicHeadRequest
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
     ]
