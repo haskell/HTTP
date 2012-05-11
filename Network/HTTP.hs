@@ -63,7 +63,8 @@ module Network.HTTP
        , postRequest     -- :: String -> Request_String
        , postRequestWithBody -- :: String -> String -> String -> Request_String
        
-       , getResponseBody -- :: Requesty ty -> ty
+       , getResponseBody -- :: Result (Request ty) -> IO ty
+       , getResponseCode -- :: Result (Request ty) -> IO ResponseCode
        ) where
 
 -----------------------------------------------------------------
@@ -200,6 +201,14 @@ postRequestWithBody urlString typ body =
 getResponseBody :: Result (Response ty) -> IO ty
 getResponseBody (Left err) = fail (show err)
 getResponseBody (Right r)  = return (rspBody r)
+
+-- | @getResponseBody response@ takes the response of a HTTP requesting action and
+-- tries to extricate the status code of the 'Response' @response@. If the request action
+-- returned an error, an IO exception is raised.
+getResponseCode :: Result (Response ty) -> IO ResponseCode
+getResponseCode (Left err) = fail (show err)
+getResponseCode (Right r)  = return (rspCode r)
+
 
 --
 -- * TODO

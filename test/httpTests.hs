@@ -491,10 +491,6 @@ altProcessRequest req = do
     ("GET", "/basic/get2") -> return $ Httpd.mkResponse 200 [] "This is the alternate server (2)."
     _                     -> return $ Httpd.mkResponse 500 [] "Unknown request"
 
-getResponseCode :: Result (Response a) -> IO ResponseCode
-getResponseCode (Left err) = fail (show err)
-getResponseCode (Right r)  = return (rspCode r)
-
 maybeTestGroup True name xs = testGroup name xs
 maybeTestGroup False name _ = testGroup name []
 
