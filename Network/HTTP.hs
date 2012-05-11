@@ -143,37 +143,52 @@ receiveHTTP conn = S.receiveHTTP conn
 respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
 respondHTTP conn rsp = S.respondHTTP conn rsp
 
--- | @getRequest urlString@ is convenience constructor for basic GET 'Request's. If
--- @urlString@ isn't a syntactically valid URL, the function raises an error.
-getRequest :: String -> Request_String
+
+-- | A convenience constructor for a GET 'Request'.
+--
+-- If the URL isn\'t syntactically valid, the function raises an error.
+getRequest
+    :: String             -- ^URL to fetch
+    -> Request_String     -- ^The constructed request
 getRequest urlString = 
   case parseURI urlString of
     Nothing -> error ("getRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest GET u
 
--- | @headRequest urlString@ is convenience constructor for basic HEAD 'Request's. If
--- @urlString@ isn't a syntactically valid URL, the function raises an error.
-headRequest :: String -> Request_String
+-- | A convenience constructor for a HEAD 'Request'.
+--
+-- If the URL isn\'t syntactically valid, the function raises an error.
+headRequest
+    :: String             -- ^URL to fetch
+    -> Request_String     -- ^The constructed request
 headRequest urlString = 
   case parseURI urlString of
     Nothing -> error ("headRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest HEAD u
 
--- | @postRequest urlString@ is convenience constructor for POST 'Request's. If
--- @urlString@ isn\'t a syntactically valid URL, the function raises an error.
-postRequest :: String -> Request_String
+-- | A convenience constructor for a POST 'Request'.
+--
+-- If the URL isn\'t syntactically valid, the function raises an error.
+postRequest
+    :: String                   -- ^URL to POST to
+    -> Request_String           -- ^The constructed request
 postRequest urlString = 
   case parseURI urlString of
     Nothing -> error ("postRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest POST u
 
--- | @postRequestWithBody urlString typ body@ is convenience constructor for
--- POST 'Request's. It constructs a request and sets the body as well as
+-- | A convenience constructor for a POST 'Request'.
+--
+-- It constructs a request and sets the body as well as
 -- the Content-Type and Content-Length headers. The contents of the body
 -- are forced to calculate the value for the Content-Length header.
--- If @urlString@ isn\'t a syntactically valid URL, the function raises
--- an error.
-postRequestWithBody :: String -> String -> String -> Request_String
+--
+-- If the URL isn\'t syntactically valid, the function raises an error.
+postRequestWithBody
+    :: String                      -- ^URL to POST to
+    -> String                      -- ^Content-Type of body
+    -> String                      -- ^The body of the request
+    -> Request_String              -- ^The constructed request
 postRequestWithBody urlString typ body = 
   case parseURI urlString of
     Nothing -> error ("postRequestWithBody: Not a valid URL - " ++ urlString)
