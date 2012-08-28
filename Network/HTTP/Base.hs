@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- using Prelude.catch
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Base

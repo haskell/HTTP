@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Stream

@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -fno-warn-deprecations #-} -- using Prelude.catch
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 {-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |

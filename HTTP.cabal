@@ -55,6 +55,10 @@ Flag mtl1
   description: Use the old mtl version 1.
   default: False
 
+Flag warn-as-error
+  default:     False
+  description: Build with warnings-as-errors
+
 Library
   Exposed-modules: 
                  Network.BufferType,
@@ -89,6 +93,9 @@ Library
   else
     Build-depends: mtl >= 2.0 && < 2.2
 
+  if flag(warn-as-error)
+    ghc-options:      -Werror
+
   if os(windows)
     Build-depends: Win32
 
@@ -117,3 +124,4 @@ Test-Suite test
                      split >= 0.1 && < 0.2,
                      test-framework,
                      test-framework-hunit
+
