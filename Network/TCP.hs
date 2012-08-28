@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- using Prelude.catch
 {-# LANGUAGE TypeSynonymInstances #-}
 -----------------------------------------------------------------------------
 -- |
@@ -303,7 +302,7 @@ isConnectedTo (Connection conn) endPoint = do
      ConnClosed -> print "aa" >> return False
      _ 
       | connEndPoint v == endPoint ->
-          catch (getPeerName (connSock v) >> return True) (const $ return False)
+          catchIO (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
 isTCPConnectedTo :: HandleStream ty -> EndPoint -> IO Bool
@@ -313,7 +312,7 @@ isTCPConnectedTo conn endPoint = do
      ConnClosed -> return False
      _ 
       | connEndPoint v == endPoint ->
-          catch (getPeerName (connSock v) >> return True) (const $ return False)
+          catchIO (getPeerName (connSock v) >> return True) (const $ return False)
       | otherwise -> return False
 
 readBlockBS :: HStream a => HandleStream a -> Int -> IO (Result a)
@@ -365,18 +364,18 @@ bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
       modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b})
       return (return a)
     _ -> do
-      Prelude.catch (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.return)
-                    (\ e -> 
+      catchIO (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.return)
+              (\ e ->
 		       if isEOFError e 
 			then do
-			  when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
+			  when (connCloseEOF conn) $ catchIO (closeQuick ref) (\ _ -> return ())
 			  return (return (buf_empty (connBuffer conn)))
 			else return (failMisc (show e)))
 
 bufferPutBlock :: BufferOp a -> Handle -> a -> IO (Result ())
 bufferPutBlock ops h b = 
-  Prelude.catch (buf_hPut ops h b >> hFlush h >> return (return ()))
-                (\ e -> return (failMisc (show e)))
+  catchIO (buf_hPut ops h b >> hFlush h >> return (return ()))
+          (\ e -> return (failMisc (show e)))
 
 bufferReadLine :: HStream a => HandleStream a -> IO (Result a)
 bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
@@ -386,13 +385,13 @@ bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
     let (newl,b1) = buf_splitAt (connBuffer conn) 1 b0
     modifyMVar_ (getRef ref) (\ co -> return co{connInput=Just b1})
     return (return (buf_append (connBuffer conn) a newl))
-   _ -> Prelude.catch 
+   _ -> catchIO
               (buf_hGetLine (connBuffer conn) (connHandle conn) >>= 
 	            return . return . appendNL (connBuffer conn))
               (\ e ->
                  if isEOFError e
                   then do
-	  	    when (connCloseEOF conn) $ catch (closeQuick ref) (\ _ -> return ())
+	  	    when (connCloseEOF conn) $ catchIO (closeQuick ref) (\ _ -> return ())
 		    return (return   (buf_empty (connBuffer conn)))
                   else return (failMisc (show e)))
  where

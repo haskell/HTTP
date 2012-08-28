@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- using Prelude.catch
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 {-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
@@ -23,6 +22,7 @@ module Network.HTTP.Proxy
 
 import Control.Monad ( when, mplus, join, liftM2)
 
+import Network.HTTP.Base ( catchIO )
 import Network.HTTP.Utils ( dropWhileTail, chopAtDelim )
 import Network.HTTP.Auth
 import Network.URI
@@ -87,7 +87,7 @@ registryProxyLoc = (hive, path)
 
 -- read proxy settings from the windows registry; this is just a best
 -- effort and may not work on all setups. 
-registryProxyString = Prelude.catch
+registryProxyString = catchIO
   (bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
     enable <- fmap toBool $ regQueryValueDWORD hkey "ProxyEnable"
     if enable

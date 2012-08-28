@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- using Prelude.catch
+{-# LANGUAGE ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Base
@@ -123,7 +123,7 @@ import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
    ( ReadP, readP_to_S, char, (<++), look, munch )
 
-import Control.Exception as Exception (IOException)
+import Control.Exception as Exception (catch, IOException)
 
 import qualified Paths_HTTP as Self (version)
 import Data.Version (showVersion)
@@ -887,10 +887,10 @@ readTillEmpty2 bufOps readL list =
 -- | @catchIO a h@ handles IO action exceptions throughout codebase; version-specific
 -- tweaks better go here.
 catchIO :: IO a -> (IOException -> IO a) -> IO a
-catchIO a h = Prelude.catch a h
+catchIO a h = Exception.catch a h
 
 catchIO_ :: IO a -> IO a -> IO a
-catchIO_ a h = Prelude.catch a (const h)
+catchIO_ a h = Exception.catch a (\(_ :: IOException) -> h)
 
 responseParseError :: String -> String -> Result a
 responseParseError loc v = failWith (ErrorParse (loc ++ ' ':v))

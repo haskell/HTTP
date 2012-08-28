@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-deprecations #-} -- using Prelude.catch
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -----------------------------------------------------------------------------
 -- |
@@ -37,7 +36,7 @@ import Network.Socket
 import Network.HTTP.Base ( catchIO )
 import Control.Monad (liftM)
 import Control.Exception as Exception (IOException)
-import System.IO.Error (catch, isEOFError)
+import System.IO.Error (isEOFError)
 
 -- | Exception handler for socket operations.
 handleSocketError :: Socket -> IOException -> IO (Result a)
@@ -51,7 +50,7 @@ handleSocketError sk e =
 myrecv :: Socket -> Int -> IO String
 myrecv sock len =
     let handler e = if isEOFError e then return [] else ioError e
-        in System.IO.Error.catch (recv sock len) handler
+        in catchIO (recv sock len) handler
 
 instance Stream Socket where
     readBlock sk n    = readBlockSocket sk n
