@@ -15,6 +15,7 @@ import qualified Httpd
 
 import Network.Browser
 import Network.HTTP
+import Network.HTTP.Base
 import Network.HTTP.Auth
 import Network.HTTP.Headers
 import Network.Stream (Result)
@@ -35,6 +36,14 @@ basicGetRequest = do
   assertEqual "HTTP status code" (2, 0, 0) code
   body <- getResponseBody response
   assertEqual "Receiving expected response" "It works." body
+
+basicGetRequestLBS :: (?testUrl :: ServerAddress) => Assertion
+basicGetRequestLBS = do
+  response <- simpleHTTP (mkRequest GET (fromJust (parseURI (?testUrl ("/basic/get")))))
+  code <- getResponseCode response
+  assertEqual "HTTP status code" (2, 0, 0) code
+  body <- getResponseBody response
+  assertEqual "Receiving expected response" (BL.pack "It works.") body
 
 basicHeadRequest :: (?testUrl :: ServerAddress) => Assertion
 basicHeadRequest = do
@@ -497,6 +506,7 @@ maybeTestGroup False name _ = testGroup name []
 basicTests =
     testGroup "Basic tests"
     [ testCase "Basic GET request" basicGetRequest
+    , testCase "Basic GET request (lazy bytestring)" basicGetRequestLBS
     , testCase "Network.HTTP example code" basicExample
     , testCase "Secure GET request" secureGetRequest
     , testCase "Basic POST request" basicPostRequest
