@@ -81,7 +81,7 @@ Library
                  Network.HTTP.Utils
                  Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: base >= 2 && < 4.6, network, parsec
+  Build-depends: base >= 2 && < 4.7, network, parsec
   Extensions: FlexibleInstances
   if flag(old-base)
     Build-depends: base < 3
