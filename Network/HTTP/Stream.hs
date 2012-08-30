@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Stream
@@ -108,9 +107,11 @@ sendMain conn rqst onSendComplete =  do
     --let str = if null (rqBody rqst)
     --              then show rqst
     --              else show (insertHeader HdrExpect "100-continue" rqst)
-   writeBlock conn (show rqst)
+    -- TODO review throwing away of result
+   _ <- writeBlock conn (show rqst)
     -- write body immediately, don't wait for 100 CONTINUE
-   writeBlock conn (rqBody rqst)
+   -- TODO review throwing away of result
+   _ <- writeBlock conn (rqBody rqst)
    onSendComplete
    rsp <- getResponseHead conn
    switchResponse conn True False rsp rqst
@@ -155,7 +156,8 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                 Retry -> {- Request with "Expect" header failed.
                                 Trouble is the request contains Expects
                                 other than "100-Continue" -}
-                    do { writeBlock conn (show rqst ++ rqBody rqst)
+                    do { -- TODO review throwing away of result
+                         _ <- writeBlock conn (show rqst ++ rqBody rqst)
                        ; rsp <- getResponseHead conn
                        ; switchResponse conn False bdy_sent rsp rqst
                        }   
@@ -226,7 +228,9 @@ receiveHTTP conn = getRequestHead >>= processRequest
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
 respondHTTP :: Stream s => s -> Response_String -> IO ()
-respondHTTP conn rsp = do writeBlock conn (show rsp)
+respondHTTP conn rsp = do -- TODO review throwing away of result
+                          _ <- writeBlock conn (show rsp)
                           -- write body immediately, don't wait for 100 CONTINUE
-                          writeBlock conn (rspBody rsp)
+                          -- TODO review throwing away of result
+                          _ <- writeBlock conn (rspBody rsp)
 			  return ()

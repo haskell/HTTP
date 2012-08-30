@@ -1,4 +1,3 @@
-{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 {-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
@@ -165,7 +164,9 @@ uri2proxy _ = Nothing
 #if defined(WIN32)
 regQueryValueDWORD :: HKEY -> String -> IO DWORD
 regQueryValueDWORD hkey name = alloca $ \ptr -> do
-  regQueryValueEx hkey name (castPtr ptr) (sizeOf (undefined :: DWORD))
+  -- TODO: this throws away the key type returned by regQueryValueEx
+  -- we should check it's what we expect instead
+  _ <- regQueryValueEx hkey name (castPtr ptr) (sizeOf (undefined :: DWORD))
   peek ptr
 
 #endif
