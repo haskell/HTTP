@@ -58,6 +58,7 @@ import Network.Socket ( socketToHandle )
 import Data.Char  ( toLower )
 import Data.Word  ( Word8 )
 import Control.Concurrent
+import Control.Exception ( onException )
 import Control.Monad ( liftM, when )
 import System.IO ( Handle, hFlush, IOMode(..), hClose )
 import System.IO.Error ( isEOFError )
@@ -221,7 +222,7 @@ openTCPConnection_ uri port stashInput = withSocket $ \s -> do
  where
   withSocket action = do
     s <- socket AF_INET Stream 6
-    catchIO (action s) (\e -> sClose s >> ioError e)
+    onException (action s) (sClose s)
   getHostAddr h = do
     catchIO (inet_addr uri)    -- handles ascii IP numbers
             (\ _ -> do

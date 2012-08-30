@@ -44,6 +44,7 @@ import Network.HTTP.Utils ( trim, readsOne )
 
 import Data.Char (toLower)
 import Data.Maybe (fromMaybe)
+import Control.Exception (onException)
 import Control.Monad (when)
 
 -----------------------------------------------------------------
@@ -89,8 +90,8 @@ sendHTTP_notify :: HStream ty
 		-> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
   when providedClose $ (closeOnEnd conn True)
-  catchIO (sendMain conn rq onSendComplete)
-          (\e -> do { close conn; ioError e })
+  onException (sendMain conn rq onSendComplete)
+              (close conn)
  where
   providedClose = findConnClose (rqHeaders rq)
 
