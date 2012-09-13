@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Auth
@@ -189,7 +190,11 @@ headerToChallenge baseURI (Header _ str) =
                }
 
         annotateURIs :: [Maybe URI] -> [URI]
+#ifdef NETWORK23
         annotateURIs = (map (\u -> fromMaybe u (u `relativeTo` baseURI))) . catMaybes
+#else
+        annotateURIs = map (`relativeTo` baseURI) . catMaybes
+#endif
 
         -- Change These:
         readQop :: String -> [Qop]

@@ -913,7 +913,7 @@ request' nullVal rqState rq = do
 	         		   }
                              rq2
                  where
-                   newURI_abs = maybe newURI id (newURI `relativeTo` uri)
+                   newURI_abs = uriDefaultTo newURI uri
 
       (3,0,5) ->
         case retrieveHeaders HdrLocation rsp of
@@ -1035,7 +1035,11 @@ supportedScheme u = uriScheme u == "http:"
 -- If the second argument is not sufficient context for determining
 -- a full URI then anarchy reins.
 uriDefaultTo :: URI -> URI -> URI
+#ifdef NETWORK23
 uriDefaultTo a b = maybe a id (a `relativeTo` b)
+#else
+uriDefaultTo a b = a `relativeTo` b
+#endif
 
 
 -- This form junk is completely untested...
