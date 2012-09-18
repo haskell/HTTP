@@ -85,22 +85,18 @@ Library
                  Network.HTTP.Utils
                  Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: base >= 2 && < 4.7, parsec
+  Build-depends: base >= 2 && < 4.7, network < 2.5, parsec
   Extensions: FlexibleInstances
   if flag(old-base)
     Build-depends: base < 3
   else
     Build-depends: base >= 3, array, old-time, bytestring
+
   if flag(mtl1)
     Build-depends: mtl >= 1.1 && < 1.2
     CPP-Options: -DMTL1
   else
     Build-depends: mtl >= 2.0 && < 2.2
-  if flag(network23)
-    Build-depends: network < 2.4
-    CPP-Options: -DNETWORK23
-  else
-    Build-depends: network >= 2.4 && < 2.5
 
   if flag(warn-as-error)
     ghc-options:      -Werror
@@ -116,6 +112,7 @@ Test-Suite test
   hs-source-dirs: test
   main-is: httpTests.hs
 
+  -- note: version constraints are inherited from HTTP library stanza
   build-depends:     HTTP,
                      HUnit,
                      httpd-shed,
@@ -129,7 +126,7 @@ Test-Suite test
                      warp >= 1.2 && < 1.3,
                      pureMD5 >= 2.1 && < 2.2,
                      base >= 2 && < 4.6,
-                     network < 2.5,
+                     network,
                      split >= 0.1 && < 0.2,
                      test-framework,
                      test-framework-hunit

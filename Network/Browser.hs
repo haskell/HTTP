@@ -1035,10 +1035,10 @@ supportedScheme u = uriScheme u == "http:"
 -- If the second argument is not sufficient context for determining
 -- a full URI then anarchy reins.
 uriDefaultTo :: URI -> URI -> URI
-#ifdef NETWORK23
-uriDefaultTo a b = maybe a id (a `relativeTo` b)
-#else
+#if MIN_VERSION_network(2,4,0)
 uriDefaultTo a b = a `relativeTo` b
+#else
+uriDefaultTo a b = maybe a id (a `relativeTo` b)
 #endif
 
 

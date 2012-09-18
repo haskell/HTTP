@@ -190,10 +190,10 @@ headerToChallenge baseURI (Header _ str) =
                }
 
         annotateURIs :: [Maybe URI] -> [URI]
-#ifdef NETWORK23
-        annotateURIs = (map (\u -> fromMaybe u (u `relativeTo` baseURI))) . catMaybes
-#else
+#if MIN_VERSION_network(2,4,0)
         annotateURIs = map (`relativeTo` baseURI) . catMaybes
+#else
+        annotateURIs = (map (\u -> fromMaybe u (u `relativeTo` baseURI))) . catMaybes
 #endif
 
         -- Change These:
