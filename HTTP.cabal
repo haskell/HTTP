@@ -107,7 +107,7 @@ Library
 Test-Suite test
   type: exitcode-stdio-1.0
 
-  build-tools: ghc >= 6.10 && < 7.6
+  build-tools: ghc >= 6.10
 
   hs-source-dirs: test
   main-is: httpTests.hs
