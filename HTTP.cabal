@@ -1,5 +1,5 @@
 Name: HTTP
-Version: 4000.2.5
+Version: 4000.2.6
 Cabal-Version: >= 1.8
 Build-type: Simple
 License: BSD3
@@ -107,7 +107,7 @@ Library
 Test-Suite test
   type: exitcode-stdio-1.0
 
-  build-tools: ghc >= 6.10 && < 7.6
+  build-tools: ghc >= 6.10
 
   hs-source-dirs: test
   main-is: httpTests.hs
