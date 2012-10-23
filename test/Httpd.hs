@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+
 module Httpd
     ( Request, Response, Server
     , mkResponse
@@ -73,8 +75,10 @@ shed port handler =
           reqBody = Shed.reqBody request
          }
 
+#if !MIN_VERSION_bytestring(0,10,0)
 instance NFData B.ByteString where
-    rnf = rnf . B.length
+   rnf = rnf . B.length
+#endif
 
 warp :: Server
 warp port handler =
