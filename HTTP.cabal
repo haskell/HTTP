@@ -107,7 +107,7 @@ Library
 Test-Suite test
   type: exitcode-stdio-1.0
 
-  build-tools: ghc >= 6.10
+  build-tools: ghc >= 6.10 && < 7.8
 
   hs-source-dirs: test
   main-is: httpTests.hs
@@ -117,17 +117,17 @@ Test-Suite test
                      HUnit,
                      httpd-shed,
                      mtl >= 2.0 && < 2.2,
-                     bytestring >= 0.9 && < 0.10,
+                     bytestring >= 0.9 && < 0.11,
                      case-insensitive >= 0.4 && < 0.5,
                      deepseq >= 1.3 && < 1.4,
-                     http-types >= 0.6 && < 0.7,
-                     conduit >= 0.4 && < 0.5,
-                     wai >= 1.2 && < 1.3,
-                     warp >= 1.2 && < 1.3,
+                     http-types >= 0.6 && < 0.8,
+                     conduit >= 0.4 && < 0.6,
+                     wai >= 1.2 && < 1.4,
+                     warp >= 1.2 && < 1.4,
                      pureMD5 >= 2.1 && < 2.2,
-                     base >= 2 && < 4.6,
+                     base >= 2 && < 4.7,
                      network,
-                     split >= 0.1 && < 0.2,
+                     split >= 0.1 && < 0.3,
                      test-framework,
                      test-framework-hunit
 
