@@ -103,6 +103,19 @@ basicAuthSuccess = do
   body <- getResponseBody response
   assertEqual "Receiving expected response" ((2, 0, 0), "Here's the secret") (code, body)
 
+utf8URLEncode :: Assertion
+utf8URLEncode = do
+  assertEqual "Normal URL" (urlEncode "what-a_mess.com") "what-a_mess.com"
+  assertEqual "Chinese URL" (urlEncode "好") "%E5%A5%BD"
+  assertEqual "Russian URL" (urlEncode "ололо") "%D0%BE%D0%BB%D0%BE%D0%BB%D0%BE"
+
+utf8URLDecode :: Assertion
+utf8URLDecode = do
+  assertEqual "Normal URL" (urlDecode "what-a_mess.com") "what-a_mess.com"
+  assertEqual "Mixed URL" (urlDecode "UTFin进入-wow") "UTFin进入-wow"
+  assertEqual "Chinese URL" (urlDecode "%E5%A5%BD") "好"
+  assertEqual "Russian URL" (urlDecode "%D0%BE%D0%BB%D0%BE%D0%BB%D0%BE") "ололо"
+
 browserExample :: (?testUrl :: ServerAddress) => Assertion
 browserExample = do
   result <-
@@ -513,6 +526,8 @@ basicTests =
     , testCase "Basic HEAD request" basicHeadRequest
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
+    , testCase "UTF-8 urlEncode" utf8URLEncode
+    , testCase "UTF-8 urlDecode" utf8URLDecode
     ]
 
 browserTests =
