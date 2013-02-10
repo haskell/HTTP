@@ -108,8 +108,10 @@ import Network.URI
 
 import Control.Monad ( guard )
 import Control.Monad.Error ()
+import Data.Bits     ( (.&.), (.|.), shiftL, shiftR )
+import Data.Word     ( Word8 )
 import Data.Char     ( digitToInt, intToDigit, toLower, isDigit,
-                       isAscii, isAlphaNum )
+                       isAscii, isAlphaNum, ord, chr )
 import Data.List     ( partition, find )
 import Data.Maybe    ( listToMaybe, fromMaybe )
 import Numeric       ( readHex )
@@ -590,33 +592,102 @@ matchResponse rqst rsp =
     Escape method: char -> '%' a b  where a, b :: Hex digits
 -}
 
+replacement_character :: Char
+replacement_character = '\xfffd'
+
+-- | Encode a single Haskell Char to a list of Word8 values, in UTF8 format.
+--
+-- Shamelessly stolen from utf-8string-0.3.7
+encodeChar :: Char -> [Word8]
+encodeChar = map fromIntegral . go . ord
+ where
+  go oc
+   | oc <= 0x7f       = [oc]
+
+   | oc <= 0x7ff      = [ 0xc0 + (oc `shiftR` 6)
+                        , 0x80 + oc .&. 0x3f
+                        ]
+
+   | oc <= 0xffff     = [ 0xe0 + (oc `shiftR` 12)
+                        , 0x80 + ((oc `shiftR` 6) .&. 0x3f)
+                        , 0x80 + oc .&. 0x3f
+                        ]
+   | otherwise        = [ 0xf0 + (oc `shiftR` 18)
+                        , 0x80 + ((oc `shiftR` 12) .&. 0x3f)
+                        , 0x80 + ((oc `shiftR` 6) .&. 0x3f)
+                        , 0x80 + oc .&. 0x3f
+                        ]
+
+-- | Decode a UTF8 string packed into a list of Word8 values, directly to String
+--
+-- Shamelessly stolen from utf-8string-0.3.7
+decode :: [Word8] -> String
+decode [    ] = ""
+decode (c:cs)
+  | c < 0x80  = chr (fromEnum c) : decode cs
+  | c < 0xc0  = replacement_character : decode cs
+  | c < 0xe0  = multi1
+  | c < 0xf0  = multi_byte 2 0xf  0x800
+  | c < 0xf8  = multi_byte 3 0x7  0x10000
+  | c < 0xfc  = multi_byte 4 0x3  0x200000
+  | c < 0xfe  = multi_byte 5 0x1  0x4000000
+  | otherwise = replacement_character : decode cs
+  where
+    multi1 = case cs of
+      c1 : ds | c1 .&. 0xc0 == 0x80 ->
+        let d = ((fromEnum c .&. 0x1f) `shiftL` 6) .|.  fromEnum (c1 .&. 0x3f)
+        in if d >= 0x000080 then toEnum d : decode ds
+                            else replacement_character : decode ds
+      _ -> replacement_character : decode cs
+
+    multi_byte :: Int -> Word8 -> Int -> [Char]
+    multi_byte i mask overlong = aux i cs (fromEnum (c .&. mask))
+      where
+        aux 0 rs acc
+          | overlong <= acc && acc <= 0x10ffff &&
+            (acc < 0xd800 || 0xdfff < acc)     &&
+            (acc < 0xfffe || 0xffff < acc)      = chr acc : decode rs
+          | otherwise = replacement_character : decode rs
+
+        aux n (r:rs) acc
+          | r .&. 0xc0 == 0x80 = aux (n-1) rs
+                               $ shiftL acc 6 .|. fromEnum (r .&. 0x3f)
+
+        aux _ rs     _ = replacement_character : decode rs
+
+
+-- This function is a bit funny because potentially the input String could contain some actual Unicode
+-- characters (though this shouldn't happen for most use cases), so we have to preserve those characters
+-- while simultaneously decoding any UTF-8 data
 urlDecode :: String -> String
-urlDecode ('%':a:b:rest) = toEnum (16 * digitToInt a + digitToInt b)
-                         : urlDecode rest
-urlDecode (h:t) = h : urlDecode t
-urlDecode [] = []
+urlDecode = go []
+  where
+    go bs ('%':a:b:rest)           = go (fromIntegral (16 * digitToInt a + digitToInt b) : bs) rest
+    go bs (h:t) | fromEnum h < 256 = go (fromIntegral (fromEnum h) : bs) t -- Treat ASCII as just another byte of UTF-8
+    go [] []                       = []
+    go [] (h:t)                    = h : go [] t -- h >= 256, so can't be part of any UTF-8 byte sequence
+    go bs rest                     = decode (reverse bs) ++ go [] rest
 
 
 urlEncode :: String -> String
 urlEncode     [] = []
 urlEncode (ch:t) 
   | (isAscii ch && isAlphaNum ch) || ch `elem` "-_.~" = ch : urlEncode t
-  | not (isAscii ch) = foldr escape (urlEncode t) (eightBs [] (fromEnum ch))
-  | otherwise = escape (fromEnum ch) (urlEncode t)
+  | not (isAscii ch) = foldr escape (urlEncode t) (encodeChar ch)
+  | otherwise = escape (fromIntegral (fromEnum ch)) (urlEncode t)
     where
      escape b rs = '%':showH (b `div` 16) (showH (b `mod` 16) rs)
-     
-     showH x xs
-       | x <= 9    = toEnum (o_0 + x) : xs
-       | otherwise = toEnum (o_A + (x-10)) : xs
-      where
-       o_0 = fromEnum '0'
-       o_A = fromEnum 'A'
 
-     eightBs :: [Int]  -> Int -> [Int]
-     eightBs acc x
-      | x <= 0xff = (x:acc)
-      | otherwise = eightBs ((x `mod` 256) : acc) (x `div` 256)
+     showH :: Word8 -> String -> String
+     showH x xs
+       | x <= 9    = to (o_0 + x) : xs
+       | otherwise = to (o_A + (x-10)) : xs
+      where
+       to  = toEnum  .  fromIntegral
+       fro = fromIntegral . fromEnum
+
+       o_0 = fro '0'
+       o_A = fro 'A'
 
 -- Encode form variables, useable in either the
 -- query part of a URI, or the body of a POST request.
