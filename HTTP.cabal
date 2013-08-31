@@ -85,7 +85,7 @@ Library
                  Network.HTTP.Utils
                  Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
-  Build-depends: base >= 2 && < 4.7, network < 2.5, parsec
+  Build-depends: base >= 2 && < 4.8, network < 2.5, parsec
   Extensions: FlexibleInstances
   if flag(old-base)
     Build-depends: base < 3
@@ -125,7 +125,7 @@ Test-Suite test
                      wai >= 1.2 && < 1.4,
                      warp >= 1.2 && < 1.4,
                      pureMD5 >= 2.1 && < 2.2,
-                     base >= 2 && < 4.7,
+                     base >= 2 && < 4.8,
                      network,
                      split >= 0.1 && < 0.3,
                      test-framework,
