@@ -123,7 +123,8 @@ Test-Suite test
                      http-types >= 0.6 && < 0.9,
                      conduit >= 0.4 && < 1.1,
                      wai >= 1.2 && < 1.4,
-                     warp >= 1.2 && < 1.4,
+                     -- compile failure with warp 1.3.10
+                     warp >= 1.2 && < 1.3.10,
                      pureMD5 >= 2.1 && < 2.2,
                      base >= 2 && < 4.8,
                      network,
