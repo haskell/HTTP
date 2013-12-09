@@ -868,7 +868,7 @@ hopefulTransfer bufOps readL strs
     = readL >>= 
       either (\v -> return $ Left v)
              (\more -> if (buf_isEmpty bufOps more)
-                         then return (Right ([],foldr (flip (buf_append bufOps)) (buf_empty bufOps) strs))
+                         then return (Right ([], buf_concat bufOps $ reverse strs))
                          else hopefulTransfer bufOps readL (more:strs))
 
 -- | A necessary feature of HTTP\/1.1
