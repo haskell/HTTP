@@ -24,7 +24,7 @@ Description:
  .
  The representation of the bytes flowing across is extensible via the use of a type class,
  letting you pick the representation of requests and responses that best fits your use.
- Some pre-packaged, common instances are provided for you (@ByteString@, @String@.)
+ Some pre-packaged, common instances are provided for you (@ByteString@, @String@).
  .
  Here's an example use:
  .
