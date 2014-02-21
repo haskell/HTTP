@@ -25,7 +25,7 @@ import Network.HTTP.Base ( catchIO )
 import Network.HTTP.Utils ( dropWhileTail, chopAtDelim )
 import Network.HTTP.Auth
 import Network.URI
-   ( URI(..), URIAuth(..), parseAbsoluteURI )
+   ( URI(..), URIAuth(..), parseAbsoluteURI, unEscapeString )
 import System.IO ( hPutStrLn, stderr )
 import System.Environment
 
@@ -154,7 +154,7 @@ uri2proxy uri@URI{ uriScheme    = "http:"
    auth =
      case auth' of
        [] -> Nothing
-       as -> Just (AuthBasic "" usr pwd uri)
+       as -> Just (AuthBasic "" (unEscapeString usr) (unEscapeString pwd) uri)
         where
 	 (usr,pwd) = chopAtDelim ':' as
 
