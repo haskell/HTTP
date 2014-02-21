@@ -139,9 +139,9 @@ import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
 import Control.Applicative (Applicative (..), (<$>))
 #ifdef MTL1
-import Control.Monad (filterM, when, ap)
+import Control.Monad (filterM, forM_, when, ap)
 #else
-import Control.Monad (filterM, when)
+import Control.Monad (filterM, forM_, when)
 #endif
 import Control.Monad.State (StateT (..), MonadIO (..), modify, gets, withStateT, evalStateT, MonadState (..))
 
@@ -820,6 +820,8 @@ request' nullVal rqState rq = do
       -- add new cookies to browser state
      handleCookies uri (uriAuthToString $ reqURIAuth rq) 
                        (retrieveHeaders HdrSetCookie rsp)
+     -- Deal with "Connection: close" in response.
+     handleConnectionClose (reqURIAuth rq) (retrieveHeaders HdrConnection rsp)
      mbMxAuths <- getMaxAuthAttempts
      case rspCode rsp of
       (4,0,1) -- Credentials not sent or refused.
@@ -1000,6 +1002,18 @@ updateConnectionPool c = do
 defaultMaxPoolSize :: Int
 defaultMaxPoolSize = 5
 
+cleanConnectionPool :: HStream hTy
+                    => URIAuth -> BrowserAction (HandleStream hTy) ()
+cleanConnectionPool uri = do
+  let ep = EndPoint (uriRegName uri) (uriAuthPort Nothing uri)
+  pool <- gets bsConnectionPool
+  bad <- liftIO $ mapM (\c -> c `isTCPConnectedTo` ep) pool
+  let tmp = zip bad pool
+      newpool = map snd $ filter (not . fst) tmp
+      toclose = map snd $ filter fst tmp
+  liftIO $ forM_ toclose close
+  modify (\b -> b { bsConnectionPool = newpool })
+
 handleCookies :: URI -> String -> [Header] -> BrowserAction t ()
 handleCookies _   _              [] = return () -- cut short the silliness.
 handleCookies uri dom cookieHeaders = do
@@ -1014,6 +1028,15 @@ handleCookies uri dom cookieHeaders = do
   mapM_ addCookie newCookies'
  where
   (errs, newCookies) = processCookieHeaders dom cookieHeaders
+
+handleConnectionClose :: HStream hTy
+                      => URIAuth -> [Header]
+                      -> BrowserAction (HandleStream hTy) ()
+handleConnectionClose _ [] = return ()
+handleConnectionClose uri headers = do
+  let doClose = any (== "close") $ map headerToConnType headers
+  when doClose $ cleanConnectionPool uri
+  where headerToConnType (Header _ t) = map toLower t
 
 ------------------------------------------------------------------
 ----------------------- Miscellaneous ----------------------------
