@@ -151,7 +151,6 @@ browserOneCookie :: (?testUrl :: ServerAddress) => Assertion
 browserOneCookie = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     -- This first requests returns a single Set-Cookie: hello=world
     _ <- request $ getRequest (?testUrl "/browser/one-cookie/1")
 
@@ -166,7 +165,6 @@ browserTwoCookies :: (?testUrl :: ServerAddress) => Assertion
 browserTwoCookies = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     -- This first request returns two cookies
     _ <- request $ getRequest (?testUrl "/browser/two-cookies/1")
 
@@ -182,7 +180,6 @@ browserFollowsRedirect :: (?testUrl :: ServerAddress) => Int -> Assertion
 browserFollowsRedirect n = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     request $ getRequest (?testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
   assertEqual "Receiving expected response from server"
               ((2, 0, 0), "It works.")
@@ -192,7 +189,6 @@ browserReturnsRedirect :: (?testUrl :: ServerAddress) => Int -> Assertion
 browserReturnsRedirect n = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
     request $ getRequest (?testUrl "/browser/redirect/relative/" ++ show n ++ "/basic/get")
   assertEqual "Receiving expected response from server"
               ((n `div` 100, n `mod` 100 `div` 10, n `mod` 10), "")
@@ -205,7 +201,6 @@ browserBasicAuth :: (?testUrl :: ServerAddress) => Assertion
 browserBasicAuth = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
 
     setAuthorityGen authGenBasic
 
@@ -222,7 +217,6 @@ browserDigestAuth :: (?testUrl :: ServerAddress) => Assertion
 browserDigestAuth = do
   (_, response) <- browse $ do
     setOutHandler (const $ return ())
-    setMaxPoolSize (Just 0) -- TODO remove this: workaround for github issue 14
 
     setAuthorityGen authGenDigest
 
@@ -534,9 +528,8 @@ browserTests =
     testGroup "Browser tests"
     [ testGroup "Basic"
       [
-        -- github issue 14
-        -- testCase "Two requests" browserTwoRequests
         testCase "Network.Browser example code" browserExample
+      , testCase "Two requests" browserTwoRequests
       ]
     , testGroup "Secure"
       [
@@ -581,9 +574,8 @@ port80Tests =
     [ testCase "Alternate server" browserAlt
     , testCase "Both servers" browserBoth
     , testCase "Both servers (reversed)" browserBothReversed
-    -- github issue 14
-    -- , testCase "Two requests - alternate server" browserTwoRequestsAlt
-    -- , testCase "Two requests - both servers" browserTwoRequestsBoth
+    , testCase "Two requests - alternate server" browserTwoRequestsAlt
+    , testCase "Two requests - both servers" browserTwoRequestsBoth
     ]
 
 urlRoot :: Int -> String
