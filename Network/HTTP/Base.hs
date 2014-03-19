@@ -120,6 +120,7 @@ import Network.Stream
 import Network.BufferType ( BufferOp(..), BufferType(..) )
 import Network.HTTP.Headers
 import Network.HTTP.Utils ( trim, crlf, sp, readsOne )
+import qualified Network.HTTP.Base64 as Base64 (encode)
 
 import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
@@ -756,6 +757,7 @@ normalizeRequest opts req = foldr (\ f -> f opts) req normalizers
   --normalizers :: [RequestNormalizer ty]
   normalizers = 
      ( normalizeHostURI
+     : normalizeBasicAuth
      : normalizeConnectionClose
      : normalizeUserAgent 
      : normCustoms opts
@@ -780,6 +782,23 @@ normalizeConnectionClose :: RequestNormalizer ty
 normalizeConnectionClose opts req 
  | normDoClose opts = replaceHeader HdrConnection "close" req
  | otherwise        = req
+
+-- | @normalizeBasicAuth opts req@ sets the header @Authorization: Basic...@
+-- if the "user:pass@" part is present in the "http://user:pass@host/path"
+-- of the URI. If Authorization header was present already it is not replaced.
+normalizeBasicAuth :: RequestNormalizer ty
+normalizeBasicAuth _ req =
+  case getAuth req of
+    Just uriauth ->
+      case (user uriauth, password uriauth) of
+        (Just u, Just p) ->
+          insertHeaderIfMissing HdrAuthorization astr req
+            where
+              astr = "Basic " ++ base64encode (u ++ ":" ++ p)
+              base64encode = Base64.encode . stringToOctets :: String -> String
+              stringToOctets = map (fromIntegral . fromEnum) :: String -> [Word8]
+        (_, _) -> req
+    Nothing ->req
 
 -- | @normalizeHostURI forProxy req@ rewrites your request to have it
 -- follow the expected formats by the receiving party (proxy or server.)

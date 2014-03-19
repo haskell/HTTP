@@ -82,6 +82,22 @@ basicPostRequest = do
               (show (Just "text/plain", Just "4", sendBody))
               body
 
+userpwAuthFailure :: (?baduserpwUrl :: ServerAddress) => Assertion
+userpwAuthFailure = do
+  response <- simpleHTTP (getRequest (?baduserpwUrl "/auth/basic"))
+  code <- getResponseCode response
+  body <- getResponseBody response
+  assertEqual "HTTP status code" ((4, 0, 1),
+                "Just \"Basic dGVzdDp3cm9uZ3B3ZA==\"") (code, body)
+  -- in case of 401, the server returns the contents of the Authz header
+
+userpwAuthSuccess :: (?userpwUrl :: ServerAddress) => Assertion
+userpwAuthSuccess = do
+  response <- simpleHTTP (getRequest (?userpwUrl "/auth/basic"))
+  code <- getResponseCode response
+  body <- getResponseBody response
+  assertEqual "Receiving expected response" ((2, 0, 0), "Here's the secret") (code, body)
+
 basicAuthFailure :: (?testUrl :: ServerAddress) => Assertion
 basicAuthFailure = do
   response <- simpleHTTP (getRequest (?testUrl "/auth/basic"))
@@ -518,6 +534,8 @@ basicTests =
     , testCase "Secure GET request" secureGetRequest
     , testCase "Basic POST request" basicPostRequest
     , testCase "Basic HEAD request" basicHeadRequest
+    , testCase "URI user:pass Auth failure" userpwAuthFailure
+    , testCase "URI user:pass Auth success" userpwAuthSuccess
     , testCase "Basic Auth failure" basicAuthFailure
     , testCase "Basic Auth success" basicAuthSuccess
     , testCase "UTF-8 urlEncode" utf8URLEncode
@@ -578,19 +596,19 @@ port80Tests =
     , testCase "Two requests - both servers" browserTwoRequestsBoth
     ]
 
-urlRoot :: Int -> String
-urlRoot 80 = "http://localhost"
-urlRoot n = "http://localhost:" ++ show n
+urlRoot :: String -> Int -> String
+urlRoot userpw 80 = "http://" ++ userpw ++ "localhost"
+urlRoot userpw n = "http://" ++ userpw ++ "localhost:" ++ show n
 
-secureRoot :: Int -> String
-secureRoot 443 = "https://localhost"
-secureRoot n = "https://localhost:" ++ show n
+secureRoot :: String -> Int -> String
+secureRoot userpw 443 = "https://" ++ userpw ++ "localhost"
+secureRoot userpw n = "https://" ++ userpw ++ "localhost:" ++ show n
 
 type ServerAddress = String -> String
 
-httpAddress, httpsAddress :: Int -> ServerAddress
-httpAddress port p = urlRoot port ++ p
-httpsAddress port p = secureRoot port ++ p
+httpAddress, httpsAddress :: String -> Int -> ServerAddress
+httpAddress userpw port p = urlRoot userpw port ++ p
+httpsAddress userpw port p = secureRoot userpw port ++ p
 
 main :: IO ()
 main = do
@@ -604,15 +622,17 @@ main = do
 
   let setupNormalTests = do
       flip mapM numberedServers $ \(portNum, (serverName, server)) -> do
-         let ?testUrl = httpAddress portNum
-             ?secureTestUrl = httpsAddress portNum
+         let ?testUrl = httpAddress "" portNum
+             ?userpwUrl = httpAddress "test:password@" portNum
+             ?baduserpwUrl = httpAddress "test:wrongpwd@" portNum
+             ?secureTestUrl = httpsAddress "" portNum
          _ <- forkIO $ server portNum processRequest
          return $ testGroup serverName [basicTests, browserTests]
 
   let setupAltTests = do
       let (portNum, (_, server)) = head numberedServers
-      let ?testUrl = httpAddress portNum
-          ?altTestUrl = httpAddress altPortNum
+      let ?testUrl = httpAddress "" portNum
+          ?altTestUrl = httpAddress "" altPortNum
       _ <- forkIO $ server altPortNum altProcessRequest
       return port80Tests
 

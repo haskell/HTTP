@@ -1,3 +1,4 @@
+ * If the URI contains "user:pass@" part, use it for Basic Authorization
  * Add a test harness.
  * Don't leak a socket when getHostAddr throws an exception.
  * Send cookies in request format, not response format.
