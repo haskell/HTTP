@@ -32,7 +32,10 @@
 -- 
 -- /NOTE:/ The 'Request' send actions will normalize the @Request@ prior to transmission.
 -- Normalization such as having the request path be in the expected form and, possibly,
--- introduce a default @Host:@ header if one isn't already present. If you do not 
+-- introduce a default @Host:@ header if one isn't already present.
+-- Normalization also takes the @"user:pass\@"@ portion out of the the URI,
+-- if it was supplied, and converts it into @Authorization: Basic$ header.
+-- If you do not 
 -- want the requests tampered with, but sent as-is, please import and use the
 -- the "Network.HTTP.HandleStream" or "Network.HTTP.Stream" modules instead. They
 -- export the same functions, but leaves construction and any normalization of 
