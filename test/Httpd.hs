@@ -84,7 +84,7 @@ warp :: Server
 warp port handler =
     Warp.run port $ \warpRequest -> do
        request <- requestFromWarp warpRequest
-       response <- lift $ handler request
+       response <- handler request
        return (responseToWarp response)
   where
      responseToWarp (Response status hdrs body) =
