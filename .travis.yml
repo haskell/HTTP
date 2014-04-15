@@ -47,20 +47,19 @@ before_install:
 
 install:
  - cabal-1.18 update
- - cabal-1.18 install --only-dependencies --enable-tests --enable-benchmarks
+ - cabal-1.18 install --only-dependencies
 
 # Here starts the actual work to be performed for the package under
 # test; any command which exits with a non-zero exit code causes the
 # build to fail.
 script:
  # -v2 provides useful information for debugging
- - cabal-1.18 configure --enable-tests --enable-benchmarks -v2
+ - cabal-1.18 configure -v2
 
  # this builds all libraries and executables
  # (including tests/benchmarks)
  - cabal-1.18 build
 
- - cabal-1.18 test
  - cabal-1.18 check
 
  # tests that a source-distribution can be generated
