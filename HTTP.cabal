@@ -55,10 +55,6 @@ Flag mtl1
   description: Use the old mtl version 1.
   default: False
 
-Flag warn-as-error
-  default:     False
-  description: Build with warnings-as-errors
-
 Flag network23
   description: Use version 2.3.x or below of the network package
   default: False
@@ -97,9 +93,6 @@ Library
     CPP-Options: -DMTL1
   else
     Build-depends: mtl >= 2.0 && < 2.2
-
-  if flag(warn-as-error)
-    ghc-options:      -Werror
 
   if os(windows)
     Build-depends: Win32
