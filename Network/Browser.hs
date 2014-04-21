@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses, GeneralizedNewtypeDeriving, CPP #-}
+{-# LANGUAGE MultiParamTypeClasses, GeneralizedNewtypeDeriving, CPP, FlexibleContexts #-}
 {- |
 
 Module      :  Network.Browser
