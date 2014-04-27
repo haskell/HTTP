@@ -15,7 +15,7 @@ import Control.Applicative
 import Control.Arrow ( (***) )
 import Control.DeepSeq
 import Control.Monad
-import Control.Monad.Trans ( lift )
+import Control.Monad.Trans ( liftIO )
 import Data.ByteString as B ( empty, concat, length, ByteString )
 import Data.ByteString.Char8 as BC ( pack, unpack )
 import Data.ByteString.Lazy.Char8 as BLC ( pack )
@@ -91,7 +91,7 @@ warp :: Server
 warp port handler =
     Warp.run port $ \warpRequest -> do
        request <- requestFromWarp warpRequest
-       response <- handler request
+       response <- liftIO $ handler request
        return (responseToWarp response)
   where
      responseToWarp (Response status hdrs body) =
