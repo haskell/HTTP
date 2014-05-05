@@ -92,7 +92,7 @@ Library
     Build-depends: mtl >= 1.1.0.0 && < 1.2
     CPP-Options: -DMTL1
   else
-    Build-depends: mtl >= 2.0 && < 2.2
+    Build-depends: mtl >= 2.0 && < 2.3
 
   build-tools: ghc >= 6.10 && < 7.10
 
