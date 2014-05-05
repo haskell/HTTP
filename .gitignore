@@ -1,2 +1,8 @@
 *~
 dist
+.cabal-sandbox*
+Setup.hi
+Setup.o
+cabal.sandbox.config
+setup.exe
+setup.exe.manifest
