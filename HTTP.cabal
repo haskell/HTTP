@@ -54,6 +54,7 @@ Flag mtl1
 Flag warn-as-error
   default:     False
   description: Build with warnings-as-errors
+  manual:      True
 
 Flag network23
   description: Use version 2.3.x or below of the network package
