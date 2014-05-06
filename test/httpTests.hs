@@ -22,6 +22,7 @@ import Network.Stream (Result)
 import Network.URI (uriPath, parseURI)
 
 import System.Environment (getArgs)
+import System.Info (os)
 import System.IO (getChar)
 
 import Test.Framework (defaultMainWithArgs, testGroup)
@@ -600,7 +601,7 @@ data InetFamily = IPv4 | IPv6
 
 familyToLocalhost :: InetFamily -> String
 familyToLocalhost IPv4 = "127.0.0.1"
-familyToLocalhost IPv6 = "ip6-localhost"
+familyToLocalhost IPv6 = if os == "mingw32" then "localhost" else "ip6-localhost" 
 
 urlRoot :: InetFamily -> String -> Int -> String
 urlRoot fam userpw 80 = "http://" ++ userpw ++ familyToLocalhost fam

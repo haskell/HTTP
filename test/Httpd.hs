@@ -96,10 +96,8 @@ warp ipv6 port handler = do
         [] -> fail "Couldn't obtain address information in warp"
         (addri:_) -> do
             sock <- socket (addrFamily addri) Stream defaultProtocol
-            setSocketOption sock ReuseAddr 1
-            setSocketOption sock ReusePort 1
             bind sock (addrAddress addri)
-            listen sock 128
+            listen sock 5
             Warp.runSettingsSocket (Warp.setPort port Warp.defaultSettings) sock $ \warpRequest -> do
                request <- requestFromWarp warpRequest
                response <- handler request
