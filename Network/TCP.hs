@@ -40,7 +40,7 @@ import Network.Socket
    , shutdown, ShutdownCmd(..)
    , sClose, setSocketOption, getPeerName
    , socket, Family(AF_UNSPEC), defaultProtocol, getAddrInfo
-   , defaultHints, addrFamily
+   , defaultHints, addrFamily, withSocketsDo
    , addrSocketType, addrAddress
    )
 import qualified Network.Stream as Stream
@@ -215,7 +215,7 @@ openTCPConnection uri port = openTCPConnection_ uri port False
 
 openTCPConnection_ :: BufferType ty => String -> Int -> Bool -> IO (HandleStream ty)
 openTCPConnection_ uri port stashInput = do
-    addrinfos <- getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream }) (Just uri) (Just . show $ port)
+    addrinfos <- withSocketsDo $ getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream }) (Just uri) (Just . show $ port)
     case addrinfos of
         [] -> fail "openTCPConnection: getAddrInfo returned no address information"
         (a:_) -> do
