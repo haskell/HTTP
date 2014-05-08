@@ -20,6 +20,13 @@ import qualified Data.CaseInsensitive as CI ( mk, original )
 import Data.Maybe ( fromJust )
 import Network.URI ( URI, parseRelativeReference )
 
+import Network.Socket
+    ( getAddrInfo, AddrInfo, defaultHints, addrAddress, addrFamily
+      , addrFlags, addrSocketType, AddrInfoFlag(AI_PASSIVE), socket, Family(AF_UNSPEC,AF_INET6)
+      , defaultProtocol, bind, SocketType(Stream), listen, setSocketOption
+      , SocketOption(ReuseAddr,ReusePort)
+    )
+
 import qualified Network.Shed.Httpd as Shed
     ( Request, Response(Response), initServer
     , reqMethod, reqURI, reqHeaders, reqBody
@@ -33,7 +40,7 @@ import qualified Network.Wai as Warp
     ( Request(requestMethod, requestHeaders, rawPathInfo, requestBody)
     , responseLBS )
 import qualified Network.Wai.Handler.Warp as Warp
-    ( run )
+    ( runSettingsSocket, defaultSettings, setPort )
 
 data Request = Request
     {
@@ -80,12 +87,21 @@ instance NFData B.ByteString where
    rnf = rnf . B.length
 #endif
 
-warp :: Server
-warp port handler =
-    Warp.run port $ \warpRequest -> do
-       request <- requestFromWarp warpRequest
-       response <- handler request
-       return (responseToWarp response)
+warp :: Bool -> Server
+warp ipv6 port handler = do
+    addrinfos <- getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream })
+                             (Just $ if ipv6 then "::1" else "127.0.0.1")
+                             (Just . show $ port)
+    case addrinfos of
+        [] -> fail "Couldn't obtain address information in warp"
+        (addri:_) -> do
+            sock <- socket (addrFamily addri) Stream defaultProtocol
+            bind sock (addrAddress addri)
+            listen sock 5
+            Warp.runSettingsSocket (Warp.setPort port Warp.defaultSettings) sock $ \warpRequest -> do
+               request <- requestFromWarp warpRequest
+               response <- handler request
+               return (responseToWarp response)
   where
      responseToWarp (Response status hdrs body) =
          Warp.responseLBS

@@ -34,13 +34,14 @@ module Network.TCP
 
    ) where
 
-import Network.BSD (getHostByName, hostAddresses)
 import Network.Socket
-   ( Socket, SockAddr(SockAddrInet), SocketOption(KeepAlive)
-   , SocketType(Stream), inet_addr, connect
+   ( Socket, SocketOption(KeepAlive)
+   , SocketType(Stream), connect
    , shutdown, ShutdownCmd(..)
    , sClose, setSocketOption, getPeerName
-   , socket, Family(AF_INET)
+   , socket, Family(AF_UNSPEC), defaultProtocol, getAddrInfo
+   , defaultHints, addrFamily, withSocketsDo
+   , addrSocketType, addrAddress
    )
 import qualified Network.Stream as Stream
    ( Stream(readBlock, readLine, writeBlock, close, closeOnEnd) )
@@ -213,27 +214,17 @@ openTCPConnection :: BufferType ty => String -> Int -> IO (HandleStream ty)
 openTCPConnection uri port = openTCPConnection_ uri port False
 
 openTCPConnection_ :: BufferType ty => String -> Int -> Bool -> IO (HandleStream ty)
-openTCPConnection_ uri port stashInput = withSocket $ \s -> do
-    setSocketOption s KeepAlive 1
-    hostA <- getHostAddr uri
-    let a = SockAddrInet (toEnum port) hostA
-    connect s a
-    socketConnection_ uri port s stashInput
- where
-  withSocket action = do
-    s <- socket AF_INET Stream 6
-    onException (action s) (sClose s)
-  getHostAddr h = do
-    catchIO (inet_addr uri)    -- handles ascii IP numbers
-            (\ _ -> do
-	        host <- getHostByName_safe uri
-                case hostAddresses host of
-                  []     -> fail ("openTCPConnection: no addresses in host entry for " ++ show h)
-                  (ha:_) -> return ha)
-
-  getHostByName_safe h = 
-    catchIO (getHostByName h)
-            (\ _ -> fail ("openTCPConnection: host lookup failure for " ++ show h))
+openTCPConnection_ uri port stashInput = do
+    addrinfos <- withSocketsDo $ getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream }) (Just uri) (Just . show $ port)
+    case addrinfos of
+        [] -> fail "openTCPConnection: getAddrInfo returned no address information"
+        (a:_) -> do
+                s <- socket (addrFamily a) Stream defaultProtocol
+                onException (do
+                            setSocketOption s KeepAlive 1
+                            connect s (addrAddress a)
+                            socketConnection_ uri port s stashInput
+                            ) (sClose s)
 
 -- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
 socketConnection :: BufferType ty
