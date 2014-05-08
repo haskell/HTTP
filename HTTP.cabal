@@ -119,7 +119,7 @@ Test-Suite test
   -- note: version constraints are inherited from HTTP library stanza
   build-depends:     HTTP,
                      HUnit,
-                     httpd-shed,
+                     httpd-shed >= 0.4 && < 0.5,
                      mtl >= 2.0 && < 2.3,
                      bytestring >= 0.9 && < 0.11,
                      case-insensitive >= 0.4 && < 1.3,
