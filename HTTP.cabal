@@ -96,7 +96,7 @@ Library
     Build-depends: mtl >= 1.1.0.0 && < 1.2
     CPP-Options: -DMTL1
   else
-    Build-depends: mtl >= 2.0 && < 2.2
+    Build-depends: mtl >= 2.0 && < 2.3
 
   build-tools: ghc >= 6.10 && < 7.10
 
@@ -120,7 +120,7 @@ Test-Suite test
   build-depends:     HTTP,
                      HUnit,
                      httpd-shed,
-                     mtl >= 2.0 && < 2.2,
+                     mtl >= 2.0 && < 2.3,
                      bytestring >= 0.9 && < 0.11,
                      case-insensitive >= 0.4 && < 1.2,
                      deepseq >= 1.3 && < 1.4,
