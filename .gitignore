@@ -6,3 +6,11 @@ Setup.o
 cabal.sandbox.config
 setup.exe
 setup.exe.manifest
+test/get
+test/get.exe
+test/get.hi
+test/get.o
+test/getb
+test/getb.exe
+test/getb.hi
+test/getb.o
