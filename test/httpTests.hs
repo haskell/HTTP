@@ -1,4 +1,4 @@
-{-# LANGUAGE ImplicitParams, ViewPatterns, NoMonomorphismRestriction #-}
+{-# LANGUAGE ImplicitParams, ViewPatterns, NoMonomorphismRestriction, CPP #-}
 import Control.Concurrent
 
 import Control.Applicative ((<$))
@@ -423,7 +423,7 @@ isSubsetOf xs ys = all (`elem` ys) xs
 -- first bits of result text from haskell.org (just to give some representative text)
 haskellOrgText =
   "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd\">\
-\<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\" dir=\"ltr\">\
+\\t<html xmlns=\"http://www.w3.org/1999/xhtml\" xml:lang=\"en\" lang=\"en\" dir=\"ltr\">\
 \\t<head>\
 \\t\t<meta http-equiv=\"Content-Type\" content=\"text/html; charset=UTF-8\" />\
 \\t\t\t\t<meta name=\"keywords\" content=\"Haskell,Applications and libraries,Books,Foreign Function Interface,Functional programming,Hac Boston,HakkuTaikai,HaskellImplementorsWorkshop/2011,Haskell Communities and Activities Report,Haskell in education,Haskell in industry\" />"
@@ -614,7 +614,12 @@ main :: IO ()
 main = do
   args <- getArgs
 
-  let servers = [("httpd-shed", Httpd.shed), ("warp", Httpd.warp)]
+  let servers =
+          [ ("httpd-shed", Httpd.shed)
+#ifdef WARP_TESTS
+          , ("warp", Httpd.warp)
+#endif
+          ]
       basePortNum, altPortNum :: Int
       basePortNum = 5812
       altPortNum = 80

@@ -4,7 +4,10 @@ module Httpd
     ( Request, Response, Server
     , mkResponse
     , reqMethod, reqURI, reqHeaders, reqBody
-    , shed, warp
+    , shed
+#ifdef WARP_TESTS
+    , warp
+#endif
     )
     where
 
@@ -16,7 +19,9 @@ import Control.Monad.Trans ( lift )
 import Data.ByteString as B ( empty, concat, length, ByteString )
 import Data.ByteString.Char8 as BC ( pack, unpack )
 import Data.ByteString.Lazy.Char8 as BLC ( pack )
+#ifdef WARP_TESTS
 import qualified Data.CaseInsensitive as CI ( mk, original )
+#endif
 import Data.Maybe ( fromJust )
 import Network.URI ( URI, parseRelativeReference )
 
@@ -24,7 +29,7 @@ import qualified Network.Shed.Httpd as Shed
     ( Request, Response(Response), initServer
     , reqMethod, reqURI, reqHeaders, reqBody
     )
-
+#ifdef WARP_TESTS
 import qualified Data.Conduit.Lazy as Warp
     ( lazyConsume )
 import qualified Network.HTTP.Types as Warp
@@ -34,6 +39,7 @@ import qualified Network.Wai as Warp
     , responseLBS )
 import qualified Network.Wai.Handler.Warp as Warp
     ( run )
+#endif
 
 data Request = Request
     {
@@ -80,6 +86,7 @@ instance NFData B.ByteString where
    rnf = rnf . B.length
 #endif
 
+#ifdef WARP_TESTS
 warp :: Server
 warp port handler =
     Warp.run port $ \warpRequest -> do
@@ -108,3 +115,4 @@ warp port handler =
                  reqHeaders = map headerFromWarp (Warp.requestHeaders request),
                  reqBody = BC.unpack (B.concat body)
                 }
+#endif
