@@ -3,6 +3,8 @@
 
 -- ghc --make -package HTTP get.hs -o get
 
+module Main where
+
 import Data.Char (intToDigit)
 import Network.HTTP
 import Network.Stream
