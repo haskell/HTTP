@@ -215,6 +215,10 @@ openTCPConnection uri port = openTCPConnection_ uri port False
 
 openTCPConnection_ :: BufferType ty => String -> Int -> Bool -> IO (HandleStream ty)
 openTCPConnection_ uri port stashInput = do
+    -- use withSocketsDo here in case the caller hasn't used it, which would make getAddrInfo fail on Windows
+    -- although withSocketsDo is supposed to wrap the entire program, in practice it is safe to use it locally
+    -- like this as it just does a once-only installation of a shutdown handler to run at program exit,
+    -- rather than actually shutting down after the action
     addrinfos <- withSocketsDo $ getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream }) (Just uri) (Just . show $ port)
     case addrinfos of
         [] -> fail "openTCPConnection: getAddrInfo returned no address information"
