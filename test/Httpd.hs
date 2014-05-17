@@ -4,7 +4,10 @@ module Httpd
     ( Request, Response, Server
     , mkResponse
     , reqMethod, reqURI, reqHeaders, reqBody
-    , shed, warp
+    , shed
+#ifdef WARP_TESTS
+    , warp
+#endif
     )
     where
 
@@ -12,11 +15,13 @@ import Control.Applicative
 import Control.Arrow ( (***) )
 import Control.DeepSeq
 import Control.Monad
-import Control.Monad.Trans ( lift )
+import Control.Monad.Trans ( liftIO )
 import Data.ByteString as B ( empty, concat, length, ByteString )
 import Data.ByteString.Char8 as BC ( pack, unpack )
 import Data.ByteString.Lazy.Char8 as BLC ( pack )
+#ifdef WARP_TESTS
 import qualified Data.CaseInsensitive as CI ( mk, original )
+#endif
 import Data.Maybe ( fromJust )
 import Network.URI ( URI, parseRelativeReference )
 
@@ -31,7 +36,7 @@ import qualified Network.Shed.Httpd as Shed
     ( Request, Response(Response), initServer
     , reqMethod, reqURI, reqHeaders, reqBody
     )
-
+#ifdef WARP_TESTS
 import qualified Data.Conduit.Lazy as Warp
     ( lazyConsume )
 import qualified Network.HTTP.Types as Warp
@@ -41,6 +46,7 @@ import qualified Network.Wai as Warp
     , responseLBS )
 import qualified Network.Wai.Handler.Warp as Warp
     ( runSettingsSocket, defaultSettings, setPort )
+#endif
 
 data Request = Request
     {
@@ -87,6 +93,7 @@ instance NFData B.ByteString where
    rnf = rnf . B.length
 #endif
 
+#ifdef WARP_TESTS
 warp :: Bool -> Server
 warp ipv6 port handler = do
     addrinfos <- getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream })
@@ -124,3 +131,4 @@ warp ipv6 port handler = do
                  reqHeaders = map headerFromWarp (Warp.requestHeaders request),
                  reqBody = BC.unpack (B.concat body)
                 }
+#endif
