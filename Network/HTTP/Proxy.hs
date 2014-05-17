@@ -19,6 +19,12 @@ module Network.HTTP.Proxy
        , parseProxy  -- :: String -> Maybe Proxy
        ) where
 
+{-
+#if !defined(WIN32) && defined(mingw32_HOST_OS)
+#define WIN32 1
+#endif
+-}
+
 import Control.Monad ( when, mplus, join, liftM2)
 
 #if defined(WIN32)
