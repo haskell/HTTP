@@ -126,7 +126,9 @@ Test-Suite test
   hs-source-dirs: test
   main-is: httpTests.hs
 
-  other-modules: Httpd
+  other-modules:
+    Httpd
+    UnitTests
 
   -- note: version constraints are inherited from HTTP library stanza
   build-depends:     HTTP,

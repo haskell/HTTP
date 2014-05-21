@@ -124,7 +124,7 @@ import qualified Network.HTTP.Base64 as Base64 (encode)
 
 import Text.Read.Lex (readDecP)
 import Text.ParserCombinators.ReadP
-   ( ReadP, readP_to_S, char, (<++), look, munch )
+   ( ReadP, readP_to_S, char, (<++), look, munch, munch1 )
 
 import Control.Exception as Exception (catch, IOException)
 
@@ -156,10 +156,18 @@ pURIAuthority :: ReadP URIAuthority
 pURIAuthority = do
 		(u,pw) <- (pUserInfo `before` char '@') 
 			  <++ return (Nothing, Nothing)
-		h <- munch (/=':')
+		h <- rfc2732host <++ munch (/=':')
 		p <- orNothing (char ':' >> readDecP)
 		look >>= guard . null 
 		return URIAuthority{ user=u, password=pw, host=h, port=p }
+
+-- RFC2732 adds support for '[literal-ipv6-address]' in the host part of a URL
+rfc2732host :: ReadP String
+rfc2732host = do
+    _ <- char '['
+    res <- munch1 (/=']')
+    _ <- char ']'
+    return res
 
 pUserInfo :: ReadP (Maybe String, Maybe String)
 pUserInfo = do

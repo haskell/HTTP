@@ -12,6 +12,7 @@ import Data.Maybe (fromJust)
 import System.IO.Error (userError)
 
 import qualified Httpd
+import qualified UnitTests
 
 import Network.Browser
 import Network.HTTP
@@ -660,8 +661,8 @@ main = do
         normalTests <- setupNormalTests
         altTests <- setupAltTests
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs (normalTests ++ [altTests]) args
+        defaultMainWithArgs (UnitTests.unitTests ++ normalTests ++ [altTests]) args
      args -> do -- run the test harness as normal
         normalTests <- setupNormalTests
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs normalTests args
+        defaultMainWithArgs (UnitTests.unitTests ++ normalTests) args
