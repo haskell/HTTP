@@ -602,7 +602,7 @@ data InetFamily = IPv4 | IPv6
 
 familyToLocalhost :: InetFamily -> String
 familyToLocalhost IPv4 = "127.0.0.1"
-familyToLocalhost IPv6 = if os == "mingw32" then "localhost" else "ip6-localhost" 
+familyToLocalhost IPv6 = "[::1]"
 
 urlRoot :: InetFamily -> String -> Int -> String
 urlRoot fam userpw 80 = "http://" ++ userpw ++ familyToLocalhost fam
