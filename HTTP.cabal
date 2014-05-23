@@ -5,7 +5,7 @@ Build-type: Simple
 License: BSD3
 License-file: LICENSE
 Author: Warrick Gray <warrick.gray@hotmail.com>
-Maintainer: Ganesh Sittampalam <http@projects.haskell.org>
+Maintainer: Ganesh Sittampalam <ganesh@earth.li>
 Homepage: https://github.com/haskell/HTTP
 Category: Network
 Synopsis: A library for client-side HTTP
