@@ -28,9 +28,15 @@ import Network.URI ( URI, parseRelativeReference )
 import Network.Socket
     ( getAddrInfo, AddrInfo, defaultHints, addrAddress, addrFamily
       , addrFlags, addrSocketType, AddrInfoFlag(AI_PASSIVE), socket, Family(AF_UNSPEC,AF_INET6)
-      , defaultProtocol, bind, SocketType(Stream), listen, setSocketOption
-      , SocketOption(ReuseAddr,ReusePort)
+      , defaultProtocol, SocketType(Stream), listen, setSocketOption
     )
+#ifdef WARP_TESTS
+#if MIN_VERSION_network(2,4,0)
+import Network.Socket ( bind )
+#else
+import Network.Socket ( bindSocket, Socket, SockAddr )
+#endif
+#endif
 
 import qualified Network.Shed.Httpd as Shed
     ( Request, Response(Response), initServer
@@ -94,6 +100,11 @@ instance NFData B.ByteString where
 #endif
 
 #ifdef WARP_TESTS
+#if !MIN_VERSION_network(2,4,0)
+bind :: Socket -> SockAddr -> IO ()
+bind = bindSocket
+#endif
+
 warp :: Bool -> Server
 warp ipv6 port handler = do
     addrinfos <- getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream })
