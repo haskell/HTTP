@@ -5,7 +5,7 @@ Build-type: Simple
 License: BSD3
 License-file: LICENSE
 Author: Warrick Gray <warrick.gray@hotmail.com>
-Maintainer: Ganesh Sittampalam <http@projects.haskell.org>
+Maintainer: Ganesh Sittampalam <ganesh@earth.li>
 Homepage: https://github.com/haskell/HTTP
 Category: Network
 Synopsis: A library for client-side HTTP
@@ -92,7 +92,9 @@ Library
                  Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
 
-  Build-depends: base >= 3.0 && < 4.8, parsec >= 2.0 && < 3.2
+  -- note the test harness constraints should be kept in sync with these
+  -- where dependencies are shared
+  Build-depends: base >= 3.0.3.1 && < 4.8, parsec >= 2.0 && < 3.2
   Build-depends: array >= 0.2.0.0 && < 0.6, old-time >= 1.0.0.0 && < 1.2, bytestring >= 0.9.1.3 && < 0.11
 
   Extensions: FlexibleInstances
@@ -130,31 +132,32 @@ Test-Suite test
     Httpd
     UnitTests
 
-  -- note: version constraints are inherited from HTTP library stanza
+  -- note: version constraints for dependencies shared with the library
+  -- should be the same
   build-depends:     HTTP,
-                     HUnit,
+                     HUnit >= 1.2.0.1 && < 1.3,
                      httpd-shed >= 0.4 && < 0.5,
-                     mtl >= 2.0 && < 2.3,
-                     bytestring >= 0.9 && < 0.11,
-                     deepseq >= 1.3 && < 1.4,
-                     pureMD5 >= 2.1 && < 2.2,
-                     base >= 2 && < 4.8,
-                     network,
-                     split >= 0.1 && < 0.3,
-                     test-framework,
-                     test-framework-hunit
+                     mtl >= 1.1.0.0 && < 2.3,
+                     bytestring >= 0.9.1.3 && < 0.11,
+                     deepseq >= 1.3.0.0 && < 1.4,
+                     pureMD5 >= 0.2.4 && < 2.2,
+                     base >= 3.0.3.1 && < 4.8,
+                     network >= 2.2.0.1 && < 2.6,
+                     split >= 0.1.3 && < 0.3,
+                     test-framework >= 0.2.0 && < 0.9,
+                     test-framework-hunit >= 0.2.0 && <0.4
 
   if flag(warp-tests)
     CPP-Options: -DWARP_TESTS
     build-depends:
-                       case-insensitive >= 0.4 && < 1.3,
-                       http-types >= 0.6 && < 0.9,
-                       wai >= 1.2 && < 2.2,
-                       warp >= 1.2 && < 2.2
+                       case-insensitive >= 0.2 && < 1.3,
+                       http-types >= 0.6.1 && < 0.9,
+                       wai >= 1.2.0 && < 2.2,
+                       warp >= 1.2.0 && < 2.2
 
     if flag(conduit10)
       build-depends:
-                         conduit >= 0.4 && < 1.1
+                         conduit >= 0.4.0 && < 1.1
     else
       build-depends:
                          conduit >= 1.1 && < 1.2,

@@ -1,0 +1,11 @@
+#!/bin/sh -e
+
+BACKJUMPS=10000
+
+echo OPTIONS: $*
+cabal clean
+cabal install --only-dependencies --force-reinstalls --max-backjumps=$BACKJUMPS --enable-tests $*
+cabal configure --enable-tests $*
+cabal build
+cabal test
+

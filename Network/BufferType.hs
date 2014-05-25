@@ -6,7 +6,7 @@
 -- Copyright   :  See LICENSE file
 -- License     :  BSD
 --
--- Maintainer  :  Ganesh Sittampalam <http@projects.haskell.org>
+-- Maintainer  :  Ganesh Sittampalam <ganesh@earth.li>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
