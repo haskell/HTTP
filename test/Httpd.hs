@@ -25,6 +25,19 @@ import qualified Data.CaseInsensitive as CI ( mk, original )
 import Data.Maybe ( fromJust )
 import Network.URI ( URI, parseRelativeReference )
 
+import Network.Socket
+    ( getAddrInfo, AddrInfo, defaultHints, addrAddress, addrFamily
+      , addrFlags, addrSocketType, AddrInfoFlag(AI_PASSIVE), socket, Family(AF_UNSPEC,AF_INET6)
+      , defaultProtocol, SocketType(Stream), listen, setSocketOption
+    )
+#ifdef WARP_TESTS
+#if MIN_VERSION_network(2,4,0)
+import Network.Socket ( bind )
+#else
+import Network.Socket ( bindSocket, Socket, SockAddr )
+#endif
+#endif
+
 import qualified Network.Shed.Httpd as Shed
     ( Request, Response(Response), initServer
     , reqMethod, reqURI, reqHeaders, reqBody
@@ -38,7 +51,7 @@ import qualified Network.Wai as Warp
     ( Request(requestMethod, requestHeaders, rawPathInfo, requestBody)
     , responseLBS )
 import qualified Network.Wai.Handler.Warp as Warp
-    ( run )
+    ( runSettingsSocket, defaultSettings, setPort )
 #endif
 
 data Request = Request
@@ -87,12 +100,26 @@ instance NFData B.ByteString where
 #endif
 
 #ifdef WARP_TESTS
-warp :: Server
-warp port handler =
-    Warp.run port $ \warpRequest -> do
-       request <- requestFromWarp warpRequest
-       response <- liftIO $ handler request
-       return (responseToWarp response)
+#if !MIN_VERSION_network(2,4,0)
+bind :: Socket -> SockAddr -> IO ()
+bind = bindSocket
+#endif
+
+warp :: Bool -> Server
+warp ipv6 port handler = do
+    addrinfos <- getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream })
+                             (Just $ if ipv6 then "::1" else "127.0.0.1")
+                             (Just . show $ port)
+    case addrinfos of
+        [] -> fail "Couldn't obtain address information in warp"
+        (addri:_) -> do
+            sock <- socket (addrFamily addri) Stream defaultProtocol
+            bind sock (addrAddress addri)
+            listen sock 5
+            Warp.runSettingsSocket (Warp.setPort port Warp.defaultSettings) sock $ \warpRequest -> do
+               request <- requestFromWarp warpRequest
+               response <- handler request
+               return (responseToWarp response)
   where
      responseToWarp (Response status hdrs body) =
          Warp.responseLBS

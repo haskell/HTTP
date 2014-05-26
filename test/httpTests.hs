@@ -12,6 +12,7 @@ import Data.Maybe (fromJust)
 import System.IO.Error (userError)
 
 import qualified Httpd
+import qualified UnitTests
 
 import Network.Browser
 import Network.HTTP
@@ -22,6 +23,7 @@ import Network.Stream (Result)
 import Network.URI (uriPath, parseURI)
 
 import System.Environment (getArgs)
+import System.Info (os)
 import System.IO (getChar)
 
 import Test.Framework (defaultMainWithArgs, testGroup)
@@ -596,28 +598,35 @@ port80Tests =
     , testCase "Two requests - both servers" browserTwoRequestsBoth
     ]
 
-urlRoot :: String -> Int -> String
-urlRoot userpw 80 = "http://" ++ userpw ++ "localhost"
-urlRoot userpw n = "http://" ++ userpw ++ "localhost:" ++ show n
+data InetFamily = IPv4 | IPv6
 
-secureRoot :: String -> Int -> String
-secureRoot userpw 443 = "https://" ++ userpw ++ "localhost"
-secureRoot userpw n = "https://" ++ userpw ++ "localhost:" ++ show n
+familyToLocalhost :: InetFamily -> String
+familyToLocalhost IPv4 = "127.0.0.1"
+familyToLocalhost IPv6 = "[::1]"
+
+urlRoot :: InetFamily -> String -> Int -> String
+urlRoot fam userpw 80 = "http://" ++ userpw ++ familyToLocalhost fam
+urlRoot fam userpw n = "http://" ++ userpw ++ familyToLocalhost fam ++ ":" ++ show n
+
+secureRoot :: InetFamily -> String -> Int -> String
+secureRoot fam userpw 443 = "https://" ++ userpw ++ familyToLocalhost fam
+secureRoot fam userpw n = "https://" ++ userpw ++ familyToLocalhost fam ++ ":" ++ show n
 
 type ServerAddress = String -> String
 
-httpAddress, httpsAddress :: String -> Int -> ServerAddress
-httpAddress userpw port p = urlRoot userpw port ++ p
-httpsAddress userpw port p = secureRoot userpw port ++ p
+httpAddress, httpsAddress :: InetFamily -> String -> Int -> ServerAddress
+httpAddress fam userpw port p = urlRoot fam userpw port ++ p
+httpsAddress fam userpw port p = secureRoot fam userpw port ++ p
 
 main :: IO ()
 main = do
   args <- getArgs
 
   let servers =
-          [ ("httpd-shed", Httpd.shed)
+          [ ("httpd-shed", Httpd.shed, IPv4)
 #ifdef WARP_TESTS
-          , ("warp", Httpd.warp)
+          , ("warp.v6", Httpd.warp True, IPv6)
+          , ("warp.v4", Httpd.warp False, IPv4)
 #endif
           ]
       basePortNum, altPortNum :: Int
@@ -626,18 +635,18 @@ main = do
       numberedServers = zip [basePortNum..] servers
 
   let setupNormalTests = do
-      flip mapM numberedServers $ \(portNum, (serverName, server)) -> do
-         let ?testUrl = httpAddress "" portNum
-             ?userpwUrl = httpAddress "test:password@" portNum
-             ?baduserpwUrl = httpAddress "test:wrongpwd@" portNum
-             ?secureTestUrl = httpsAddress "" portNum
+      flip mapM numberedServers $ \(portNum, (serverName, server, family)) -> do
+         let ?testUrl = httpAddress family "" portNum
+             ?userpwUrl = httpAddress family "test:password@" portNum
+             ?baduserpwUrl = httpAddress family "test:wrongpwd@" portNum
+             ?secureTestUrl = httpsAddress family "" portNum
          _ <- forkIO $ server portNum processRequest
          return $ testGroup serverName [basicTests, browserTests]
 
   let setupAltTests = do
-      let (portNum, (_, server)) = head numberedServers
-      let ?testUrl = httpAddress "" portNum
-          ?altTestUrl = httpAddress "" altPortNum
+      let (portNum, (_, server,family)) = head numberedServers
+      let ?testUrl = httpAddress family "" portNum
+          ?altTestUrl = httpAddress family "" altPortNum
       _ <- forkIO $ server altPortNum altProcessRequest
       return port80Tests
 
@@ -652,8 +661,8 @@ main = do
         normalTests <- setupNormalTests
         altTests <- setupAltTests
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs (normalTests ++ [altTests]) args
+        defaultMainWithArgs (UnitTests.unitTests ++ normalTests ++ [altTests]) args
      args -> do -- run the test harness as normal
         normalTests <- setupNormalTests
         _ <- threadDelay 1000000 -- Give the server time to start :-(
-        defaultMainWithArgs normalTests args
+        defaultMainWithArgs (UnitTests.unitTests ++ normalTests) args

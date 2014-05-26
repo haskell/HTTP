@@ -14,7 +14,7 @@ test/with-ghc-6.10 test/check-package -f-warp-tests --constraint 'httpd-shed<0.4
 
 test/with-ghc-6.12 test/check-package -f-warp-tests --constraint 'split<0.2' --constraint 'test-framework<0.8' --constraint 'entropy<0.2' --constraint 'crypto-api<0.11'
 
-test/with-ghc-7.0 test/check-package --constraint 'warp<1.3' -fconduit10
+test/with-ghc-7.0 test/check-package -f-warp-tests
 
 test/with-ghc-7.4 test/check-package
 
@@ -33,7 +33,7 @@ test/with-ghc-7.6 test/check-package --constraint='parsec>=2.1'
 test/with-ghc-6.10 test/check-package --constraint='array==0.2.0.0' -f-warp-tests
 test/with-ghc-7.8 test/check-package --constraint='array>=0.5'
 
-test/with-ghc-7.0 test/check-package --constraint='old-time==1.0.0.0' --constraint 'warp<1.3' -fconduit10
+test/with-ghc-7.0 test/check-package --constraint='old-time==1.0.0.0' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='old-time>=1.1'
 
 test/with-ghc-6.10 test/check-package --constraint='bytestring==0.9.1.3' -f-warp-tests
@@ -45,7 +45,7 @@ test/with-ghc-7.6 test/check-package --constraint='httpd-shed>=0.4'
 test/with-ghc-7.6 test/check-package --constraint='HUnit==1.2.0.1'
 test/with-ghc-7.6 test/check-package --constraint='HUnit>=1.2.0.1'
 
-test/with-ghc-7.0 test/check-package --constraint='test-framework==0.2.0' --constraint 'warp<1.3' -fconduit10
+test/with-ghc-7.0 test/check-package --constraint='test-framework==0.2.0' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='test-framework>=0.8'
 
 test/with-ghc-6.10 test/check-package --constraint='test-framework-hunit==0.2.0' -f-warp-tests
@@ -63,7 +63,7 @@ test/with-ghc-7.6 test/check-package --constraint 'network>=2.5&&<2.6' --constra
 test/with-ghc-6.10 test/check-package --constraint='mtl==1.1.0.0' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='mtl>=2.2'
 
-test/with-ghc-7.0 test/check-package --constraint='split==0.1.3' --constraint 'warp<1.3' -fconduit10
+test/with-ghc-7.0 test/check-package --constraint='split==0.1.3' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='split>=0.2'
 
 test/with-ghc-6.10 test/check-package --constraint='pureMD5==0.2.4' -f-warp-tests
@@ -72,19 +72,19 @@ test/with-ghc-7.6 test/check-package --constraint='pureMD5>=2.1'
 test/with-ghc-7.6 test/check-package --constraint='deepseq==1.3.0.0'
 test/with-ghc-7.6 test/check-package --constraint='deepseq>=1.3'
 
-test/with-ghc-7.0 test/check-package --constraint='case-insensitive==0.2' --constraint 'warp<1.3' -fconduit10
+test/with-ghc-7.4 test/check-package --constraint='case-insensitive==0.4.0.1'
 test/with-ghc-7.6 test/check-package --constraint='case-insensitive>=1.2'
 
-test/with-ghc-7.0 test/check-package --constraint='http-types==0.6.1' --constraint 'warp<1.3' -fconduit10 --constraint 'conduit<0.5'
+test/with-ghc-7.4 test/check-package --constraint='http-types==0.8.0'
 test/with-ghc-7.6 test/check-package --constraint='http-types>=0.8'
 
-test/with-ghc-7.0 test/check-package --constraint='warp==1.2.0' -fconduit10
+test/with-ghc-7.6 test/check-package --constraint='warp==2.1.0'
 test/with-ghc-7.6 test/check-package --constraint='warp>=2.1'
 
-test/with-ghc-7.0 test/check-package --constraint='wai==1.2.0' -fconduit10
+test/with-ghc-7.6 test/check-package --constraint='wai==2.1.0'
 test/with-ghc-7.6 test/check-package --constraint='wai>=2.1'
 
-test/with-ghc-7.6 test/check-package --constraint='conduit==0.4.0' -fconduit10
+test/with-ghc-7.6 test/check-package --constraint='conduit==1.0.8' -fconduit10
 test/with-ghc-7.6 test/check-package --constraint='conduit>=1.0' -fconduit10
 test/with-ghc-7.6 test/check-package --constraint='conduit>=1.1'
 

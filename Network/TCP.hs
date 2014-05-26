@@ -34,13 +34,14 @@ module Network.TCP
 
    ) where
 
-import Network.BSD (getHostByName, hostAddresses)
 import Network.Socket
-   ( Socket, SockAddr(SockAddrInet), SocketOption(KeepAlive)
-   , SocketType(Stream), inet_addr, connect
+   ( Socket, SocketOption(KeepAlive)
+   , SocketType(Stream), connect
    , shutdown, ShutdownCmd(..)
    , sClose, setSocketOption, getPeerName
-   , socket, Family(AF_INET)
+   , socket, Family(AF_UNSPEC), defaultProtocol, getAddrInfo
+   , defaultHints, addrFamily, withSocketsDo
+   , addrSocketType, addrAddress
    )
 import qualified Network.Stream as Stream
    ( Stream(readBlock, readLine, writeBlock, close, closeOnEnd) )
@@ -213,27 +214,35 @@ openTCPConnection :: BufferType ty => String -> Int -> IO (HandleStream ty)
 openTCPConnection uri port = openTCPConnection_ uri port False
 
 openTCPConnection_ :: BufferType ty => String -> Int -> Bool -> IO (HandleStream ty)
-openTCPConnection_ uri port stashInput = withSocket $ \s -> do
-    setSocketOption s KeepAlive 1
-    hostA <- getHostAddr uri
-    let a = SockAddrInet (toEnum port) hostA
-    connect s a
-    socketConnection_ uri port s stashInput
- where
-  withSocket action = do
-    s <- socket AF_INET Stream 6
-    onException (action s) (sClose s)
-  getHostAddr h = do
-    catchIO (inet_addr uri)    -- handles ascii IP numbers
-            (\ _ -> do
-	        host <- getHostByName_safe uri
-                case hostAddresses host of
-                  []     -> fail ("openTCPConnection: no addresses in host entry for " ++ show h)
-                  (ha:_) -> return ha)
+openTCPConnection_ uri port stashInput = do
+    -- HACK: uri is sometimes obtained by calling Network.URI.uriRegName, and this includes
+    -- the surrounding square brackets for an RFC 2732 host like [::1]. It's not clear whether
+    -- it should, or whether all call sites should be using something different instead, but
+    -- the simplest short-term fix is to strip any surrounding square brackets here.
+    -- It shouldn't affect any as this is the only situation they can occur - see RFC 3986.
+    let fixedUri =
+         case uri of
+            '[':(rest@(c:_)) | last rest == ']'
+              -> if c == 'v' || c == 'V'
+                     then error $ "Unsupported post-IPv6 address " ++ uri
+                     else init rest
+            _ -> uri
 
-  getHostByName_safe h = 
-    catchIO (getHostByName h)
-            (\ _ -> fail ("openTCPConnection: host lookup failure for " ++ show h))
+
+    -- use withSocketsDo here in case the caller hasn't used it, which would make getAddrInfo fail on Windows
+    -- although withSocketsDo is supposed to wrap the entire program, in practice it is safe to use it locally
+    -- like this as it just does a once-only installation of a shutdown handler to run at program exit,
+    -- rather than actually shutting down after the action
+    addrinfos <- withSocketsDo $ getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream }) (Just fixedUri) (Just . show $ port)
+    case addrinfos of
+        [] -> fail "openTCPConnection: getAddrInfo returned no address information"
+        (a:_) -> do
+                s <- socket (addrFamily a) Stream defaultProtocol
+                onException (do
+                            setSocketOption s KeepAlive 1
+                            connect s (addrAddress a)
+                            socketConnection_ fixedUri port s stashInput
+                            ) (sClose s)
 
 -- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
 socketConnection :: BufferType ty
