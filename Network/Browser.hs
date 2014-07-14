@@ -1007,11 +1007,12 @@ cleanConnectionPool :: HStream hTy
 cleanConnectionPool uri = do
   let ep = EndPoint (uriRegName uri) (uriAuthPort Nothing uri)
   pool <- gets bsConnectionPool
-  bad <- liftIO $ mapM (\c -> c `isTCPConnectedTo` ep) pool
-  let tmp = zip bad pool
+  let closePool = head pool -- The first pool needs to be closed.
+  bad <- liftIO $ mapM (\c -> c `isTCPConnectedTo` ep) (tail pool)
+  let tmp = zip bad (tail pool)
       newpool = map snd $ filter (not . fst) tmp
       toclose = map snd $ filter fst tmp
-  liftIO $ forM_ toclose close
+  liftIO $ forM_ (closePool:toclose) close
   modify (\b -> b { bsConnectionPool = newpool })
 
 handleCookies :: URI -> String -> [Header] -> BrowserAction t ()
