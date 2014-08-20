@@ -69,6 +69,10 @@ Flag warp-tests
   default:     True
   manual:      True
 
+flag network-uri
+  description: Get Network.URI from the network-uri package
+  default: True
+
 Library
   Exposed-modules: 
                  Network.BufferType,
@@ -110,7 +114,10 @@ Library
     -- GHC 6.10 and later versions of network
     Build-depends: network >= 2.2.0.1 && < 2.3
   else
-    Build-depends: network >= 2.2.0.1 && < 2.6
+    if flag(network-uri)
+      Build-depends: network-uri == 2.6.*, network == 2.6.*
+    else
+      Build-depends: network >= 2.2.0.1 && < 2.6
 
   build-tools: ghc >= 6.10 && < 7.10
 
