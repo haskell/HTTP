@@ -28,7 +28,7 @@ import Network.URI ( URI, parseRelativeReference )
 import Network.Socket
     ( getAddrInfo, AddrInfo, defaultHints, addrAddress, addrFamily
       , addrFlags, addrSocketType, AddrInfoFlag(AI_PASSIVE), socket, Family(AF_UNSPEC,AF_INET6)
-      , defaultProtocol, SocketType(Stream), listen, setSocketOption
+      , defaultProtocol, SocketType(Stream), listen, setSocketOption, SocketOption(ReuseAddr)
     )
 #ifdef WARP_TESTS
 #if MIN_VERSION_network(2,4,0)
@@ -114,6 +114,7 @@ warp ipv6 port handler = do
         [] -> fail "Couldn't obtain address information in warp"
         (addri:_) -> do
             sock <- socket (addrFamily addri) Stream defaultProtocol
+            setSocketOption sock ReuseAddr 1
             bind sock (addrAddress addri)
             listen sock 5
             Warp.runSettingsSocket (Warp.setPort port Warp.defaultSettings) sock $ \warpRequest -> do
