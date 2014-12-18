@@ -142,12 +142,7 @@ warp ipv6 port handler = do
 #if MIN_VERSION_wai(3,0,1)
          body <- fmap BLC.unpack $ Warp.strictRequestBody request
 #else
-# if MIN_VERSION_wai(1,4,1)
          body <- fmap BLC.unpack $ Warp.lazyRequestBody request
-# else
-         body <- fmap (BC.unpack . B.concat) $
-             Warp.lazyConsume (Warp.requestBody request)
-# endif
          body `deepseq` return ()
 #endif
          return $
