@@ -24,6 +24,7 @@ test/with-ghc-7.8 test/check-package
 # only have GHC 7.0.4 easily available to test with, so test
 # base 4.3.1.0 instead of 4.3.0.0
 test/with-ghc-7.0 test/check-package --constraint='base==4.3.1.0' -f-warp-tests
+# don't have GHC 7.10 easily available to test with yet
 test/with-ghc-7.8 test/check-package --constraint='base>=4.7'
 
 test/with-ghc-7.0 test/check-package --constraint='parsec==2.0' --constraint 'network<2.3' --constraint 'entropy<0.2.2.4' -f-warp-tests
@@ -71,7 +72,7 @@ test/with-ghc-7.0 test/check-package --constraint='pureMD5==0.2.4' --constraint 
 test/with-ghc-7.6 test/check-package --constraint='pureMD5>=2.1'
 
 test/with-ghc-7.6 test/check-package --constraint='deepseq==1.3.0.0' --constraint='time<1.5'
-test/with-ghc-7.6 test/check-package --constraint='deepseq>=1.3'
+test/with-ghc-7.6 test/check-package --constraint='deepseq>=1.4'
 
 test/with-ghc-7.4 test/check-package --constraint='case-insensitive==0.4.0.1'
 test/with-ghc-7.6 test/check-package --constraint='case-insensitive>=1.2'
@@ -80,10 +81,13 @@ test/with-ghc-7.4 test/check-package --constraint='http-types==0.8.0'
 test/with-ghc-7.6 test/check-package --constraint='http-types>=0.8'
 
 test/with-ghc-7.6 test/check-package --constraint='warp==2.1.0' --constraint='conduit<1.1'
-test/with-ghc-7.6 test/check-package --constraint='warp>=2.1'
+test/with-ghc-7.6 test/check-package --constraint='warp>=3.0'
 
 test/with-ghc-7.6 test/check-package --constraint='wai==2.1.0' --constraint='conduit<1.1'
-test/with-ghc-7.6 test/check-package --constraint='wai>=2.1'
+# covering different versions with ifdefs
+test/with-ghc-7.6 test/check-package --constraint='wai>=2.1&&<3.0'
+test/with-ghc-7.6 test/check-package --constraint='wai==3.0.0'
+test/with-ghc-7.6 test/check-package --constraint='wai>=3.0.1'
 
 test/with-ghc-7.6 test/check-package --constraint='conduit==1.0.8' -fconduit10
 test/with-ghc-7.6 test/check-package --constraint='conduit>=1.0' -fconduit10
