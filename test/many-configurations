@@ -7,14 +7,15 @@
 # and not supported by all versions of cabal) so it may not be completely reliable.
 # The constraints specified have been observed to make it build in practice once
 # but are not necessarily sufficient.
+# TODO would probably be sensible to use 'cabal freeze' files instead where possible.
 
 # cover each GHC
 
-test/with-ghc-6.10 test/check-package -f-warp-tests --constraint 'httpd-shed<0.4.0.1' --constraint 'time<1.1' --constraint 'split<0.2' --constraint 'binary<0.6' --constraint 'blaze-builder<0.3' --constraint 'entropy<0.2' --constraint 'crypto-api<0.6' --constraint 'semigroups<0.4'
+test/with-ghc-6.10 test/check-package -f-warp-tests --constraint 'httpd-shed<0.4.0.1' --constraint 'time<1.1' --constraint 'split<0.2' --constraint 'binary<0.6' --constraint 'blaze-builder<0.3' --constraint 'entropy<0.2' --constraint 'crypto-api<0.6' --constraint 'semigroups<0.4' --constraint 'text<0.11'
 
 test/with-ghc-6.12 test/check-package -f-warp-tests --constraint 'split<0.2' --constraint 'test-framework<0.8' --constraint 'entropy<0.2' --constraint 'crypto-api<0.11'
 
-test/with-ghc-7.0 test/check-package -f-warp-tests
+test/with-ghc-7.0 test/check-package -f-warp-tests --constraint 'entropy<0.2.2.4'
 
 test/with-ghc-7.4 test/check-package
 
@@ -69,7 +70,7 @@ test/with-ghc-7.6 test/check-package --constraint='split>=0.2'
 test/with-ghc-6.10 test/check-package --constraint='pureMD5==0.2.4' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='pureMD5>=2.1'
 
-test/with-ghc-7.6 test/check-package --constraint='deepseq==1.3.0.0'
+test/with-ghc-7.6 test/check-package --constraint='deepseq==1.3.0.0' --constraint='time<1.5'
 test/with-ghc-7.6 test/check-package --constraint='deepseq>=1.3'
 
 test/with-ghc-7.4 test/check-package --constraint='case-insensitive==0.4.0.1'
@@ -78,10 +79,10 @@ test/with-ghc-7.6 test/check-package --constraint='case-insensitive>=1.2'
 test/with-ghc-7.4 test/check-package --constraint='http-types==0.8.0'
 test/with-ghc-7.6 test/check-package --constraint='http-types>=0.8'
 
-test/with-ghc-7.6 test/check-package --constraint='warp==2.1.0'
+test/with-ghc-7.6 test/check-package --constraint='warp==2.1.0' --constraint='conduit<1.1'
 test/with-ghc-7.6 test/check-package --constraint='warp>=2.1'
 
-test/with-ghc-7.6 test/check-package --constraint='wai==2.1.0'
+test/with-ghc-7.6 test/check-package --constraint='wai==2.1.0' --constraint='conduit<1.1'
 test/with-ghc-7.6 test/check-package --constraint='wai>=2.1'
 
 test/with-ghc-7.6 test/check-package --constraint='conduit==1.0.8' -fconduit10
