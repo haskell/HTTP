@@ -16,11 +16,12 @@ import Control.Arrow ( (***) )
 import Control.DeepSeq
 import Control.Monad
 import Control.Monad.Trans ( liftIO )
-import Data.ByteString as B ( empty, concat, length, ByteString )
-import Data.ByteString.Char8 as BC ( pack, unpack )
-import Data.ByteString.Lazy.Char8 as BLC ( pack )
+import qualified Data.ByteString            as B
+import qualified Data.ByteString.Lazy       as BL
+import qualified Data.ByteString.Char8      as BC
+import qualified Data.ByteString.Lazy.Char8 as BLC
 #ifdef WARP_TESTS
-import qualified Data.CaseInsensitive as CI ( mk, original )
+import qualified Data.CaseInsensitive       as CI
 #endif
 import Data.Maybe ( fromJust )
 import Network.URI ( URI, parseRelativeReference )
@@ -43,13 +44,13 @@ import qualified Network.Shed.Httpd as Shed
     , reqMethod, reqURI, reqHeaders, reqBody
     )
 #ifdef WARP_TESTS
+#if !MIN_VERSION_wai(3,0,0)
 import qualified Data.Conduit.Lazy as Warp
-    ( lazyConsume )
+#endif
+
 import qualified Network.HTTP.Types as Warp
     ( Status(..) )
 import qualified Network.Wai as Warp
-    ( Request(requestMethod, requestHeaders, rawPathInfo, requestBody)
-    , responseLBS )
 import qualified Network.Wai.Handler.Warp as Warp
     ( runSettingsSocket, defaultSettings, setPort )
 #endif
@@ -117,10 +118,17 @@ warp ipv6 port handler = do
             setSocketOption sock ReuseAddr 1
             bind sock (addrAddress addri)
             listen sock 5
+#if MIN_VERSION_wai(3,0,0)
+            Warp.runSettingsSocket (Warp.setPort port Warp.defaultSettings) sock $ \warpRequest warpRespond -> do
+               request <- requestFromWarp warpRequest
+               response <- handler request
+               warpRespond (responseToWarp response)
+#else
             Warp.runSettingsSocket (Warp.setPort port Warp.defaultSettings) sock $ \warpRequest -> do
                request <- requestFromWarp warpRequest
                response <- handler request
                return (responseToWarp response)
+#endif
   where
      responseToWarp (Response status hdrs body) =
          Warp.responseLBS
@@ -131,8 +139,17 @@ warp ipv6 port handler = do
      headerFromWarp (name, value) =
          (BC.unpack (CI.original name), BC.unpack value)
      requestFromWarp request = do
-         body <- Warp.lazyConsume (Warp.requestBody request)
+#if MIN_VERSION_wai(3,0,1)
+         body <- fmap BLC.unpack $ Warp.strictRequestBody request
+#else
+# if MIN_VERSION_wai(1,4,1)
+         body <- fmap BLC.unpack $ Warp.lazyRequestBody request
+# else
+         body <- fmap (BC.unpack . B.concat) $
+             Warp.lazyConsume (Warp.requestBody request)
+# endif
          body `deepseq` return ()
+#endif
          return $
                 Request
                 {
@@ -141,6 +158,6 @@ warp ipv6 port handler = do
                           BC.unpack . Warp.rawPathInfo $
                           request,
                  reqHeaders = map headerFromWarp (Warp.requestHeaders request),
-                 reqBody = BC.unpack (B.concat body)
+                 reqBody = body
                 }
 #endif
