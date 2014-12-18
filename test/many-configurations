@@ -72,7 +72,8 @@ test/with-ghc-7.0 test/check-package --constraint='pureMD5==0.2.4' --constraint 
 test/with-ghc-7.6 test/check-package --constraint='pureMD5>=2.1'
 
 test/with-ghc-7.6 test/check-package --constraint='deepseq==1.3.0.0' --constraint='time<1.5'
-test/with-ghc-7.6 test/check-package --constraint='deepseq>=1.4'
+# deepseq 1.4 not on hackage yet
+test/with-ghc-7.6 test/check-package --constraint='deepseq>=1.3'
 
 test/with-ghc-7.4 test/check-package --constraint='case-insensitive==0.4.0.1'
 test/with-ghc-7.6 test/check-package --constraint='case-insensitive>=1.2'
