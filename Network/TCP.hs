@@ -10,8 +10,8 @@
 -- Portability :  non-portable (not tested)
 --
 -- Some utility functions for working with the Haskell @network@ package. Mostly
--- for internal use by the @Network.HTTP@ code, but 
---      
+-- for internal use by the @Network.HTTP@ code.
+--
 -----------------------------------------------------------------------------
 module Network.TCP
    ( Connection
