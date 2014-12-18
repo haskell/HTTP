@@ -114,7 +114,7 @@ Library
   else
     Build-depends: network >= 2.2.1.5 && < 2.6
 
-  build-tools: ghc >= 7.0 && < 7.10
+  build-tools: ghc >= 7.0 && < 7.12
 
   if flag(warn-as-error)
     ghc-options:      -Werror
@@ -125,7 +125,7 @@ Library
 Test-Suite test
   type: exitcode-stdio-1.0
 
-  build-tools: ghc >= 7.0 && < 7.10
+  build-tools: ghc >= 7.0 && < 7.12
 
   hs-source-dirs: test
   main-is: httpTests.hs
