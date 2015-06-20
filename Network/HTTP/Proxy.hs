@@ -25,7 +25,7 @@ module Network.HTTP.Proxy
 #endif
 -}
 
-import Control.Monad ( when, mplus, join, liftM2)
+import Control.Monad ( when, mplus, join, liftM, liftM2)
 
 #if defined(WIN32)
 import Network.HTTP.Base ( catchIO )
@@ -82,7 +82,7 @@ windowsProxyString :: IO (Maybe String)
 #if !defined(WIN32)
 windowsProxyString = return Nothing
 #else
-windowsProxyString = registryProxyString >>= fmap return (>>= parseWindowsProxy)
+windowsProxyString = liftM (>>= parseWindowsProxy) registryProxyString
 
 registryProxyLoc :: (HKEY,String)
 registryProxyLoc = (hive, path)
