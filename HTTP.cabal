@@ -9,9 +9,9 @@ Maintainer: Ganesh Sittampalam <ganesh@earth.li>
 Homepage: https://github.com/haskell/HTTP
 Category: Network
 Synopsis: A library for client-side HTTP
-Description: 
+Description:
 
- The HTTP package supports client-side web programming in Haskell. It lets you set up 
+ The HTTP package supports client-side web programming in Haskell. It lets you set up
  HTTP connections, transmitting requests and processing the responses coming back, all
  from within the comforts of Haskell. It's dependent on the network package to operate,
  but other than that, the implementation is all written in Haskell.
@@ -74,12 +74,12 @@ flag network-uri
   default: True
 
 Library
-  Exposed-modules: 
+  Exposed-modules:
                  Network.BufferType,
                  Network.Stream,
                  Network.StreamDebugger,
                  Network.StreamSocket,
-                 Network.TCP,                
+                 Network.TCP,
                  Network.HTTP,
                  Network.HTTP.Headers,
                  Network.HTTP.Base,
@@ -137,7 +137,7 @@ Test-Suite test
   -- note: version constraints for dependencies shared with the library
   -- should be the same
   build-depends:     HTTP,
-                     HUnit >= 1.2.0.1 && < 1.3,
+                     HUnit >= 1.2.0.1 && < 1.4,
                      httpd-shed >= 0.4 && < 0.5,
                      mtl >= 1.1.1.0 && < 2.3,
                      bytestring >= 0.9.1.5 && < 0.11,
