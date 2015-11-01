@@ -45,7 +45,7 @@ test/with-ghc-7.6 test/check-package --constraint='httpd-shed==0.4' --constraint
 test/with-ghc-7.6 test/check-package --constraint='httpd-shed>=0.4'
 
 test/with-ghc-7.6 test/check-package --constraint='HUnit==1.2.0.1'
-test/with-ghc-7.6 test/check-package --constraint='HUnit>=1.2.0.1'
+test/with-ghc-7.6 test/check-package --constraint='HUnit>=1.3'
 
 test/with-ghc-7.0 test/check-package --constraint='test-framework==0.2.0' --constraint 'entropy<0.2.2.4' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='test-framework>=0.8'
