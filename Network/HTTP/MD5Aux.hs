@@ -91,6 +91,7 @@ instance MD5 WordList where
 instance Num ABCD where
  ABCD (a1, b1, c1, d1) + ABCD (a2, b2, c2, d2) = ABCD (a1 + a2, b1 + b2, c1 + c2, d1 + d2)
 
+ (-)         = error "(-){ABCD}: no instance method defined"
  (*)         = error "(*){ABCD}: no instance method defined"
  signum      = error "signum{ABCD}: no instance method defined"
  fromInteger = error "fromInteger{ABCD}: no instance method defined"
