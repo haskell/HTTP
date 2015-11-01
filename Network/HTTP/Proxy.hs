@@ -196,7 +196,7 @@ uri2proxy uri@URI{ uriScheme    = "http:"
        [] -> Nothing
        as -> Just (AuthBasic "" (unEscapeString usr) (unEscapeString pwd) uri)
         where
-	 (usr,pwd) = chopAtDelim ':' as
+         (usr,pwd) = chopAtDelim ':' as
 
 uri2proxy _ = Nothing
 
