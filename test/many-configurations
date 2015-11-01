@@ -19,6 +19,8 @@ test/with-ghc-7.6 test/check-package
 
 test/with-ghc-7.8 test/check-package
 
+test/with-ghc-7.10 test/check-package
+
 # cover the min/max bounds for each package in turn (TODO: add this for each one)
 
 # only have GHC 7.0.4 easily available to test with, so test
