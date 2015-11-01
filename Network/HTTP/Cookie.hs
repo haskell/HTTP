@@ -119,7 +119,7 @@ headerToCookies dom (Header HdrSetCookie val) (accErr, accCookie) =
 
    mkCookie :: String -> String -> [(String,String)] -> Cookie
    mkCookie nm cval more = 
-	  MkCookie { ckName    = nm
+          MkCookie { ckName    = nm
                    , ckValue   = cval
                    , ckDomain  = map toLower (fromMaybe dom (lookup "domain" more))
                    , ckPath    = lookup "path" more
