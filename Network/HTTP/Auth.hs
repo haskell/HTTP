@@ -87,16 +87,16 @@ withAuthority a rq = case a of
         AuthBasic{}  -> "Basic " ++ base64encode (auUsername a ++ ':' : auPassword a)
         AuthDigest{} ->
             "Digest " ++
-	     concat [ "username="  ++ quo (auUsername a)
-	            , ",realm="    ++ quo (auRealm a)
-		    , ",nonce="    ++ quo (auNonce a)
-		    , ",uri="      ++ quo digesturi
-		    , ",response=" ++ quo rspdigest
+             concat [ "username="  ++ quo (auUsername a)
+                    , ",realm="    ++ quo (auRealm a)
+                    , ",nonce="    ++ quo (auNonce a)
+                    , ",uri="      ++ quo digesturi
+                    , ",response=" ++ quo rspdigest
                        -- plus optional stuff:
-		    , fromMaybe "" (fmap (\ alg -> ",algorithm=" ++ quo (show alg)) (auAlgorithm a))
-		    , fromMaybe "" (fmap (\ o   -> ",opaque=" ++ quo o) (auOpaque a))
-		    , if null (auQop a) then "" else ",qop=auth"
-		    ]
+                    , fromMaybe "" (fmap (\ alg -> ",algorithm=" ++ quo (show alg)) (auAlgorithm a))
+                    , fromMaybe "" (fmap (\ o   -> ",opaque=" ++ quo o) (auOpaque a))
+                    , if null (auQop a) then "" else ",qop=auth"
+                    ]
     where
         quo s = '"':s ++ "\""
 
