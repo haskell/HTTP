@@ -711,7 +711,7 @@ defaultAutoProxyDetect = False
 -- is returned along with the 'Response' itself.
 request :: HStream ty
         => Request ty
-	-> BrowserAction (HandleStream ty) (URI,Response ty)
+        -> BrowserAction (HandleStream ty) (URI,Response ty)
 request req = nextRequest $ do
   res <- request' nullVal initialState req
   reportEvent ResponseFinish (show (rqURI req))
@@ -729,9 +729,9 @@ request req = nextRequest $ do
 -- counts.
 request' :: HStream ty
          => ty
-	 -> RequestState
-	 -> Request ty
-	 -> BrowserAction (HandleStream ty) (Result (URI,Response ty))
+         -> RequestState
+         -> Request ty
+         -> BrowserAction (HandleStream ty) (Result (URI,Response ty))
 request' nullVal rqState rq = do
    let uri = rqURI rq
    failHTTPS uri
@@ -765,18 +765,18 @@ request' nullVal rqState rq = do
    let rq'' = if not $ null cookies then insertHeaders [cookiesToHeader cookies] rq' else rq'
    p <- getProxy
    def_ua <- gets bsUserAgent
-   let defaultOpts = 
+   let defaultOpts =
          case p of 
-	   NoProxy     -> defaultNormalizeRequestOptions{normUserAgent=def_ua}
-	   Proxy _ ath ->
-	      defaultNormalizeRequestOptions
-	        { normForProxy  = True
-		, normUserAgent = def_ua
-		, normCustoms   = 
-		    maybe []
-		          (\ authS -> [\ _ r -> insertHeader HdrProxyAuthorization (withAuthority authS r) r])
-			  ath
-		}
+           NoProxy     -> defaultNormalizeRequestOptions{normUserAgent=def_ua}
+           Proxy _ ath ->
+              defaultNormalizeRequestOptions
+                { normForProxy  = True
+                , normUserAgent = def_ua
+                , normCustoms   =
+                    maybe []
+                          (\ authS -> [\ _ r -> insertHeader HdrProxyAuthorization (withAuthority authS r) r])
+                          ath
+                }
    let final_req = normalizeRequest defaultOpts rq''
    out ("Sending:\n" ++ show final_req)
    e_rsp <- 
@@ -784,16 +784,16 @@ request' nullVal rqState rq = do
        NoProxy        -> dorequest (reqURIAuth rq'') final_req
        Proxy str _ath -> do
           let notURI 
-	       | null pt || null hst = 
-	         URIAuth{ uriUserInfo = ""
-	                , uriRegName  = str
-			, uriPort     = ""
-			}
-	       | otherwise = 
-	         URIAuth{ uriUserInfo = ""
-	                , uriRegName  = hst
-			, uriPort     = pt
-			}
+               | null pt || null hst =
+                 URIAuth{ uriUserInfo = ""
+                        , uriRegName  = str
+                        , uriPort     = ""
+                        }
+               | otherwise =
+                 URIAuth{ uriUserInfo = ""
+                        , uriRegName  = hst
+                        , uriPort     = pt
+                        }
                   -- If the ':' is dropped from port below, dorequest will assume port 80. Leave it!
                  where (hst, pt) = span (':'/=) str
            -- Proxy can take multiple forms - look for http://host:port first,
@@ -804,7 +804,7 @@ request' nullVal rqState rq = do
                       (parseURI str)
 
           out $ "proxy uri host: " ++ uriRegName proxyURIAuth ++ ", port: " ++ uriPort proxyURIAuth
-	  dorequest proxyURIAuth final_req
+          dorequest proxyURIAuth final_req
    mbMx <- getMaxErrorRetries
    case e_rsp of
     Left v 
@@ -827,27 +827,27 @@ request' nullVal rqState rq = do
       (4,0,1) -- Credentials not sent or refused.
         | reqDenies rqState > fromMaybe defaultMaxAuthAttempts mbMxAuths -> do
           out "401 - credentials again refused; exceeded retry count (2)"
-	  return (Right (uri,rsp))
-	| otherwise -> do
+          return (Right (uri,rsp))
+        | otherwise -> do
           out "401 - credentials not supplied or refused; retrying.."
           let hdrs = retrieveHeaders HdrWWWAuthenticate rsp
-	  flg <- getAllowBasicAuth
+          flg <- getAllowBasicAuth
           case pickChallenge flg (catMaybes $ map (headerToChallenge uri) hdrs) of
             Nothing -> do
-	      out "no challenge"
-	      return (Right (uri,rsp))   {- do nothing -}
+              out "no challenge"
+              return (Right (uri,rsp))   {- do nothing -}
             Just x  -> do
               au <- challengeToAuthority uri x
               case au of
                 Nothing  -> do
-		  out "no auth"
-		  return (Right (uri,rsp)) {- do nothing -}
+                  out "no auth"
+                  return (Right (uri,rsp)) {- do nothing -}
                 Just au' -> do
                   out "Retrying request with new credentials"
-		  request' nullVal
-			   rqState{ reqDenies     = succ(reqDenies rqState)
-			          , reqStopOnDeny = False
-				  }
+                  request' nullVal
+                           rqState{ reqDenies     = succ(reqDenies rqState)
+                                  , reqStopOnDeny = False
+                                  }
                            (insertHeader HdrAuthorization (withAuthority au' rq) rq)
 
       (4,0,7)  -- Proxy Authentication required
@@ -857,7 +857,7 @@ request' nullVal rqState rq = do
         | otherwise -> do
           out "407 - proxy authentication required"
           let hdrs = retrieveHeaders HdrProxyAuthenticate rsp
-	  flg <- getAllowBasicAuth
+          flg <- getAllowBasicAuth
           case pickChallenge flg (catMaybes $ map (headerToChallenge uri) hdrs) of
             Nothing -> return (Right (uri,rsp))   {- do nothing -}
             Just x  -> do
@@ -874,32 +874,32 @@ request' nullVal rqState rq = do
                      out "Retrying with proxy authentication"
                      setProxy (Proxy px (Just au'))
                      request' nullVal
-			      rqState{ reqDenies     = succ(reqDenies rqState)
-			             , reqStopOnDeny = False
-				     }
-			      rq
+                              rqState{ reqDenies     = succ(reqDenies rqState)
+                                     , reqStopOnDeny = False
+                                     }
+                              rq
 
       (3,0,x) | x `elem` [2,3,1,7]  ->  do
         out ("30" ++ show x ++  " - redirect")
-	allow_redirs <- allowRedirect rqState
-	case allow_redirs of
-	  False -> return (Right (uri,rsp))
-	  _ -> do
+        allow_redirs <- allowRedirect rqState
+        case allow_redirs of
+          False -> return (Right (uri,rsp))
+          _ -> do
            case retrieveHeaders HdrLocation rsp of
             [] -> do 
-	      err "No Location: header in redirect response"
+              err "No Location: header in redirect response"
               return (Right (uri,rsp))
             (Header _ u:_) -> 
-	      case parseURIReference u of
+              case parseURIReference u of
                 Nothing -> do
                   err ("Parse of Location: header in a redirect response failed: " ++ u)
                   return (Right (uri,rsp))
                 Just newURI
-	         | {-uriScheme newURI_abs /= uriScheme uri && -}(not (supportedScheme newURI_abs)) -> do
-	            err ("Unable to handle redirect, unsupported scheme: " ++ show newURI_abs)
-	            return (Right (uri, rsp))
-                 | otherwise -> do		     
-  	            out ("Redirecting to " ++ show newURI_abs ++ " ...") 
+                 | {-uriScheme newURI_abs /= uriScheme uri && -}(not (supportedScheme newURI_abs)) -> do
+                    err ("Unable to handle redirect, unsupported scheme: " ++ show newURI_abs)
+                    return (Right (uri, rsp))
+                 | otherwise -> do
+                    out ("Redirecting to " ++ show newURI_abs ++ " ...")
                     
                     -- Redirect using GET request method, depending on
                     -- response code.
@@ -909,10 +909,10 @@ request' nullVal rqState rq = do
                         rq2 = if toGet then (replaceHeader HdrContentLength "0") (rq1 {rqBody = nullVal}) else rq1
                     
                     request' nullVal
-	         	    rqState{ reqDenies     = 0
-	         	           , reqRedirects  = succ(reqRedirects rqState)
-	         		   , reqStopOnDeny = True
-	         		   }
+                            rqState{ reqDenies     = 0
+                                   , reqRedirects  = succ(reqRedirects rqState)
+                                   , reqStopOnDeny = True
+                                   }
                              rq2
                  where
                    newURI_abs = uriDefaultTo newURI uri
@@ -920,10 +920,10 @@ request' nullVal rqState rq = do
       (3,0,5) ->
         case retrieveHeaders HdrLocation rsp of
          [] -> do 
-	   err "No Location header in proxy redirect response."
+           err "No Location header in proxy redirect response."
            return (Right (uri,rsp))
          (Header _ u:_) -> 
-	   case parseURIReference u of
+           case parseURIReference u of
             Nothing -> do
              err ("Parse of Location header in a proxy redirect response failed: " ++ u)
              return (Right (uri,rsp))
@@ -931,19 +931,19 @@ request' nullVal rqState rq = do
              out ("Retrying with proxy " ++ show newuri ++ "...")
              setProxy (Proxy (uriToAuthorityString newuri) Nothing)
              request' nullVal rqState{ reqDenies     = 0
-	                             , reqRedirects  = 0
-				     , reqRetries    = succ (reqRetries rqState)
-				     , reqStopOnDeny = True
-				     }
-				     rq
+                                     , reqRedirects  = 0
+                                     , reqRetries    = succ (reqRetries rqState)
+                                     , reqStopOnDeny = True
+                                     }
+                                     rq
       _       -> return (Right (uri,rsp))
 
 -- | The internal request handling state machine.
 dorequest :: (HStream ty)
           => URIAuth
-	  -> Request ty
-	  -> BrowserAction (HandleStream ty)
-	                   (Result (Response ty))
+          -> Request ty
+          -> BrowserAction (HandleStream ty)
+                           (Result (Response ty))
 dorequest hst rqst = do
   pool <- gets bsConnectionPool
   let uPort = uriAuthPort Nothing{-ToDo: feed in complete URL-} hst
@@ -952,13 +952,13 @@ dorequest hst rqst = do
     case conn of
       [] -> do 
         out ("Creating new connection to " ++ uriAuthToString hst)
-	reportEvent OpenConnection (show (rqURI rqst))
+        reportEvent OpenConnection (show (rqURI rqst))
         c <- liftIO $ openStream (uriRegName hst) uPort
-	updateConnectionPool c
-	dorequest2 c rqst
+        updateConnectionPool c
+        dorequest2 c rqst
       (c:_) -> do
         out ("Recovering connection to " ++ uriAuthToString hst)
-	reportEvent ReuseConnection (show (rqURI rqst))
+        reportEvent ReuseConnection (show (rqURI rqst))
         dorequest2 c rqst
   case rsp of 
      Right (Response a b c _) -> 
@@ -972,20 +972,20 @@ dorequest hst rqst = do
      onSendComplete =
        maybe (return ())
              (\evh -> do
-	        x <- buildBrowserEvent RequestSent (show (rqURI r)) (bsRequestID st)
-		runBA st (evh x)
-		return ())
+                x <- buildBrowserEvent RequestSent (show (rqURI r)) (bsRequestID st)
+                runBA st (evh x)
+                return ())
              (bsEvent st)
     liftIO $ 
       maybe (sendHTTP_notify c r onSendComplete)
             (\ f -> do
                c' <- debugByteStream (f++'-': uriAuthToString hst) c
-	       sendHTTP_notify c' r onSendComplete)
-	    dbg
+               sendHTTP_notify c' r onSendComplete)
+            dbg
 
 updateConnectionPool :: HStream hTy
                      => HandleStream hTy
-		     -> BrowserAction (HandleStream hTy) ()
+                     -> BrowserAction (HandleStream hTy) ()
 updateConnectionPool c = do
    pool <- gets bsConnectionPool
    let len_pool = length pool
@@ -993,8 +993,8 @@ updateConnectionPool c = do
    when (len_pool > maxPoolSize)
         (liftIO $ close (last pool))
    let pool' 
-	| len_pool > maxPoolSize = init pool
-	| otherwise              = pool
+        | len_pool > maxPoolSize = init pool
+        | otherwise              = pool
    when (maxPoolSize > 0) $ modify (\b -> b { bsConnectionPool=c:pool' })
    return ()
                              
