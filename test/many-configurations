@@ -105,7 +105,7 @@ test/with-ghc-7.6 test/check-package --constraint='conduit-extra>=1.1'
 test/with-ghc-7.0 test/check-package -fmtl1 --constraint 'entropy<0.2.2.4' -f-warp-tests
 test/with-ghc-7.6 test/check-package -f-mtl1
 
-test/with-ghc-7.6 test/check-package -fwarn-as-error
+# test/with-ghc-7.6 test/check-package -fwarn-as-error
 test/with-ghc-7.6 test/check-package -f-warn-as-error
 
 test/with-ghc-7.6 test/check-package -fnetwork23
