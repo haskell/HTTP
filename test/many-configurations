@@ -9,6 +9,8 @@
 # but are not necessarily sufficient.
 # TODO would probably be sensible to use 'cabal freeze' files instead where possible.
 
+rm -rf .cabal-sandbox
+
 # cover each GHC
 
 test/with-ghc-7.0 test/check-package -f-warp-tests --constraint 'entropy<0.2.2.4'

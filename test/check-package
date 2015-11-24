@@ -3,11 +3,14 @@
 BACKJUMPS=10000
 
 echo OPTIONS: $*
-rm -rf .cabal-sandbox
-cabal sandbox init
-cabal clean
-cabal install --only-dependencies --force-reinstalls --max-backjumps=$BACKJUMPS --reorder-goals --enable-tests $*
-cabal configure --enable-tests $*
-cabal build
-cabal test
 
+buildAndTest() {
+  cabal sandbox init &&
+  cabal clean &&
+  cabal install --only-dependencies --force-reinstalls --max-backjumps=$BACKJUMPS --reorder-goals --enable-tests $* &&
+  cabal configure --enable-tests $* &&
+  cabal build &&
+  cabal test
+}
+
+buildAndTest $* || (rm -rf .cabal-sandbox && buildAndTest $*)
