@@ -25,10 +25,11 @@ module Network.HTTP.Proxy
 #endif
 -}
 
-import Control.Monad ( when, mplus, join, liftM2, liftM)
+import Control.Monad ( when, mplus, join, liftM2 )
 
 #if defined(WIN32)
 import Network.HTTP.Base ( catchIO )
+import Control.Monad ( liftM )
 import Data.List ( isPrefixOf )
 #endif
 import Network.HTTP.Utils ( dropWhileTail, chopAtDelim )
