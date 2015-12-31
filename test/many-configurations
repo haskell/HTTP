@@ -86,13 +86,13 @@ test/with-ghc-7.4 test/check-package --constraint='http-types==0.8.0'
 test/with-ghc-7.6 test/check-package --constraint='http-types>=0.9'
 
 test/with-ghc-7.6 test/check-package --constraint='warp==2.1.0' --constraint='conduit<1.1'
-test/with-ghc-7.6 test/check-package --constraint='warp>=3.1'
+test/with-ghc-7.6 test/check-package --constraint='warp>=3.2'
 
 test/with-ghc-7.6 test/check-package --constraint='wai==2.1.0' --constraint='conduit<1.1'
 # covering different versions with ifdefs
 test/with-ghc-7.6 test/check-package --constraint='wai>=2.1&&<3.0'
 test/with-ghc-7.6 test/check-package --constraint='wai==3.0.0'
-test/with-ghc-7.6 test/check-package --constraint='wai>=3.0.1'
+test/with-ghc-7.6 test/check-package --constraint='wai>=3.2'
 
 test/with-ghc-7.6 test/check-package --constraint='conduit==1.0.8' -fconduit10
 test/with-ghc-7.6 test/check-package --constraint='conduit>=1.0' -fconduit10
