@@ -37,8 +37,8 @@ test/with-ghc-7.6 test/check-package --constraint='parsec>=2.1'
 test/with-ghc-7.0 test/check-package --constraint='array==0.3.0.2' --constraint 'entropy<0.2.2.4' -f-warp-tests
 test/with-ghc-7.8 test/check-package --constraint='array>=0.5'
 
-test/with-ghc-7.0 test/check-package --constraint='old-time==1.0.0.0' --constraint 'entropy<0.2.2.4' -f-warp-tests
-test/with-ghc-7.6 test/check-package --constraint='old-time>=1.1'
+test/with-ghc-7.0 test/check-package --constraint='time==1.1.2.3' --constraint 'entropy<0.2.2.4' -f-warp-tests
+test/with-ghc-7.6 test/check-package --constraint='time>=1.5'
 
 test/with-ghc-7.0 test/check-package --constraint='bytestring==0.9.1.5' --constraint 'entropy<0.2.2.4' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='bytestring>=0.10'

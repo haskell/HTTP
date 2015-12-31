@@ -149,7 +149,7 @@ import qualified System.IO
    ( hSetBuffering, hPutStr, stdout, stdin, hGetChar
    , BufferMode(NoBuffering, LineBuffering)
    )
-import System.Time ( ClockTime, getClockTime )
+import Data.Time.Clock ( UTCTime, getCurrentTime )
 
 
 ------------------------------------------------------------------
@@ -638,7 +638,7 @@ nullRequestState = RequestState
 -- at which they occurred.
 data BrowserEvent
  = BrowserEvent
-      { browserTimestamp  :: ClockTime
+      { browserTimestamp  :: UTCTime
       , browserRequestID  :: RequestID
       , browserRequestURI :: {-URI-}String
       , browserEventType  :: BrowserEventType
@@ -668,7 +668,7 @@ setEventHandler mbH = modify (\b -> b { bsEvent=mbH})
 
 buildBrowserEvent :: BrowserEventType -> {-URI-}String -> RequestID -> IO BrowserEvent
 buildBrowserEvent bt uri reqID = do
-  ct <- getClockTime
+  ct <- getCurrentTime
   return BrowserEvent 
          { browserTimestamp  = ct
          , browserRequestID  = reqID
