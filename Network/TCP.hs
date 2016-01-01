@@ -309,7 +309,7 @@ isConnectedTo :: Connection -> EndPoint -> IO Bool
 isConnectedTo (Connection conn) endPoint = do
    v <- readMVar (getRef conn)
    case v of
-     ConnClosed -> print "aa" >> return False
+     ConnClosed -> return False
      _ 
       | connEndPoint v == endPoint ->
           catchIO (getPeerName (connSock v) >> return True) (const $ return False)
