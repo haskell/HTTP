@@ -306,14 +306,7 @@ closeConnection ref readL = do
 -- and that the connection peer matches the given
 -- host name (which is recorded locally).
 isConnectedTo :: Connection -> EndPoint -> IO Bool
-isConnectedTo (Connection conn) endPoint = do
-   v <- readMVar (getRef conn)
-   case v of
-     ConnClosed -> return False
-     _ 
-      | connEndPoint v == endPoint ->
-          catchIO (getPeerName (connSock v) >> return True) (const $ return False)
-      | otherwise -> return False
+isConnectedTo (Connection conn) endPoint = isTCPConnectedTo conn endPoint
 
 isTCPConnectedTo :: HandleStream ty -> EndPoint -> IO Bool
 isTCPConnectedTo conn endPoint = do
