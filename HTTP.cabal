@@ -98,7 +98,7 @@ Library
 
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
-  Build-depends: base >= 4.3.0.0 && < 4.9, parsec >= 2.0 && < 3.2
+  Build-depends: base >= 4.3.0.0 && < 4.10, parsec >= 2.0 && < 3.2
   Build-depends: array >= 0.3.0.2 && < 0.6, bytestring >= 0.9.1.5 && < 0.11
   Build-depends: time >= 1.1.2.3 && < 1.7
 
@@ -115,7 +115,7 @@ Library
   else
     Build-depends: network >= 2.2.1.8 && < 2.6
 
-  build-tools: ghc >= 7.0 && < 7.12
+  build-tools: ghc >= 7.0 && < 8.2
 
   if flag(warn-as-error)
     ghc-options:      -Werror
@@ -126,7 +126,7 @@ Library
 Test-Suite test
   type: exitcode-stdio-1.0
 
-  build-tools: ghc >= 7.0 && < 7.12
+  build-tools: ghc >= 7.0 && < 8.2
 
   hs-source-dirs: test
   main-is: httpTests.hs
@@ -144,7 +144,7 @@ Test-Suite test
                      bytestring >= 0.9.1.5 && < 0.11,
                      deepseq >= 1.3.0.0 && < 1.5,
                      pureMD5 >= 0.2.4 && < 2.2,
-                     base >= 4.3.0.0 && < 4.9,
+                     base >= 4.3.0.0 && < 4.10,
                      split >= 0.1.3 && < 0.3,
                      test-framework >= 0.2.0 && < 0.9,
                      test-framework-hunit >= 0.3.0 && <0.4
