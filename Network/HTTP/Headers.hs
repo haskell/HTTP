@@ -279,17 +279,17 @@ parseHeader str =
 parseHeaders :: [String] -> Result [Header]
 parseHeaders = catRslts [] . 
                  map (parseHeader . clean) . 
-		     joinExtended ""
+                     joinExtended ""
    where
         -- Joins consecutive lines where the second line
         -- begins with ' ' or '\t'.
         joinExtended old      [] = [old]
         joinExtended old (h : t)
-	  | isLineExtension h    = joinExtended (old ++ ' ' : tail h) t
+          | isLineExtension h    = joinExtended (old ++ ' ' : tail h) t
           | otherwise            = old : joinExtended h t
-	
-	isLineExtension (x:_) = x == ' ' || x == '\t'
-	isLineExtension _ = False
+
+        isLineExtension (x:_) = x == ' ' || x == '\t'
+        isLineExtension _ = False
 
         clean [] = []
         clean (h:t) | h `elem` "\t\r\n" = ' ' : clean t

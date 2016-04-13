@@ -27,7 +27,7 @@ import System.IO
      hSetBuffering, BufferMode(NoBuffering)
    )
 import Network.TCP ( HandleStream, HStream, 
-       		     StreamHooks(..), setStreamHooks, getStreamHooks )
+                     StreamHooks(..), setStreamHooks, getStreamHooks )
 
 -- | Allows stream logging.  Refer to 'debugStream' below.
 data StreamDebugger x
@@ -37,17 +37,17 @@ instance (Stream x) => Stream (StreamDebugger x) where
     readBlock (Dbg h x) n =
         do val <- readBlock x n
            hPutStrLn h ("--readBlock " ++ show n)
-	   hPutStrLn h (show val)
+           hPutStrLn h (show val)
            return val
     readLine (Dbg h x) =
         do val <- readLine x
            hPutStrLn h ("--readLine")
-	   hPutStrLn h (show val)
+           hPutStrLn h (show val)
            return val
     writeBlock (Dbg h x) str =
         do val <- writeBlock x str
            hPutStrLn h ("--writeBlock" ++ show str)
-	   hPutStrLn h (show val)
+           hPutStrLn h (show val)
            return val
     close (Dbg h x) =
         do hPutStrLn h "--closing..."
@@ -89,12 +89,12 @@ debugStreamHooks h nm =
        hPutStrLn h ("--readBlock " ++ show n)
        hPutStrLn h (either show show eval)
     , hook_readLine = \ toStr val -> do
-	   let eval = case val of { Left e -> Left e ; Right v -> Right $ toStr v}
+           let eval = case val of { Left e -> Left e ; Right v -> Right $ toStr v}
            hPutStrLn h ("--readLine")
-	   hPutStrLn h (either show show eval)
+           hPutStrLn h (either show show eval)
     , hook_writeBlock = \ toStr str val -> do
            hPutStrLn h ("--writeBlock " ++ show val)
-	   hPutStrLn h (toStr str)
+           hPutStrLn h (toStr str)
     , hook_close = do
            hPutStrLn h "--closing..."
            hFlush h

@@ -127,7 +127,7 @@ getResponseHead conn = do
 -- to the RFC.
 switchResponse :: Stream s
                => s
-	       -> Bool {- allow retry? -}
+               -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request_String
@@ -163,12 +163,12 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                        }   
                      
                 Done -> do
-		    when (findConnClose hdrs)
-            	    	 (closeOnEnd conn True)
+                    when (findConnClose hdrs)
+                         (closeOnEnd conn True)
                     return (Right $ Response cd rn hdrs "")
 
                 DieHorribly str -> do
-		    close conn
+                    close conn
                     return $ responseParseError "sendHTTP" ("Invalid response: " ++ str)
 
                 ExpectEntity ->
@@ -183,14 +183,14 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                           Just x  -> 
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
-				                               (readLine conn) (readBlock conn)
+                                                               (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "sendHTTP"
                        ; case rslt of
-		           Left e -> close conn >> return (Left e)
-			   Right (ftrs,bdy) -> do
-			    when (findConnClose (hdrs++ftrs))
-			    	 (closeOnEnd conn True)
-			    return (Right (Response cd rn (hdrs++ftrs) bdy))
+                           Left e -> close conn >> return (Left e)
+                           Right (ftrs,bdy) -> do
+                            when (findConnClose (hdrs++ftrs))
+                                 (closeOnEnd conn True)
+                            return (Right (Response cd rn (hdrs++ftrs) bdy))
                        }
 
 -- | Receive and parse a HTTP request from the given Stream. Should be used 
@@ -204,13 +204,13 @@ receiveHTTP conn = getRequestHead >>= processRequest
             do { lor <- readTillEmpty1 stringBufferOp (readLine conn)
                ; return $ lor >>= parseRequestHead
                }
-	
+
         processRequest (Left e) = return $ Left e
-	processRequest (Right (rm,uri,hdrs)) = 
-	    do -- FIXME : Also handle 100-continue.
+        processRequest (Right (rm,uri,hdrs)) =
+            do -- FIXME : Also handle 100-continue.
                let tc = lookupHeader HdrTransferEncoding hdrs
                    cl = lookupHeader HdrContentLength hdrs
-	       rslt <- case tc of
+               rslt <- case tc of
                           Nothing ->
                               case cl of
                                   Just x  -> linearTransfer (readBlock conn) (read x :: Int)
@@ -218,12 +218,12 @@ receiveHTTP conn = getRequestHead >>= processRequest
                           Just x  ->
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
-				                               (readLine conn) (readBlock conn)
+                                                               (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "receiveHTTP"
                
                return $ do
-	          (ftrs,bdy) <- rslt
-		  return (Request uri rm (hdrs++ftrs) bdy)
+                  (ftrs,bdy) <- rslt
+                  return (Request uri rm (hdrs++ftrs) bdy)
 
 -- | Very simple function, send a HTTP response over the given stream. This 
 --   could be improved on to use different transfer types.
@@ -233,4 +233,4 @@ respondHTTP conn rsp = do -- TODO review throwing away of result
                           -- write body immediately, don't wait for 100 CONTINUE
                           -- TODO review throwing away of result
                           _ <- writeBlock conn (rspBody rsp)
-			  return ()
+                          return ()

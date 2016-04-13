@@ -156,7 +156,7 @@ stringBufferOp =BufferOp
       , buf_splitAt      = splitAt
       , buf_span         = \ p a -> 
                              case Strict.span p (Strict.pack a) of
-			       (x,y) -> (Strict.unpack x, Strict.unpack y)
+                               (x,y) -> (Strict.unpack x, Strict.unpack y)
       , buf_empty        = []
       , buf_isLineTerm   = \ b -> b == crlf || b == lf
       , buf_isEmpty      = null 

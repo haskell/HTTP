@@ -10,8 +10,8 @@
 -- Portability :  non-portable (not tested)
 --
 -- Some utility functions for working with the Haskell @network@ package. Mostly
--- for internal use by the @Network.HTTP@ code, but 
---      
+-- for internal use by the @Network.HTTP@ code.
+--
 -----------------------------------------------------------------------------
 module Network.TCP
    ( Connection
@@ -88,12 +88,12 @@ instance Eq EndPoint where
 
 data Conn a 
  = MkConn { connSock      :: ! Socket
-	  , connHandle    :: Handle
+          , connHandle    :: Handle
           , connBuffer    :: BufferOp a
-	  , connInput     :: Maybe a
+          , connInput     :: Maybe a
           , connEndPoint  :: EndPoint
-	  , connHooks     :: Maybe (StreamHooks a)
-	  , connCloseEOF  :: Bool -- True => close socket upon reaching end-of-stream.
+          , connHooks     :: Maybe (StreamHooks a)
+          , connCloseEOF  :: Bool -- True => close socket upon reaching end-of-stream.
           }
  | ConnClosed
    deriving(Eq)
@@ -248,8 +248,8 @@ openTCPConnection_ uri port stashInput = do
 socketConnection :: BufferType ty
                  => String
                  -> Int
-		 -> Socket
-		 -> IO (HandleStream ty)
+                 -> Socket
+                 -> IO (HandleStream ty)
 socketConnection hst port sock = socketConnection_ hst port sock False
 
 -- Internal function used to control the on-demand streaming of input
@@ -257,21 +257,21 @@ socketConnection hst port sock = socketConnection_ hst port sock False
 socketConnection_ :: BufferType ty
                   => String
                   -> Int
-		  -> Socket
-		  -> Bool
-		  -> IO (HandleStream ty)
+                  -> Socket
+                  -> Bool
+                  -> IO (HandleStream ty)
 socketConnection_ hst port sock stashInput = do
     h <- socketToHandle sock ReadWriteMode
     mb <- case stashInput of { True -> liftM Just $ buf_hGetContents bufferOps h; _ -> return Nothing }
     let conn = MkConn 
          { connSock     = sock
-	 , connHandle   = h
-	 , connBuffer   = bufferOps
-	 , connInput    = mb
-	 , connEndPoint = EndPoint hst port
-	 , connHooks    = Nothing
-	 , connCloseEOF = False
-	 }
+         , connHandle   = h
+         , connBuffer   = bufferOps
+         , connInput    = mb
+         , connEndPoint = EndPoint hst port
+         , connHooks    = Nothing
+         , connCloseEOF = False
+         }
     v <- newMVar conn
     return (HandleStream v)
 
@@ -306,14 +306,7 @@ closeConnection ref readL = do
 -- and that the connection peer matches the given
 -- host name (which is recorded locally).
 isConnectedTo :: Connection -> EndPoint -> IO Bool
-isConnectedTo (Connection conn) endPoint = do
-   v <- readMVar (getRef conn)
-   case v of
-     ConnClosed -> print "aa" >> return False
-     _ 
-      | connEndPoint v == endPoint ->
-          catchIO (getPeerName (connSock v) >> return True) (const $ return False)
-      | otherwise -> return False
+isConnectedTo (Connection conn) endPoint = isTCPConnectedTo conn endPoint
 
 isTCPConnectedTo :: HandleStream ty -> EndPoint -> IO Bool
 isTCPConnectedTo conn endPoint = do
@@ -330,7 +323,7 @@ readBlockBS ref n = onNonClosedDo ref $ \ conn -> do
    x <- bufferGetBlock ref n
    maybe (return ())
          (\ h -> hook_readBlock h (buf_toStr $ connBuffer conn) n x)
-	 (connHooks' conn)
+         (connHooks' conn)
    return x
 
 -- This function uses a buffer, at this time the buffer is just 1000 characters.
@@ -340,7 +333,7 @@ readLineBS ref = onNonClosedDo ref $ \ conn -> do
    x <- bufferReadLine ref
    maybe (return ())
          (\ h -> hook_readLine h (buf_toStr $ connBuffer conn) x)
-	 (connHooks' conn)
+         (connHooks' conn)
    return x
 
 -- The 'Connection' object allows no outward buffering, 
@@ -350,7 +343,7 @@ writeBlockBS ref b = onNonClosedDo ref $ \ conn -> do
   x    <- bufferPutBlock (connBuffer conn) (connHandle conn) b
   maybe (return ())
         (\ h -> hook_writeBlock h (buf_toStr $ connBuffer conn) b x)
-	(connHooks' conn)
+        (connHooks' conn)
   return x
 
 closeIt :: HStream ty => HandleStream ty -> (ty -> Bool) -> Bool -> IO ()
@@ -361,7 +354,7 @@ closeIt c p b = do
    conn <- readMVar (getRef c)
    maybe (return ())
          (hook_close)
-	 (connHooks' conn)
+         (connHooks' conn)
 
 closeEOF :: HandleStream ty -> Bool -> IO ()
 closeEOF c flg = modifyMVar_ (getRef c) (\ co -> return co{connCloseEOF=flg})
@@ -376,11 +369,11 @@ bufferGetBlock ref n = onNonClosedDo ref $ \ conn -> do
     _ -> do
       catchIO (buf_hGet (connBuffer conn) (connHandle conn) n >>= return.return)
               (\ e ->
-		       if isEOFError e 
-			then do
-			  when (connCloseEOF conn) $ catchIO (closeQuick ref) (\ _ -> return ())
-			  return (return (buf_empty (connBuffer conn)))
-			else return (failMisc (show e)))
+                       if isEOFError e
+                        then do
+                          when (connCloseEOF conn) $ catchIO (closeQuick ref) (\ _ -> return ())
+                          return (return (buf_empty (connBuffer conn)))
+                        else return (failMisc (show e)))
 
 bufferPutBlock :: BufferOp a -> Handle -> a -> IO (Result ())
 bufferPutBlock ops h b = 
@@ -397,12 +390,12 @@ bufferReadLine ref = onNonClosedDo ref $ \ conn -> do
     return (return (buf_append (connBuffer conn) a newl))
    _ -> catchIO
               (buf_hGetLine (connBuffer conn) (connHandle conn) >>= 
-	            return . return . appendNL (connBuffer conn))
+                    return . return . appendNL (connBuffer conn))
               (\ e ->
                  if isEOFError e
                   then do
-	  	    when (connCloseEOF conn) $ catchIO (closeQuick ref) (\ _ -> return ())
-		    return (return   (buf_empty (connBuffer conn)))
+                    when (connCloseEOF conn) $ catchIO (closeQuick ref) (\ _ -> return ())
+                    return (return   (buf_empty (connBuffer conn)))
                   else return (failMisc (show e)))
  where
    -- yes, this s**ks.. _may_ have to be addressed if perf

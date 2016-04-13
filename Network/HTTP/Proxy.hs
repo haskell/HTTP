@@ -25,10 +25,12 @@ module Network.HTTP.Proxy
 #endif
 -}
 
-import Control.Monad ( when, mplus, join, liftM2)
+import Control.Monad ( when, mplus, join, liftM2 )
 
 #if defined(WIN32)
 import Network.HTTP.Base ( catchIO )
+import Control.Monad ( liftM )
+import Data.List ( isPrefixOf )
 #endif
 import Network.HTTP.Utils ( dropWhileTail, chopAtDelim )
 import Network.HTTP.Auth
@@ -75,12 +77,14 @@ envProxyString = do
 -- Consults environment variable, and in case of Windows, by querying
 -- the Registry (cf. @registryProxyString@.)
 proxyString :: IO (Maybe String)
-proxyString = liftM2 mplus envProxyString registryProxyString
+proxyString = liftM2 mplus envProxyString windowsProxyString
 
-registryProxyString :: IO (Maybe String)
+windowsProxyString :: IO (Maybe String)
 #if !defined(WIN32)
-registryProxyString = return Nothing
+windowsProxyString = return Nothing
 #else
+windowsProxyString = liftM (>>= parseWindowsProxy) registryProxyString
+
 registryProxyLoc :: (HKEY,String)
 registryProxyLoc = (hive, path)
   where
@@ -94,6 +98,7 @@ registryProxyLoc = (hive, path)
 
 -- read proxy settings from the windows registry; this is just a best
 -- effort and may not work on all setups. 
+registryProxyString :: IO (Maybe String)
 registryProxyString = catchIO
   (bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
     enable <- fmap toBool $ regQueryValueDWORD hkey "ProxyEnable"
@@ -101,6 +106,34 @@ registryProxyString = catchIO
         then fmap Just $ regQueryValue hkey (Just "ProxyServer")
         else return Nothing)
   (\_ -> return Nothing)
+
+-- the proxy string is in the format "http=x.x.x.x:yyyy;https=...;ftp=...;socks=..."
+-- even though the following article indicates otherwise
+-- https://support.microsoft.com/en-us/kb/819961
+--
+-- to be sure, parse strings where each entry in the ';'-separated list above is
+-- either in the format "protocol=..." or "protocol://..."
+--
+-- only return the first "http" of them, if it exists
+parseWindowsProxy :: String -> Maybe String
+parseWindowsProxy s =
+  case proxies of
+    x:_ -> Just x
+    _   -> Nothing
+  where
+    parts = split ';' s
+    pr x = case break (== '=') x of
+      (p, []) -> p  -- might be in format http://
+      (p, u)  -> p ++ "://" ++ drop 1 u
+
+    proxies = filter (isPrefixOf "http://") . map pr $ parts
+
+    split :: Eq a => a -> [a] -> [[a]]
+    split _ [] = []
+    split a xs = case break (a ==) xs of
+      (ys, [])   -> [ys]
+      (ys, _:zs) -> ys:split a zs
+
 #endif
 
 -- | @fetchProxy flg@ gets the local proxy settings and parse the string
@@ -115,7 +148,7 @@ fetchProxy warnIfIllformed = do
   case mstr of
     Nothing     -> return NoProxy
     Just str    -> case parseProxy str of
-        Just p  -> return p                   
+        Just p  -> return p
         Nothing -> do
             when warnIfIllformed $ System.IO.hPutStrLn System.IO.stderr $ unlines
                     [ "invalid http proxy uri: " ++ show str
@@ -164,7 +197,7 @@ uri2proxy uri@URI{ uriScheme    = "http:"
        [] -> Nothing
        as -> Just (AuthBasic "" (unEscapeString usr) (unEscapeString pwd) uri)
         where
-	 (usr,pwd) = chopAtDelim ':' as
+         (usr,pwd) = chopAtDelim ':' as
 
 uri2proxy _ = Nothing
 

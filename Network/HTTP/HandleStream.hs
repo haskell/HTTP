@@ -84,9 +84,9 @@ sendHTTP conn rq = sendHTTP_notify conn rq (return ())
 -- request transmission and its performance.
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
-		-> Request ty
-		-> IO ()
-		-> IO (Result (Response ty))
+                -> Request ty
+                -> IO ()
+                -> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
   when providedClose $ (closeOnEnd conn True)
   onException (sendMain conn rq onSendComplete)
@@ -106,9 +106,9 @@ sendHTTP_notify conn rq onSendComplete = do
 -- Since we would wait forever, I have disabled use of 100-continue for now.
 sendMain :: HStream ty
          => HandleStream ty
-	 -> Request ty
-	 -> (IO ())
-	 -> IO (Result (Response ty))
+         -> Request ty
+         -> (IO ())
+         -> IO (Result (Response ty))
 sendMain conn rqst onSendComplete = do
       --let str = if null (rqBody rqst)
       --              then show rqst
@@ -128,7 +128,7 @@ sendMain conn rqst onSendComplete = do
 
 switchResponse :: HStream ty
                => HandleStream ty
-	       -> Bool {- allow retry? -}
+               -> Bool {- allow retry? -}
                -> Bool {- is body sent? -}
                -> Result ResponseData
                -> Request ty
@@ -143,7 +143,7 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
      Continue
       | not bdy_sent -> do {- Time to send the body -}
         writeBlock conn (rqBody rqst) >>= either (return . Left)
-	   (\ _ -> do
+           (\ _ -> do
               rsp <- getResponseHead conn
               switchResponse conn allow_retry True rsp rqst)
       | otherwise    -> do {- keep waiting -}
@@ -155,8 +155,8 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                     other than "100-Continue" -}
         -- TODO review throwing away of result
         _ <- writeBlock conn ((buf_append bufferOps)
-		                     (buf_fromStr bufferOps (show rqst))
-			             (rqBody rqst))
+                                     (buf_fromStr bufferOps (show rqst))
+                                     (rqBody rqst))
         rsp <- getResponseHead conn
         switchResponse conn False bdy_sent rsp rqst
                      
@@ -171,22 +171,22 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
      ExpectEntity -> do
        r <- fmapE (\ (ftrs,bdy) -> Right (Response cd rn (hdrs++ftrs) bdy)) $
              maybe (maybe (hopefulTransfer bo (readLine conn) [])
-	               (\ x -> 
-		          readsOne (linearTransfer (readBlock conn))
-		                   (return$responseParseError "unrecognized content-length value" x)
-			  	   x)
-		        cl)
-	           (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
-	                      (uglyDeathTransfer "sendHTTP"))
+                       (\ x ->
+                          readsOne (linearTransfer (readBlock conn))
+                                   (return$responseParseError "unrecognized content-length value" x)
+                                   x)
+                        cl)
+                   (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+                              (uglyDeathTransfer "sendHTTP"))
                    tc
        case r of
          Left{} -> do
-	   close conn
-	   return r
-	 Right (Response _ _ hs _) -> do
-	   when (findConnClose hs)
+           close conn
+           return r
+         Right (Response _ _ hs _) -> do
+           when (findConnClose hs)
                 (closeOnEnd conn True)
-	   return r
+           return r
 
       where
        tc = lookupHeader HdrTransferEncoding hdrs
@@ -208,18 +208,18 @@ receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
    getRequestHead = do
       fmapE (\es -> parseRequestHead (map (buf_toStr bufferOps) es))
             (readTillEmpty1 bufferOps (readLine conn))
-	
+
    processRequest (rm,uri,hdrs) =
       fmapE (\ (ftrs,bdy) -> Right (Request uri rm (hdrs++ftrs) bdy)) $
-	     maybe 
-	      (maybe (return (Right ([], buf_empty bo))) -- hopefulTransfer ""
-	             (\ x -> readsOne (linearTransfer (readBlock conn))
-			              (return$responseParseError "unrecognized Content-Length value" x)
-				      x)
-				      
-		     cl)
-  	      (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
-	                 (uglyDeathTransfer "receiveHTTP"))
+             maybe
+              (maybe (return (Right ([], buf_empty bo))) -- hopefulTransfer ""
+                     (\ x -> readsOne (linearTransfer (readBlock conn))
+                                      (return$responseParseError "unrecognized Content-Length value" x)
+                                      x)
+
+                     cl)
+              (ifChunked (chunkedTransfer bo (readLine conn) (readBlock conn))
+                         (uglyDeathTransfer "receiveHTTP"))
               tc
     where
      -- FIXME : Also handle 100-continue.

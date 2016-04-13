@@ -135,11 +135,11 @@ import Data.Version (showVersion)
 ------------------ URI Authority parsing ------------------------
 -----------------------------------------------------------------
 
-data URIAuthority = URIAuthority { user :: Maybe String, 
-				   password :: Maybe String,
-				   host :: String,
-				   port :: Maybe Int
-				 } deriving (Eq,Show)
+data URIAuthority = URIAuthority { user :: Maybe String,
+                                   password :: Maybe String,
+                                   host :: String,
+                                   port :: Maybe Int
+                                 } deriving (Eq,Show)
 
 -- | Parse the authority part of a URL.
 --
@@ -154,12 +154,12 @@ parseURIAuthority s = listToMaybe (map fst (readP_to_S pURIAuthority s))
 
 pURIAuthority :: ReadP URIAuthority
 pURIAuthority = do
-		(u,pw) <- (pUserInfo `before` char '@') 
-			  <++ return (Nothing, Nothing)
-		h <- rfc2732host <++ munch (/=':')
-		p <- orNothing (char ':' >> readDecP)
-		look >>= guard . null 
-		return URIAuthority{ user=u, password=pw, host=h, port=p }
+                (u,pw) <- (pUserInfo `before` char '@')
+                          <++ return (Nothing, Nothing)
+                h <- rfc2732host <++ munch (/=':')
+                p <- orNothing (char ':' >> readDecP)
+                look >>= guard . null
+                return URIAuthority{ user=u, password=pw, host=h, port=p }
 
 -- RFC2732 adds support for '[literal-ipv6-address]' in the host part of a URL
 rfc2732host :: ReadP String
@@ -171,9 +171,9 @@ rfc2732host = do
 
 pUserInfo :: ReadP (Maybe String, Maybe String)
 pUserInfo = do
-	    u <- orNothing (munch (`notElem` ":@"))
-	    p <- orNothing (char ':' >> munch (/='@'))
-	    return (u,p)
+            u <- orNothing (munch (`notElem` ":@"))
+            p <- orNothing (char ':' >> munch (/='@'))
+            return (u,p)
 
 before :: Monad m => m a -> m b -> m a
 before a b = a >>= \x -> b >> return x
@@ -189,8 +189,8 @@ uriAuthToString :: URIAuth -> String
 uriAuthToString ua = 
   concat [ uriUserInfo ua 
          , uriRegName ua
-	 , uriPort ua
-	 ]
+         , uriPort ua
+         ]
 
 uriAuthPort :: Maybe URI -> URIAuth -> Int
 uriAuthPort mbURI u = 
@@ -223,12 +223,12 @@ reqURIAuth req =
     Just ua -> ua
     _ -> case lookupHeader HdrHost (rqHeaders req) of
            Nothing -> error ("reqURIAuth: no URI authority for: " ++ show req)
-	   Just h  -> 
-	      case toHostPort h of
-	        (ht,p) -> URIAuth { uriUserInfo = ""
-	                          , uriRegName  = ht
-			          , uriPort     = p
-			          }
+           Just h  ->
+              case toHostPort h of
+                (ht,p) -> URIAuth { uriUserInfo = ""
+                                  , uriRegName  = ht
+                                  , uriPort     = p
+                                  }
   where
     -- Note: just in case you're wondering..the convention is to include the ':'
     -- in the port part..
@@ -265,13 +265,13 @@ instance Show RequestMethod where
 
 rqMethodMap :: [(String, RequestMethod)]
 rqMethodMap = [("HEAD",    HEAD),
-	       ("PUT",     PUT),
-	       ("GET",     GET),
-	       ("POST",    POST),
+               ("PUT",     PUT),
+               ("GET",     GET),
+               ("POST",    POST),
                ("DELETE",  DELETE),
-	       ("OPTIONS", OPTIONS),
-	       ("TRACE",   TRACE),
-	       ("CONNECT", CONNECT)]
+               ("OPTIONS", OPTIONS),
+               ("TRACE",   TRACE),
+               ("CONNECT", CONNECT)]
 
 -- 
 -- for backwards-ish compatibility; suggest
@@ -309,7 +309,7 @@ instance Show (Request a) where
         show m ++ sp ++ alt_uri ++ sp ++ ver ++ crlf
         ++ foldr (++) [] (map show (dropHttpVersion h)) ++ crlf
         where
-	    ver = fromMaybe httpVersion (getRequestVersion req)
+            ver = fromMaybe httpVersion (getRequestVersion req)
             alt_uri = show $ if null (uriPath u) || head (uriPath u) /= '/' 
                         then u { uriPath = '/' : uriPath u } 
                         else u
@@ -730,7 +730,7 @@ normalizeRequestURI doClose h r =
   insertHeaderIfMissing HdrHost h $
     r { rqURI = (rqURI r){ uriScheme = ""
                          , uriAuthority = Nothing
-			 }}
+                         }}
 
 -- | @NormalizeRequestOptions@ brings together the various defaulting\/normalization options
 -- over 'Request's. Use 'defaultNormalizeRequestOptions' for the standard selection of option
@@ -759,7 +759,7 @@ defaultNormalizeRequestOptions = NormalizeRequestOptions
 -- via the @NormalizeRequestOptions@ record.
 normalizeRequest :: NormalizeRequestOptions ty
                  -> Request ty
-		 -> Request ty
+                 -> Request ty
 normalizeRequest opts req = foldr (\ f -> f opts) req normalizers
  where
   --normalizers :: [RequestNormalizer ty]
@@ -817,26 +817,26 @@ normalizeHostURI opts req =
     ("",_uri_abs)
       | forProxy -> 
          case findHeader HdrHost req of
-	   Nothing -> req -- no host/authority in sight..not much we can do.
-	   Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
-	                           , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
-				   }}
+           Nothing -> req -- no host/authority in sight..not much we can do.
+           Just h  -> req{rqURI=uri{ uriAuthority=Just URIAuth{uriUserInfo="", uriRegName=hst, uriPort=pNum}
+                                   , uriScheme=if (null (uriScheme uri)) then "http" else uriScheme uri
+                                   }}
             where 
-	      hst = case span (/='@') user_hst of
-	               (as,'@':bs) -> 
-		          case span (/=':') as of
-			    (_,_:_) -> bs
-			    _ -> user_hst
-		       _ -> user_hst
+              hst = case span (/='@') user_hst of
+                       (as,'@':bs) ->
+                          case span (/=':') as of
+                            (_,_:_) -> bs
+                            _ -> user_hst
+                       _ -> user_hst
 
-	      (user_hst, pNum) = 
-	         case span isDigit (reverse h) of
-		   (ds,':':bs) -> (reverse bs, ':':reverse ds)
-		   _ -> (h,"")
+              (user_hst, pNum) =
+                 case span isDigit (reverse h) of
+                   (ds,':':bs) -> (reverse bs, ':':reverse ds)
+                   _ -> (h,"")
       | otherwise -> 
          case findHeader HdrHost req of
-	   Nothing -> req -- no host/authority in sight..not much we can do...complain?
-	   Just{}  -> req
+           Nothing -> req -- no host/authority in sight..not much we can do...complain?
+           Just{}  -> req
     (h,uri_abs) 
       | forProxy  -> insertHeaderIfMissing HdrHost h req 
       | otherwise -> replaceHeader HdrHost h req{rqURI=uri_abs} -- Note: _not_ stubbing out user:pass
@@ -869,7 +869,7 @@ normalizeHostHeader :: Request ty -> Request ty
 normalizeHostHeader rq = 
   insertHeaderIfMissing HdrHost
                         (uriToAuthorityString $ rqURI rq)
-			rq
+                        rq
                                      
 -- Looks for a "Connection" header with the value "close".
 -- Returns True when this is found.
@@ -877,7 +877,7 @@ findConnClose :: [Header] -> Bool
 findConnClose hdrs =
   maybe False
         (\ x -> map toLower (trim x) == "close")
-	(lookupHeader HdrConnection hdrs)
+        (lookupHeader HdrConnection hdrs)
 
 -- | Used when we know exactly how many bytes to expect.
 linearTransfer :: (Int -> IO (Result a)) -> Int -> IO (Result ([Header],a))
@@ -889,8 +889,8 @@ linearTransfer readBlk n = fmapE (\str -> Right ([],str)) (readBlk n)
 --   take data once and give up the rest.
 hopefulTransfer :: BufferOp a
                 -> IO (Result a)
-		-> [a]
-		-> IO (Result ([Header],a))
+                -> [a]
+                -> IO (Result ([Header],a))
 hopefulTransfer bufOps readL strs 
     = readL >>= 
       either (\v -> return $ Left v)
@@ -902,7 +902,7 @@ hopefulTransfer bufOps readL strs
 --   Also the only transfer variety likely to
 --   return any footers.
 chunkedTransfer :: BufferOp a
-		-> IO (Result a)
+                -> IO (Result a)
                 -> (Int -> IO (Result a))
                 -> IO (Result ([Header], a))
 chunkedTransfer bufOps readL readBlk = chunkedTransferC bufOps readL readBlk [] 0
@@ -910,9 +910,9 @@ chunkedTransfer bufOps readL readBlk = chunkedTransferC bufOps readL readBlk [] 
 chunkedTransferC :: BufferOp a
                  -> IO (Result a)
                  -> (Int -> IO (Result a))
-		 -> [a]
-		 -> Int
-		 -> IO (Result ([Header], a))
+                 -> [a]
+                 -> Int
+                 -> IO (Result ([Header], a))
 chunkedTransferC bufOps readL readBlk acc n = do
   v <- readL
   case v of
@@ -921,25 +921,25 @@ chunkedTransferC bufOps readL readBlk acc n = do
      | size == 0 -> 
          -- last chunk read; look for trailing headers..
         fmapE (\ strs -> do
-	         ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
-		   -- insert (computed) Content-Length header.
-		 let ftrs' = Header HdrContentLength (show n) : ftrs
+                 ftrs <- parseHeaders (map (buf_toStr bufOps) strs)
+                  -- insert (computed) Content-Length header.
+                 let ftrs' = Header HdrContentLength (show n) : ftrs
                  return (ftrs',buf_concat bufOps (reverse acc)))
 
-	      (readTillEmpty2 bufOps readL [])
+              (readTillEmpty2 bufOps readL [])
 
      | otherwise -> do
          some <- readBlk size
-	 case some of
-	   Left e -> return (Left e)
-	   Right cdata -> do
-	       _ <- readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
-	       chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
+         case some of
+           Left e -> return (Left e)
+           Right cdata -> do
+               _ <- readL -- CRLF is mandated after the chunk block; ToDo: check that the line is empty.?
+               chunkedTransferC bufOps readL readBlk (cdata:acc) (n+size)
      where
       size 
        | buf_isEmpty bufOps line = 0
        | otherwise = 
-	 case readHex (buf_toStr bufOps line) of
+         case readHex (buf_toStr bufOps line) of
           (hx,_):_ -> hx
           _        -> 0
 
@@ -951,13 +951,13 @@ uglyDeathTransfer loc = return (responseParseError loc "Unknown Transfer-Encodin
 
 -- | Remove leading crlfs then call readTillEmpty2 (not required by RFC)
 readTillEmpty1 :: BufferOp a
-	       -> IO (Result a)
+               -> IO (Result a)
                -> IO (Result [a])
 readTillEmpty1 bufOps readL =
   readL >>=
     either (return . Left)
            (\ s -> 
-	       if buf_isLineTerm bufOps s
+               if buf_isLineTerm bufOps s
                 then readTillEmpty1 bufOps readL
                 else readTillEmpty2 bufOps readL [s])
 
@@ -967,14 +967,14 @@ readTillEmpty1 bufOps readL =
 --   thing to do - so probably indicates an
 --   error condition.
 readTillEmpty2 :: BufferOp a
-	       -> IO (Result a)
-	       -> [a]
-	       -> IO (Result [a])
+               -> IO (Result a)
+               -> [a]
+               -> IO (Result [a])
 readTillEmpty2 bufOps readL list =
     readL >>=
       either (return . Left)
              (\ s ->
-	        if buf_isLineTerm bufOps s || buf_isEmpty bufOps s
+                if buf_isLineTerm bufOps s || buf_isEmpty bufOps s
                  then return (Right $ reverse (s:list))
                  else readTillEmpty2 bufOps readL (s:list))
 

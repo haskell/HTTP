@@ -130,9 +130,9 @@ sendHTTP conn rq = do
 -- request transmission and its performance.
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
-		-> Request ty
-		-> IO ()
-		-> IO (Result (Response ty))
+                -> Request ty
+                -> IO ()
+                -> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
   let norm_r = normalizeRequest defaultNormalizeRequestOptions rq 
   S.sendHTTP_notify conn norm_r onSendComplete
