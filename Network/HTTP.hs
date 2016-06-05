@@ -79,9 +79,10 @@ import Network.HTTP.Base
 import qualified Network.HTTP.HandleStream as S
 -- old implementation: import Network.HTTP.Stream
 import Network.TCP
-import Network.Stream ( Result )
+import Network.Stream ( Result, failMisc )
 import Network.URI    ( parseURI )
 
+import Control.Exception ( IOException, try )
 import Data.Maybe ( fromMaybe )
 
 {-
@@ -106,9 +107,10 @@ simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do
   auth <- getAuth r
   failHTTPS (rqURI r)
-  c <- openStream (host auth) (fromMaybe 80 (port auth))
-  let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
-  simpleHTTP_ c norm_r
+  c <- try (openStream (host auth) (fromMaybe 80 (port auth)))
+  case c of
+    Left err -> return . failMisc $ show (err :: IOException)
+    Right c' -> simpleHTTP_ c' r
    
 -- | Identical to 'simpleHTTP', but acting on an already opened stream.
 simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
