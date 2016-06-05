@@ -106,8 +106,9 @@ import Data.Maybe ( fromMaybe )
 simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do
   auth <- getAuth r
-  failHTTPS (rqURI r)
-  c <- try (openStream (host auth) (fromMaybe 80 (port auth)))
+  c <- try (do
+               failHTTPS (rqURI r)
+               openStream (host auth) (fromMaybe 80 (port auth)))
   case c of
     Left err -> return . failMisc $ show (err :: IOException)
     Right c' -> simpleHTTP_ c' r

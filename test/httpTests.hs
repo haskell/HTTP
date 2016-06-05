@@ -19,7 +19,7 @@ import Network.HTTP
 import Network.HTTP.Base
 import Network.HTTP.Auth
 import Network.HTTP.Headers
-import Network.Stream (Result)
+import Network.Stream (Result, ConnError(..))
 import Network.URI (uriPath, parseURI)
 
 import System.Environment (getArgs)
@@ -66,9 +66,9 @@ basicExample = do
 
 secureGetRequest :: (?secureTestUrl :: ServerAddress) => Assertion
 secureGetRequest = do
-  response <- try $ simpleHTTP (getRequest (?secureTestUrl "/anything"))
-  assertEqual "Threw expected exception"
-              (Left (userError "https not supported"))
+  response <- simpleHTTP (getRequest (?secureTestUrl "/anything"))
+  assertEqual "Receiving expected response"
+              (Left (ErrorMisc "user error (https not supported)"))
               (fmap show response) -- fmap show because Response isn't in Eq
 
 basicPostRequest :: (?testUrl :: ServerAddress) => Assertion
