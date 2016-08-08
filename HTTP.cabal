@@ -113,7 +113,15 @@ Library
   if flag(network-uri)
     Build-depends: network-uri == 2.6.*, network == 2.6.*
   else
-    Build-depends: network >= 2.2.1.8 && < 2.6
+    if flag(network-uri)
+      if os(HaLVM)
+        Build-depends: network-uri == 2.6.*, network-hans >= 0.2 && < 1.0
+      else
+        Build-depends: network-uri == 2.6.*, network == 2.6.*
+    else
+      Build-depends: network >= 2.2.1.8 && < 2.6
+
+  build-tools: ghc >= 6.10 && < 7.10
 
   if flag(warn-as-error)
     ghc-options:      -Werror

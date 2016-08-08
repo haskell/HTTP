@@ -36,6 +36,11 @@ import Data.Char
 import Data.Maybe
 import Data.Word ( Word8 )
 
+#include <ghcplatform.h>
+#ifdef HaLVM_TARGET_OS
+#define MIN_VERSION_network(a,b,c) 1
+#endif
+
 -- | @Authority@ specifies the HTTP Authentication method to use for
 -- a given domain/realm; @Basic@ or @Digest@.
 data Authority 
