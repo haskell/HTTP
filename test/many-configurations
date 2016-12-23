@@ -61,7 +61,7 @@ test/with-ghc-7.6 test/check-package --constraint='test-framework-hunit>=0.3'
 # cover all major versions of network given it's quite central to HTTP
 test/with-ghc-7.0 test/check-package --constraint='network==2.2.1.8' --constraint 'entropy<0.2.2.4' -f-warp-tests
 
-test/with-ghc-7.6 test/check-package --constraint 'network>=2.3&&<2.4'
+test/with-ghc-7.6 test/check-package --constraint 'network>=2.3&&<2.4' --constraint 'warp<3.2'
 test/with-ghc-7.6 test/check-package --constraint 'network>=2.4&&<2.5'
 
 # need to choose an http-shed with upper bounds, earlier versions won't build with network>=2.5
