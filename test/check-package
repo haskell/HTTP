@@ -1,16 +1,10 @@
 #!/bin/sh -e
 
-BACKJUMPS=10000
+BACKJUMPS=-1
 
 echo OPTIONS: $*
 
-buildAndTest() {
-  cabal sandbox init &&
-  cabal clean &&
-  cabal install --only-dependencies --force-reinstalls --max-backjumps=$BACKJUMPS --reorder-goals --enable-tests $* &&
-  cabal configure --enable-tests $* &&
-  cabal build &&
-  cabal test
-}
-
-buildAndTest $* || (rm -rf .cabal-sandbox && buildAndTest $*)
+rm -rf dist-newstyle
+rm -f cabal.project.local
+cabal new-build --max-backjumps=$BACKJUMPS --reorder-goals --enable-tests $*
+dist-newstyle/build/*/build/test/test
