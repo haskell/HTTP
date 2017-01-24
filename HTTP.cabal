@@ -44,6 +44,7 @@ Description:
  __Note:__ This package does not support HTTPS connections.
  If you need HTTPS, take a look at the following packages:
  .
+ * [http-streams](http://hackage.haskell.org/package/http-streams)
  * [http-client](http://hackage.haskell.org/package/http-client) (in combination with
  [http-client-tls](http://hackage.haskell.org/package/http-client-tls))
  * [req](http://hackage.haskell.org/package/req)
