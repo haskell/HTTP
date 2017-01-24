@@ -40,6 +40,14 @@ Description:
  >               setAllowRedirects True -- handle HTTP redirects
  >               request $ getRequest "http://www.haskell.org/"
  >      return (take 100 (rspBody rsp))
+ .
+ __Note:__ This package does not support HTTPS connections.
+ If you need HTTPS, take a look at the following packages:
+ .
+ * [http-client](http://hackage.haskell.org/package/http-client) (in combination with
+ [http-client-tls](http://hackage.haskell.org/package/http-client-tls))
+ * [req](http://hackage.haskell.org/package/req)
+ * [wreq](http://hackage.haskell.org/package/wreq)
 
 Extra-Source-Files: CHANGES
 
