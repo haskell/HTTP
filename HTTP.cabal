@@ -44,11 +44,15 @@ Description:
  __Note:__ This package does not support HTTPS connections.
  If you need HTTPS, take a look at the following packages:
  .
- * [http-streams](http://hackage.haskell.org/package/http-streams)
- * [http-client](http://hackage.haskell.org/package/http-client) (in combination with
- [http-client-tls](http://hackage.haskell.org/package/http-client-tls))
- * [req](http://hackage.haskell.org/package/req)
- * [wreq](http://hackage.haskell.org/package/wreq)
+ * <http://hackage.haskell.org/package/http-streams http-streams>
+ .
+ * <http://hackage.haskell.org/package/http-client http-client> (in combination with
+ <http://hackage.haskell.org/package/http-client-tls http-client-tls>)
+ .
+ * <http://hackage.haskell.org/package/req req>
+ .
+ * <http://hackage.haskell.org/package/wreq wreq>
+ .
 
 Extra-Source-Files: CHANGES
 
