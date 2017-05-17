@@ -147,7 +147,7 @@ Test-Suite test
   -- note: version constraints for dependencies shared with the library
   -- should be the same
   build-depends:     HTTP,
-                     HUnit >= 1.2.0.1 && < 1.6,
+                     HUnit >= 1.2.0.1 && < 1.7,
                      httpd-shed >= 0.4 && < 0.5,
                      mtl >= 1.1.1.0 && < 2.3,
                      bytestring >= 0.9.1.5 && < 0.11,
