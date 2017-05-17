@@ -25,13 +25,15 @@ test/with-ghc-7.10 test/check-package
 
 test/with-ghc-8.0 test/check-package
 
+test/with-ghc-8.2 test/check-package
+
 # cover the min/max bounds for each package in turn (TODO: add this for each one)
 
 # only have GHC 7.0.4 easily available to test with, so test
 # base 4.3.1.0 instead of 4.3.0.0
 test/with-ghc-7.0 test/check-package --constraint='base==4.3.1.0' -f-warp-tests
-# don't have GHC 7.10 easily available to test with yet
-test/with-ghc-7.8 test/check-package --constraint='base>=4.7'
+
+test/with-ghc-8.2 test/check-package --constraint='base>=4.10'
 
 test/with-ghc-7.0 test/check-package --constraint='parsec==2.0' --constraint 'network<2.3' --constraint 'entropy<0.2.2.4' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='parsec>=2.1'
