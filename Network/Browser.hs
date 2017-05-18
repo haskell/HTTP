@@ -151,6 +151,11 @@ import qualified System.IO
    )
 import Data.Time.Clock ( UTCTime, getCurrentTime )
 
+#include <ghcplatform.h>
+#ifdef HaLVM_TARGET_OS
+#define MIN_VERSION_network(a,b,c) 1
+#endif
+
 
 ------------------------------------------------------------------
 ----------------------- Cookie Stuff -----------------------------
