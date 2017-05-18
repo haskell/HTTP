@@ -7,4 +7,4 @@ echo OPTIONS: $*
 rm -rf dist-newstyle
 rm -f cabal.project.local
 cabal new-build --max-backjumps=$BACKJUMPS --reorder-goals --enable-tests $*
-dist-newstyle/build/*/build/test/test
+`find dist-newstyle/build -name test -a -type f`
