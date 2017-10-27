@@ -160,6 +160,7 @@ fetchProxy warnIfIllformed = do
 -- | @parseProxy str@ translates a proxy server string into a @Proxy@ value;
 -- returns @Nothing@ if not well-formed.
 parseProxy :: String -> Maybe Proxy
+parseProxy "" = Nothing
 parseProxy str = join
                    . fmap uri2proxy
                    $ parseHttpURI str
