@@ -38,11 +38,13 @@ import Network.Socket
    ( Socket, SocketOption(KeepAlive)
    , SocketType(Stream), connect
    , shutdown, ShutdownCmd(..)
-   , sClose, setSocketOption, getPeerName
+   , setSocketOption, getPeerName
    , socket, Family(AF_UNSPEC), defaultProtocol, getAddrInfo
    , defaultHints, addrFamily, withSocketsDo
    , addrSocketType, addrAddress
    )
+import qualified Network.Socket
+   ( close )
 import qualified Network.Stream as Stream
    ( Stream(readBlock, readLine, writeBlock, close, closeOnEnd) )
 import Network.Stream
@@ -242,7 +244,7 @@ openTCPConnection_ uri port stashInput = do
                             setSocketOption s KeepAlive 1
                             connect s (addrAddress a)
                             socketConnection_ fixedUri port s stashInput
-                            ) (sClose s)
+                            ) (Network.Socket.close s)
 
 -- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
 socketConnection :: BufferType ty
@@ -295,7 +297,7 @@ closeConnection ref readL = do
     suck readL
     hClose (connHandle conn)
     shutdown sk ShutdownReceive
-    sClose sk
+    Network.Socket.close sk
 
   suck :: IO Bool -> IO ()
   suck rd = do
