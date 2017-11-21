@@ -29,9 +29,11 @@ import Network.Stream
    ( Stream(..), ConnError(ErrorReset, ErrorMisc), Result
    )
 import Network.Socket
-   ( Socket, getSocketOption, shutdown, send, recv, sClose
+   ( Socket, getSocketOption, shutdown, send, recv
    , ShutdownCmd(ShutdownBoth), SocketOption(SoError)
    )
+import qualified Network.Socket
+   ( close )
 
 import Network.HTTP.Base ( catchIO )
 import Control.Monad (liftM)
@@ -59,7 +61,7 @@ instance Stream Socket where
     close sk          = do
         -- This slams closed the connection (which is considered rude for TCP\/IP)
          shutdown sk ShutdownBoth
-         sClose sk
+         Network.Socket.close sk
     closeOnEnd _sk _  = return () -- can't really deal with this, so do run the risk of leaking sockets here.
 
 readBlockSocket :: Socket -> Int -> IO (Result String)
