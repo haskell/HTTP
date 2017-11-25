@@ -177,6 +177,6 @@ Test-Suite test
     else
       build-depends:
                          conduit >= 1.1 && < 1.3,
-                         conduit-extra >= 1.1 && < 1.2
+                         conduit-extra >= 1.1 && < 1.3
 
 
