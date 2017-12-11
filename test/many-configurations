@@ -108,7 +108,7 @@ test/with-ghc-7.6 test/check-package --constraint='conduit>=1.0' -fconduit10
 test/with-ghc-7.6 test/check-package --constraint='conduit>=1.1'
 
 test/with-ghc-7.6 test/check-package --constraint='conduit-extra==1.1'
-test/with-ghc-7.6 test/check-package --constraint='conduit-extra>=1.1'
+test/with-ghc-8.2 test/check-package --constraint='conduit-extra>=1.2'
 
 
 # cover each flag
