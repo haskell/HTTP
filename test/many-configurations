@@ -1,15 +1,10 @@
 #!/bin/sh -e
 
 # Test the package across a number of configurations we expect to work.
-# This relies on having with-ghc-XXX scripts available for each supported GHC v$
+# This relies on having with-ghc-XXX scripts available for each supported GHC
 
-# The script doesn't currently use sandboxes for various reasons (lengthier builds
-# and not supported by all versions of cabal) so it may not be completely reliable.
 # The constraints specified have been observed to make it build in practice once
 # but are not necessarily sufficient.
-# TODO would probably be sensible to use 'cabal freeze' files instead where possible.
-
-rm -rf .cabal-sandbox
 
 # cover each GHC
 
