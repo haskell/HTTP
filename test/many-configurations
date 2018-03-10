@@ -22,6 +22,9 @@ test/with-ghc-8.0 test/check-package
 
 test/with-ghc-8.2 test/check-package
 
+# warp dependencies don't work on GHC 8.4 yet
+test/with-ghc-8.4 test/check-package -f-warp-tests
+
 # cover the min/max bounds for each package in turn (TODO: add this for each one)
 
 # only have GHC 7.0.4 easily available to test with, so test
