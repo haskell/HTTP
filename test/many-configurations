@@ -117,9 +117,6 @@ test/with-ghc-7.6 test/check-package -f-mtl1
 # test/with-ghc-7.6 test/check-package -fwarn-as-error
 test/with-ghc-7.6 test/check-package -f-warn-as-error
 
-test/with-ghc-7.6 test/check-package -fnetwork23
-test/with-ghc-7.6 test/check-package -f-network23
-
 test/with-ghc-7.6 test/check-package -fconduit10
 test/with-ghc-7.6 test/check-package -f-conduit10
 

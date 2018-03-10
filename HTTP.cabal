@@ -69,10 +69,6 @@ Flag warn-as-error
   description: Build with warnings-as-errors
   manual:      True
 
-Flag network23
-  description: Use version 2.3.x or below of the network package
-  default: False
-
 Flag conduit10
   description: Use version 1.0.x or below of the conduit package (for the test suite)
   default: False
