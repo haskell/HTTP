@@ -1,4 +1,4 @@
-#!/bin/sh -e
+#!/bin/sh -ex
 
 # Test the package across a number of configurations we expect to work.
 # This relies on having with-ghc-XXX scripts available for each supported GHC
