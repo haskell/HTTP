@@ -6,7 +6,7 @@
 # The constraints specified have been observed to make it build in practice once
 # but are not necessarily sufficient.
 
-# cover each GHC
+# cover each GHC (and hence each base)
 
 test/with-ghc-7.0 test/check-package -f-warp-tests
 
@@ -26,12 +26,6 @@ test/with-ghc-8.2 test/check-package
 test/with-ghc-8.4 test/check-package -f-warp-tests
 
 # cover the min/max bounds for each package in turn (TODO: add this for each one)
-
-# only have GHC 7.0.4 easily available to test with, so test
-# base 4.3.1.0 instead of 4.3.0.0
-test/with-ghc-7.0 test/check-package --constraint='base==4.3.1.0' -f-warp-tests
-
-test/with-ghc-8.2 test/check-package --constraint='base>=4.10'
 
 test/with-ghc-7.0 test/check-package --constraint='parsec==2.0' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='parsec>=2.1'
