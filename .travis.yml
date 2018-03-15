@@ -89,6 +89,9 @@ install:
   - rm -rf .ghc.environment.* "."/dist
   - DISTDIR=$(mktemp -d /tmp/dist-test.XXXX)
 
+before_script:
+  - "sudo sh -c 'echo 0 > /proc/sys/net/ipv6/conf/all/disable_ipv6'"
+
 # Here starts the actual work to be performed for the package under test;
 # any command which exits with a non-zero exit code causes the build to fail.
 script:
