@@ -96,10 +96,10 @@ test/with-ghc-7.6 test/check-package --constraint='wai>=3.2'
 
 test/with-ghc-7.6 test/check-package --constraint='conduit==1.0.8' -fconduit10
 test/with-ghc-7.6 test/check-package --constraint='conduit>=1.0' -fconduit10
-test/with-ghc-7.6 test/check-package --constraint='conduit>=1.1'
+test/with-ghc-8.2 test/check-package --constraint='conduit>=1.3'
 
 test/with-ghc-7.6 test/check-package --constraint='conduit-extra==1.1'
-test/with-ghc-8.2 test/check-package --constraint='conduit-extra>=1.2'
+test/with-ghc-8.2 test/check-package --constraint='conduit-extra>=1.3'
 
 
 # cover each flag
