@@ -109,7 +109,7 @@ Library
   -- where dependencies are shared
   Build-depends: base >= 4.3.0.0 && < 4.12, parsec >= 2.0 && < 3.2
   Build-depends: array >= 0.3.0.2 && < 0.6, bytestring >= 0.9.1.5 && < 0.11
-  Build-depends: time >= 1.1.2.3 && < 1.9
+  Build-depends: time >= 1.1.2.3 && < 1.10
 
   Extensions: FlexibleInstances
 

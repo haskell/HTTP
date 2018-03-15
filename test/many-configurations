@@ -37,9 +37,8 @@ test/with-ghc-7.8 test/check-package --constraint='array>=0.5'
 # https://github.com/haskell/cabal/issues/4154
 # test/with-ghc-7.0 test/check-package --constraint='time==1.1.2.3' --constraint 'entropy<0.2.2.4' -f-warp-tests
 test/with-ghc-7.4 test/check-package --constraint='time==1.4'
-# not everything has been bumped to support time 1.7 or 1.8 yet
-test/with-ghc-8.0 test/check-package --constraint='time>=1.7&&<1.8'
-test/with-ghc-8.0 test/check-package --constraint='time>=1.8'
+# TODO: drop the allow-newer when we can
+test/with-ghc-8.4 test/check-package --constraint='time>=1.9' --allow-newer=time
 
 test/with-ghc-7.0 test/check-package --constraint='bytestring==0.9.1.5' -f-warp-tests
 test/with-ghc-7.6 test/check-package --constraint='bytestring>=0.10'
