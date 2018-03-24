@@ -1,6 +1,7 @@
 *~
 dist
 dist-newstyle
+.ghc.environment.*
 .cabal-sandbox*
 Setup.hi
 Setup.o
