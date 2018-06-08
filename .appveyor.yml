@@ -4,6 +4,7 @@ clone_folder: "c:\\WORK"
 environment:
   global:
     CABOPTS:  "--store-dir=C:\\SR --http-transport=plain-http"
+    SOLVEROPTS: "--max-backjumps=-1 --reorder-goals"
   matrix:
     - GHCVER: "7.8.4.1"
     - GHCVER: "7.10.3.2"
@@ -29,7 +30,7 @@ build: off
 
 test_script:
  - IF EXIST configure.ac bash -c "autoreconf -i"
- - "cabal %CABOPTS% new-build -j1 -vnormal+nowrap --dry all"
+ - "cabal %CABOPTS% new-build -j1 %SOLVEROPTS% -vnormal+nowrap --dry all"
  - ps: Push-AppveyorArtifact dist-newstyle\cache\plan.json
- - "cabal %CABOPTS% new-build -j1 -vnormal+nowrap all"
- - "cabal %CABOPTS% new-test  -j1 --enable-tests -vnormal+nowrap all"
+ - "cabal %CABOPTS% new-build -j1 %SOLVEROPTS% -vnormal+nowrap all"
+ - "cabal %CABOPTS% new-test  -j1 %SOLVEROPTS% --enable-tests -vnormal+nowrap all"
