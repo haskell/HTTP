@@ -6,3 +6,5 @@ test/check-package --constraint 'Win32>=2.3&&<2.4'
 test/check-package --constraint 'Win32>=2.4&&<2.5'
 test/check-package --constraint 'Win32>=2.5&&<2.6'
 test/check-package --constraint 'Win32>=2.6&&<2.7'
+test/check-package --constraint 'Win32>=2.7&&<2.8'
+
