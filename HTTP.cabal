@@ -78,7 +78,7 @@ Flag conduit10
 
 Flag warp-tests
   description: Test against warp
-  default:     True
+  default:     False
   manual:      True
 
 flag network-uri
