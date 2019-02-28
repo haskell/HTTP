@@ -10,6 +10,8 @@ environment:
     - GHCVER: "7.10.3.2"
     - GHCVER: "8.0.2.2"
     - GHCVER: "8.2.2"
+    - GHCVER: "8.4.4"
+    - GHCVER: "8.6.3"
 
   allow_failures:
 #    - GHCVER: "7.8.4.1"
