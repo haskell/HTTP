@@ -107,7 +107,7 @@ import Network.URI
    )
 
 import Control.Monad ( guard )
-import Control.Monad.Error ()
+import Control.Monad.Error.Class ()
 import Data.Bits     ( (.&.), (.|.), shiftL, shiftR )
 import Data.Word     ( Word8 )
 import Data.Char     ( digitToInt, intToDigit, toLower, isDigit,

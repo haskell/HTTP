@@ -29,13 +29,15 @@ import Network.Stream
    ( Stream(..), ConnError(ErrorReset, ErrorMisc), Result
    )
 import Network.Socket
-   ( Socket, getSocketOption, shutdown, send, recv
+   ( Socket, getSocketOption, shutdown
    , ShutdownCmd(ShutdownBoth), SocketOption(SoError)
    )
+import Network.Socket.ByteString (send, recv)
 import qualified Network.Socket
    ( close )
 
 import Network.HTTP.Base ( catchIO )
+import Network.HTTP.Utils ( fromUTF8BS, toUTF8BS )
 import Control.Monad (liftM)
 import Control.Exception as Exception (IOException)
 import System.IO.Error (isEOFError)
@@ -52,7 +54,7 @@ handleSocketError sk e =
 myrecv :: Socket -> Int -> IO String
 myrecv sock len =
     let handler e = if isEOFError e then return [] else ioError e
-        in catchIO (recv sock len) handler
+        in catchIO (fmap fromUTF8BS (recv sock len)) handler
 
 instance Stream Socket where
     readBlock sk n    = readBlockSocket sk n
@@ -91,5 +93,5 @@ writeBlockSocket :: Socket -> String -> IO (Result ())
 writeBlockSocket sk str = (liftM Right $ fn str) `catchIO` (handleSocketError sk)
   where
    fn [] = return ()
-   fn x  = send sk x >>= \i -> fn (drop i x)
+   fn x  = send sk (toUTF8BS x) >>= \i -> fn (drop i x)
 
