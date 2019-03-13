@@ -47,9 +47,15 @@ import System.Environment
 
 #if defined(WIN32)
 import System.Win32.Types   ( DWORD, HKEY )
-import System.Win32.Registry( hKEY_CURRENT_USER, regOpenKey, regCloseKey, regQueryValue, regQueryValueEx )
+import System.Win32.Registry( hKEY_CURRENT_USER, regOpenKey, regCloseKey, regQueryValueEx )
 import Control.Exception    ( bracket )
 import Foreign              ( toBool, Storable(peek, sizeOf), castPtr, alloca )
+
+#if MIN_VERSION_Win32(2,8,0)
+import System.Win32.Registry( regQueryDefaultValue )
+#else
+import System.Win32.Registry( regQueryValue )
+#endif
 #endif
 
 -- | HTTP proxies (or not) are represented via 'Proxy', specifying if a
@@ -103,7 +109,9 @@ registryProxyString = catchIO
   (bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
     enable <- fmap toBool $ regQueryValueDWORD hkey "ProxyEnable"
     if enable
-#if MIN_VERSION_Win32(2,6,0) && !MIN_VERSION_Win32(2,8,0)
+#if MIN_VERSION_Win32(2,8,0)
+        then fmap Just $ regQueryDefaultValue hkey "ProxyServer"
+#elif MIN_VERSION_Win32(2,6,0)
         then fmap Just $ regQueryValue hkey "ProxyServer"
 #else
         then fmap Just $ regQueryValue hkey (Just "ProxyServer")
