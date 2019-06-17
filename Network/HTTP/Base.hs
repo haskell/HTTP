@@ -1,4 +1,4 @@
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE CPP, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Network.HTTP.Base
@@ -209,7 +209,11 @@ uriAuthPort mbURI u =
   default_http  = 80
   default_https = 443
 
+#if MIN_VERSION_base(4,13,0)
+failHTTPS :: MonadFail m => URI -> m ()
+#else
 failHTTPS :: Monad m => URI -> m ()
+#endif
 failHTTPS uri
   | map toLower (uriScheme uri) == "https:" = fail "https not supported"
   | otherwise = return ()
@@ -713,7 +717,11 @@ urlEncodeVars [] = []
 
 -- | @getAuth req@ fishes out the authority portion of the URL in a request's @Host@
 -- header.
+#if MIN_VERSION_base(4,13,0)
+getAuth :: MonadFail m => Request ty -> m URIAuthority
+#else
 getAuth :: Monad m => Request ty -> m URIAuthority
+#endif
 getAuth r = 
    -- ToDo: verify that Network.URI functionality doesn't take care of this (now.)
   case parseURIAuthority auth of

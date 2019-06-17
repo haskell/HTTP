@@ -133,6 +133,9 @@ import Network.HTTP.Proxy
 
 import Network.Stream ( ConnError(..), Result )
 import Network.BufferType
+#if (MIN_VERSION_base(4,9,0)) && !(MIN_VERSION_base(4,13,0))
+import Control.Monad.Fail
+#endif
 
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
@@ -422,7 +425,12 @@ instance Applicative (BrowserAction conn) where
   pure  = return
   (<*>) = ap
 #else
- deriving (Functor, Applicative, Monad, MonadIO, MonadState (BrowserState conn))
+ deriving
+ ( Functor, Applicative, Monad, MonadIO, MonadState (BrowserState conn)
+#if MIN_VERSION_base(4,9,0)
+ , MonadFail
+#endif
+ )
 #endif
 
 runBA :: BrowserState conn -> BrowserAction conn a -> IO a
@@ -720,7 +728,7 @@ request req = nextRequest $ do
     Left e  -> do
      let errStr = ("Network.Browser.request: Error raised " ++ show e)
      err errStr
-     fail errStr
+     Prelude.fail errStr
  where
   initialState = nullRequestState
   nullVal      = buf_empty bufferOps
