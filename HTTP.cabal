@@ -142,6 +142,8 @@ Test-Suite test
     Httpd
     UnitTests
 
+  ghc-options: -Wall
+
   -- note: version constraints for dependencies shared with the library
   -- should be the same
   build-depends:     HTTP,
