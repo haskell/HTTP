@@ -5,7 +5,6 @@ import Network.HTTP.Headers
 import Network.URI
 
 import Data.Maybe ( fromJust )
-import Data.Either ( fromRight )
 
 import Test.Framework ( testGroup )
 import Test.Framework.Providers.HUnit
