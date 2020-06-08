@@ -132,59 +132,160 @@ data HeaderName
  | HdrCustom String -- not in header map below.
 
 instance Eq HeaderName where
-    HdrCustom a                == HdrCustom b                = (toLower <$> a) == (toLower <$> b)
+    HdrCustom a                == HdrCustom b                = (fmap toLower a) == (fmap toLower b)
     HdrCacheControl            == HdrCacheControl            = True
+    HdrCacheControl            == _                          = False
+    _                          == HdrCacheControl            = False
     HdrConnection              == HdrConnection              = True
+    HdrConnection              == _                          = False
+    _                          == HdrConnection              = False
     HdrDate                    == HdrDate                    = True
+    HdrDate                    == _                          = False
+    _                          == HdrDate                    = False
     HdrPragma                  == HdrPragma                  = True
+    HdrPragma                  == _                          = False
+    _                          == HdrPragma                  = False
     HdrTransferEncoding        == HdrTransferEncoding        = True
+    HdrTransferEncoding        == _                          = False
+    _                          == HdrTransferEncoding        = False
     HdrUpgrade                 == HdrUpgrade                 = True
+    HdrUpgrade                 == _                          = False
+    _                          == HdrUpgrade                 = False
     HdrVia                     == HdrVia                     = True
+    HdrVia                     == _                          = False
+    _                          == HdrVia                     = False
     HdrAccept                  == HdrAccept                  = True
+    HdrAccept                  == _                          = False
+    _                          == HdrAccept                  = False
     HdrAcceptCharset           == HdrAcceptCharset           = True
+    HdrAcceptCharset           == _                          = False
+    _                          == HdrAcceptCharset           = False
     HdrAcceptEncoding          == HdrAcceptEncoding          = True
+    HdrAcceptEncoding          == _                          = False
+    _                          == HdrAcceptEncoding          = False
     HdrAcceptLanguage          == HdrAcceptLanguage          = True
+    HdrAcceptLanguage          == _                          = False
+    _                          == HdrAcceptLanguage          = False
     HdrAuthorization           == HdrAuthorization           = True
+    HdrAuthorization           == _                          = False
+    _                          == HdrAuthorization           = False
     HdrCookie                  == HdrCookie                  = True
+    HdrCookie                  == _                          = False
+    _                          == HdrCookie                  = False
     HdrExpect                  == HdrExpect                  = True
+    HdrExpect                  == _                          = False
+    _                          == HdrExpect                  = False
     HdrFrom                    == HdrFrom                    = True
+    HdrFrom                    == _                          = False
+    _                          == HdrFrom                    = False
     HdrHost                    == HdrHost                    = True
+    HdrHost                    == _                          = False
+    _                          == HdrHost                    = False
     HdrIfModifiedSince         == HdrIfModifiedSince         = True
+    HdrIfModifiedSince         == _                          = False
+    _                          == HdrIfModifiedSince         = False
     HdrIfMatch                 == HdrIfMatch                 = True
+    HdrIfMatch                 == _                          = False
+    _                          == HdrIfMatch                 = False
     HdrIfNoneMatch             == HdrIfNoneMatch             = True
+    HdrIfNoneMatch             == _                          = False
+    _                          == HdrIfNoneMatch             = False
     HdrIfRange                 == HdrIfRange                 = True
+    HdrIfRange                 == _                          = False
+    _                          == HdrIfRange                 = False
     HdrIfUnmodifiedSince       == HdrIfUnmodifiedSince       = True
+    HdrIfUnmodifiedSince       == _                          = False
+    _                          == HdrIfUnmodifiedSince       = False
     HdrMaxForwards             == HdrMaxForwards             = True
+    HdrMaxForwards             == _                          = False
+    _                          == HdrMaxForwards             = False
     HdrProxyAuthorization      == HdrProxyAuthorization      = True
+    HdrProxyAuthorization      == _                          = False
+    _                          == HdrProxyAuthorization      = False
     HdrRange                   == HdrRange                   = True
+    HdrRange                   == _                          = False
+    _                          == HdrRange                   = False
     HdrReferer                 == HdrReferer                 = True
+    HdrReferer                 == _                          = False
+    _                          == HdrReferer                 = False
     HdrUserAgent               == HdrUserAgent               = True
+    HdrUserAgent               == _                          = False
+    _                          == HdrUserAgent               = False
     HdrAge                     == HdrAge                     = True
+    HdrAge                     == _                          = False
+    _                          == HdrAge                     = False
     HdrLocation                == HdrLocation                = True
+    HdrLocation                == _                          = False
+    _                          == HdrLocation                = False
     HdrProxyAuthenticate       == HdrProxyAuthenticate       = True
+    HdrProxyAuthenticate       == _                          = False
+    _                          == HdrProxyAuthenticate       = False
     HdrPublic                  == HdrPublic                  = True
+    HdrPublic                  == _                          = False
+    _                          == HdrPublic                  = False
     HdrRetryAfter              == HdrRetryAfter              = True
+    HdrRetryAfter              == _                          = False
+    _                          == HdrRetryAfter              = False
     HdrServer                  == HdrServer                  = True
+    HdrServer                  == _                          = False
+    _                          == HdrServer                  = False
     HdrSetCookie               == HdrSetCookie               = True
+    HdrSetCookie               == _                          = False
+    _                          == HdrSetCookie               = False
     HdrTE                      == HdrTE                      = True
+    HdrTE                      == _                          = False
+    _                          == HdrTE                      = False
     HdrTrailer                 == HdrTrailer                 = True
+    HdrTrailer                 == _                          = False
+    _                          == HdrTrailer                 = False
     HdrVary                    == HdrVary                    = True
+    HdrVary                    == _                          = False
+    _                          == HdrVary                    = False
     HdrWarning                 == HdrWarning                 = True
+    HdrWarning                 == _                          = False
+    _                          == HdrWarning                 = False
     HdrWWWAuthenticate         == HdrWWWAuthenticate         = True
+    HdrWWWAuthenticate         == _                          = False
+    _                          == HdrWWWAuthenticate         = False
     HdrAllow                   == HdrAllow                   = True
+    HdrAllow                   == _                          = False
+    _                          == HdrAllow                   = False
     HdrContentBase             == HdrContentBase             = True
+    HdrContentBase             == _                          = False
+    _                          == HdrContentBase             = False
     HdrContentEncoding         == HdrContentEncoding         = True
+    HdrContentEncoding         == _                          = False
+    _                          == HdrContentEncoding         = False
     HdrContentLanguage         == HdrContentLanguage         = True
+    HdrContentLanguage         == _                          = False
+    _                          == HdrContentLanguage         = False
     HdrContentLength           == HdrContentLength           = True
+    HdrContentLength           == _                          = False
+    _                          == HdrContentLength           = False
     HdrContentLocation         == HdrContentLocation         = True
+    HdrContentLocation         == _                          = False
+    _                          == HdrContentLocation         = False
     HdrContentMD5              == HdrContentMD5              = True
+    HdrContentMD5              == _                          = False
+    _                          == HdrContentMD5              = False
     HdrContentRange            == HdrContentRange            = True
+    HdrContentRange            == _                          = False
+    _                          == HdrContentRange            = False
     HdrContentType             == HdrContentType             = True
+    HdrContentType             == _                          = False
+    _                          == HdrContentType             = False
     HdrETag                    == HdrETag                    = True
+    HdrETag                    == _                          = False
+    _                          == HdrETag                    = False
     HdrExpires                 == HdrExpires                 = True
+    HdrExpires                 == _                          = False
+    _                          == HdrExpires                 = False
     HdrLastModified            == HdrLastModified            = True
+    HdrLastModified            == _                          = False
+    _                          == HdrLastModified            = False
     HdrContentTransferEncoding == HdrContentTransferEncoding = True
-    _                          == _                          = False
+    HdrContentTransferEncoding == _                          = False
+    _                          == HdrContentTransferEncoding = False
 
 -- | @headerMap@ is a straight assoc list for translating between header names 
 -- and values.
