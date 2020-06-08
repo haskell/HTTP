@@ -130,7 +130,61 @@ data HeaderName
  | HdrContentTransferEncoding
     -- | Allows for unrecognised or experimental headers.
  | HdrCustom String -- not in header map below.
-    deriving(Eq)
+
+instance Eq HeaderName where
+    HdrCustom a                == HdrCustom b                = (toLower <$> a) == (toLower <$> b)
+    HdrCacheControl            == HdrCacheControl            = True
+    HdrConnection              == HdrConnection              = True
+    HdrDate                    == HdrDate                    = True
+    HdrPragma                  == HdrPragma                  = True
+    HdrTransferEncoding        == HdrTransferEncoding        = True
+    HdrUpgrade                 == HdrUpgrade                 = True
+    HdrVia                     == HdrVia                     = True
+    HdrAccept                  == HdrAccept                  = True
+    HdrAcceptCharset           == HdrAcceptCharset           = True
+    HdrAcceptEncoding          == HdrAcceptEncoding          = True
+    HdrAcceptLanguage          == HdrAcceptLanguage          = True
+    HdrAuthorization           == HdrAuthorization           = True
+    HdrCookie                  == HdrCookie                  = True
+    HdrExpect                  == HdrExpect                  = True
+    HdrFrom                    == HdrFrom                    = True
+    HdrHost                    == HdrHost                    = True
+    HdrIfModifiedSince         == HdrIfModifiedSince         = True
+    HdrIfMatch                 == HdrIfMatch                 = True
+    HdrIfNoneMatch             == HdrIfNoneMatch             = True
+    HdrIfRange                 == HdrIfRange                 = True
+    HdrIfUnmodifiedSince       == HdrIfUnmodifiedSince       = True
+    HdrMaxForwards             == HdrMaxForwards             = True
+    HdrProxyAuthorization      == HdrProxyAuthorization      = True
+    HdrRange                   == HdrRange                   = True
+    HdrReferer                 == HdrReferer                 = True
+    HdrUserAgent               == HdrUserAgent               = True
+    HdrAge                     == HdrAge                     = True
+    HdrLocation                == HdrLocation                = True
+    HdrProxyAuthenticate       == HdrProxyAuthenticate       = True
+    HdrPublic                  == HdrPublic                  = True
+    HdrRetryAfter              == HdrRetryAfter              = True
+    HdrServer                  == HdrServer                  = True
+    HdrSetCookie               == HdrSetCookie               = True
+    HdrTE                      == HdrTE                      = True
+    HdrTrailer                 == HdrTrailer                 = True
+    HdrVary                    == HdrVary                    = True
+    HdrWarning                 == HdrWarning                 = True
+    HdrWWWAuthenticate         == HdrWWWAuthenticate         = True
+    HdrAllow                   == HdrAllow                   = True
+    HdrContentBase             == HdrContentBase             = True
+    HdrContentEncoding         == HdrContentEncoding         = True
+    HdrContentLanguage         == HdrContentLanguage         = True
+    HdrContentLength           == HdrContentLength           = True
+    HdrContentLocation         == HdrContentLocation         = True
+    HdrContentMD5              == HdrContentMD5              = True
+    HdrContentRange            == HdrContentRange            = True
+    HdrContentType             == HdrContentType             = True
+    HdrETag                    == HdrETag                    = True
+    HdrExpires                 == HdrExpires                 = True
+    HdrLastModified            == HdrLastModified            = True
+    HdrContentTransferEncoding == HdrContentTransferEncoding = True
+    _                          == _                          = False
 
 -- | @headerMap@ is a straight assoc list for translating between header names 
 -- and values.
