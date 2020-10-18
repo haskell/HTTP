@@ -205,7 +205,7 @@ getResponseBody :: Result (Response ty) -> IO ty
 getResponseBody (Left err) = fail (show err)
 getResponseBody (Right r)  = return (rspBody r)
 
--- | @getResponseBody response@ takes the response of a HTTP requesting action and
+-- | @getResponseCode response@ takes the response of a HTTP requesting action and
 -- tries to extricate the status code of the 'Response' @response@. If the request action
 -- returned an error, an IO exception is raised.
 getResponseCode :: Result (Response ty) -> IO ResponseCode
