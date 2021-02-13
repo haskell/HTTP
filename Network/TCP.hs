@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 -----------------------------------------------------------------------------
 -- |
@@ -61,7 +62,7 @@ import Network.Socket ( socketToHandle )
 import Data.Char  ( toLower )
 import Data.Word  ( Word8 )
 import Control.Concurrent
-import Control.Exception ( onException )
+import Control.Exception ( IOException, bracketOnError, try )
 import Control.Monad ( liftM, when )
 import System.IO ( Handle, hFlush, IOMode(..), hClose )
 import System.IO.Error ( isEOFError )
@@ -236,15 +237,37 @@ openTCPConnection_ uri port stashInput = do
     -- like this as it just does a once-only installation of a shutdown handler to run at program exit,
     -- rather than actually shutting down after the action
     addrinfos <- withSocketsDo $ getAddrInfo (Just $ defaultHints { addrFamily = AF_UNSPEC, addrSocketType = Stream }) (Just fixedUri) (Just . show $ port)
+
+    let
+      connectAddrInfo a = bracketOnError
+        (socket (addrFamily a) Stream defaultProtocol)  -- acquire
+        Network.Socket.close                            -- release
+        ( \s -> do
+            setSocketOption s KeepAlive 1
+            connect s (addrAddress a)
+            socketConnection_ fixedUri port s stashInput )
+
+      -- try multiple addresses; return Just connected socket or Nothing
+      tryAddrInfos [] = return Nothing
+      tryAddrInfos (h:t) =
+        let next = \(_ :: IOException) -> tryAddrInfos t
+        in  try (connectAddrInfo h) >>= either next (return . Just)
+
     case addrinfos of
         [] -> fail "openTCPConnection: getAddrInfo returned no address information"
-        (a:_) -> do
-                s <- socket (addrFamily a) Stream defaultProtocol
-                onException (do
-                            setSocketOption s KeepAlive 1
-                            connect s (addrAddress a)
-                            socketConnection_ fixedUri port s stashInput
-                            ) (Network.Socket.close s)
+
+        -- single AddrInfo; call connectAddrInfo directly so that specific
+        -- exception is thrown in event of failure
+        [ai] -> connectAddrInfo ai `catchIO` (\e -> fail $
+                  "openTCPConnection: failed to connect to "
+                  ++ show (addrAddress ai) ++ ": " ++ show e)
+
+        -- multiple AddrInfos; try each until we get a connection, or run out
+        ais ->
+          let
+            err = fail $ "openTCPConnection: failed to connect; tried addresses: "
+                         ++ show (fmap addrAddress ais)
+          in tryAddrInfos ais >>= maybe err return
 
 -- | @socketConnection@, like @openConnection@ but using a pre-existing 'Socket'.
 socketConnection :: BufferType ty
