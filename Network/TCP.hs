@@ -89,7 +89,7 @@ instance Eq EndPoint where
      map toLower host1 == map toLower host2 && port1 == port2
 
 data Conn a 
- = MkConn { connSock      :: ! Socket
+ = MkConn { connSock      :: !Socket
           , connHandle    :: Handle
           , connBuffer    :: BufferOp a
           , connInput     :: Maybe a

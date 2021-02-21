@@ -1,3 +1,9 @@
+Version 4000.3.15.1
+ * Support GHC-9.0
+
+
+Version ?
+
  * If the URI contains "user:pass@" part, use it for Basic Authorization
  * Add a test harness.
  * Don't leak a socket when getHostAddr throws an exception.
