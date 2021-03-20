@@ -1,6 +1,7 @@
-Version 4000.3.15.1
- * Support GHC-9.0
-
+Version 4000.3.16: release 2021-03-20
+ * Support GHC-9.0 (Oleg Genrus)
+ * Various dependency bumps (multiple people)
+ * Try all addresses returned by getAddrInfo (Fraser Tweedale)
 
 Version ?
 
