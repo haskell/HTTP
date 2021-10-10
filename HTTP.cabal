@@ -109,9 +109,9 @@ Library
 
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
-  Build-depends: base >= 4.3.0.0 && < 4.16, parsec >= 2.0 && < 3.2
+  Build-depends: base >= 4.3.0.0 && < 4.17, parsec >= 2.0 && < 3.2
   Build-depends: array >= 0.3.0.2 && < 0.6, bytestring >= 0.9.1.5 && < 0.12
-  Build-depends: time >= 1.1.2.3 && < 1.12
+  Build-depends: time >= 1.1.2.3 && < 1.13
 
   default-language: Haskell98
   default-extensions: FlexibleInstances
@@ -131,7 +131,7 @@ Library
     ghc-options:      -Werror
 
   if os(windows)
-    Build-depends: Win32 >= 2.2.0.0 && < 2.11
+    Build-depends: Win32 >= 2.2.0.0 && < 2.14
 
 Test-Suite test
   type: exitcode-stdio-1.0
