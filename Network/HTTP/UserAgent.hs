@@ -1,7 +1,5 @@
 module Network.HTTP.UserAgent where
 
-import Control.Monad.Error
-
 import Data.ByteString.Lazy.Char8 ( ByteString )
 import qualified Data.ByteString.Lazy.Char8 as BS
 
