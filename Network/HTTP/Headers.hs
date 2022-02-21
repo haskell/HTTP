@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP.Headers
 -- Copyright   :  See LICENSE file
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Ganesh Sittampalam <ganesh@earth.li>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -13,7 +13,7 @@
 -- header values in 'Request's and 'Response's. To avoid having to provide
 -- separate set of operations for doing so, we introduce a type class 'HasHeaders'
 -- to facilitate writing such processing using overloading instead.
--- 
+--
 -----------------------------------------------------------------------------
 module Network.HTTP.Headers
    ( HasHeaders(..)     -- type class
@@ -35,9 +35,9 @@ module Network.HTTP.Headers
 
    , parseHeader           -- :: parseHeader :: String -> Result Header
    , parseHeaders          -- :: [String] -> Result [Header]
-   
+
    , headerMap             -- :: [(String, HeaderName)]
-   
+
    , HeaderSetter
    ) where
 
@@ -70,15 +70,15 @@ instance Show Header where
 -- Encoding HTTP header names differently, as Strings perhaps, is an
 -- equally fine choice..no decidedly clear winner, but let's stick
 -- with data constructors here.
--- 
-data HeaderName 
+--
+data HeaderName
     -- Generic Headers --
  = HdrCacheControl
  | HdrConnection
  | HdrDate
  | HdrPragma
- | HdrTransferEncoding        
- | HdrUpgrade                
+ | HdrTransferEncoding
+ | HdrUpgrade
  | HdrVia
     -- Request Headers --
  | HdrAccept
@@ -287,7 +287,7 @@ instance Eq HeaderName where
     HdrContentTransferEncoding == _                          = False
     _                          == HdrContentTransferEncoding = False
 
--- | @headerMap@ is a straight assoc list for translating between header names 
+-- | @headerMap@ is a straight assoc list for translating between header names
 -- and values.
 headerMap :: [ (String,HeaderName) ]
 headerMap =
@@ -382,12 +382,12 @@ insertHeaderIfMissing name value x = setHeaders x (newHeaders $ getHeaders x)
         newHeaders [] = [Header name value]
 
 -- | @replaceHeader hdr val o@ replaces the header @hdr@ with the
--- value @val@, dropping any existing 
+-- value @val@, dropping any existing
 replaceHeader :: HasHeaders a => HeaderSetter a
 replaceHeader name value h = setHeaders h newHeaders
     where
         newHeaders = Header name value : [ x | x@(Header n _) <- getHeaders h, name /= n ]
-          
+
 -- | @insertHeaders hdrs x@ appends multiple headers to @x@'s existing
 -- set.
 insertHeaders :: HasHeaders a => [Header] -> a -> a
@@ -397,7 +397,7 @@ insertHeaders hdrs x = setHeaders x (getHeaders x ++ hdrs)
 retrieveHeaders :: HasHeaders a => HeaderName -> a -> [Header]
 retrieveHeaders name x = filter matchname (getHeaders x)
     where
-        matchname (Header n _) = n == name 
+        matchname (Header n _) = n == name
 
 -- | @findHeader hdrNm x@ looks up @hdrNm@ in @x@, returning the first
 -- header that matches, if any.
@@ -408,7 +408,7 @@ findHeader n x = lookupHeader n (getHeaders x)
 -- list @hdrs@.
 lookupHeader :: HeaderName -> [Header] -> Maybe String
 lookupHeader _ [] = Nothing
-lookupHeader v (Header n s:t)  
+lookupHeader v (Header n s:t)
   |  v == n   =  Just s
   | otherwise =  lookupHeader v t
 
@@ -426,14 +426,14 @@ parseHeader str =
 
         match :: String -> String -> Bool
         match s1 s2 = map toLower s1 == map toLower s2
-    
+
 -- | @parseHeaders hdrs@ takes a sequence of strings holding header
 -- information and parses them into a set of headers (preserving their
 -- order in the input argument.) Handles header values split up over
 -- multiple lines.
 parseHeaders :: [String] -> Result [Header]
-parseHeaders = catRslts [] . 
-                 map (parseHeader . clean) . 
+parseHeaders = catRslts [] .
+                 map (parseHeader . clean) .
                      joinExtended ""
    where
         -- Joins consecutive lines where the second line
@@ -454,8 +454,8 @@ parseHeaders = catRslts [] .
         -- errors here be reported or ignored?
         -- currently ignored.
         catRslts :: [a] -> [Result a] -> Result [a]
-        catRslts list (h:t) = 
+        catRslts list (h:t) =
             case h of
                 Left _ -> catRslts list t
                 Right v -> catRslts (v:list) t
-        catRslts list [] = Right $ reverse list            
+        catRslts list [] = Right $ reverse list

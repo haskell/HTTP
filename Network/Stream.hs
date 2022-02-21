@@ -34,8 +34,8 @@ module Network.Stream
 
 import Control.Monad.Error
 
-data ConnError 
- = ErrorReset 
+data ConnError
+ = ErrorReset
  | ErrorClosed
  | ErrorParse String
  | ErrorMisc String
@@ -66,8 +66,8 @@ fmapE f a = do
  x <- a
  case x of
    Left  e -> return (Left e)
-   Right r -> return (f r) 
-  
+   Right r -> return (f r)
+
 -- | This is the type returned by many exported network functions.
 type Result a = Either ConnError   {- error  -}
                        a           {- result -}
@@ -81,7 +81,7 @@ type Result a = Either ConnError   {- error  -}
 -- the input in any way, e.g. leave LF on line
 -- endings etc. Unless that is exactly the behaviour
 -- you want from your twisted instances ;)
-class Stream x where 
+class Stream x where
     readLine   :: x -> IO (Result String)
     readBlock  :: x -> Int -> IO (Result String)
     writeBlock :: x -> String -> IO (Result ())

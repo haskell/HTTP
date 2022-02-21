@@ -4,13 +4,13 @@
 -- Module      :  Network.HTTP.Proxy
 -- Copyright   :  See LICENSE file
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Ganesh Sittampalam <ganesh@earth.li>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
 --
 -- Handling proxy server settings and their resolution.
--- 
+--
 -----------------------------------------------------------------------------
 module Network.HTTP.Proxy
        ( Proxy(..)
@@ -60,7 +60,7 @@ import System.Win32.Registry( regQueryValue )
 
 -- | HTTP proxies (or not) are represented via 'Proxy', specifying if a
 -- proxy should be used for the request (see 'Network.Browser.setProxy')
-data Proxy 
+data Proxy
  = NoProxy                 -- ^ Don't use a proxy.
  | Proxy String
          (Maybe Authority) -- ^ Use the proxy given. Should be of the
@@ -94,7 +94,7 @@ windowsProxyString = liftM (>>= parseWindowsProxy) registryProxyString
 registryProxyLoc :: (HKEY,String)
 registryProxyLoc = (hive, path)
   where
-    -- some sources say proxy settings should be at 
+    -- some sources say proxy settings should be at
     -- HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows
     --                   \CurrentVersion\Internet Settings\ProxyServer
     -- but if the user sets them with IE connection panel they seem to
@@ -103,7 +103,7 @@ registryProxyLoc = (hive, path)
     path = "Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings"
 
 -- read proxy settings from the windows registry; this is just a best
--- effort and may not work on all setups. 
+-- effort and may not work on all setups.
 registryProxyString :: IO (Maybe String)
 registryProxyString = catchIO
   (bracket (uncurry regOpenKey registryProxyLoc) regCloseKey $ \hkey -> do
@@ -198,7 +198,7 @@ fixUserInfo uri = uri{ uriAuthority = f `fmap` uriAuthority uri }
   where
    f a@URIAuth{uriUserInfo=s} = a{uriUserInfo=dropWhileTail (=='@') s}
 
--- 
+--
 uri2proxy :: URI -> Maybe Proxy
 uri2proxy uri@URI{ uriScheme    = "http:"
                  , uriAuthority = Just (URIAuth auth' hst prt)

@@ -1,6 +1,6 @@
-module Network.HTTP.MD5Aux 
+module Network.HTTP.MD5Aux
    (md5,  md5s,  md5i,
-    MD5(..), ABCD(..), 
+    MD5(..), ABCD(..),
     Zord64, Str(..), BoolList(..), WordList(..)) where
 
 import Data.Char (ord, chr)

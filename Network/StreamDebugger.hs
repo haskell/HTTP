@@ -13,7 +13,7 @@
 --
 -- * Changes by Robin Bate Boerop <robin@bateboerop.name>:
 --      - Created.  Made minor formatting changes.
---      
+--
 -----------------------------------------------------------------------------
 module Network.StreamDebugger
    ( StreamDebugger
@@ -26,7 +26,7 @@ import System.IO
    ( Handle, hFlush, hPutStrLn, IOMode(AppendMode), hClose, openFile,
      hSetBuffering, BufferMode(NoBuffering)
    )
-import Network.TCP ( HandleStream, HStream, 
+import Network.TCP ( HandleStream, HStream,
                      StreamHooks(..), setStreamHooks, getStreamHooks )
 
 -- | Allows stream logging.  Refer to 'debugStream' below.
@@ -57,22 +57,22 @@ instance (Stream x) => Stream (StreamDebugger x) where
            hClose h
     closeOnEnd (Dbg h x) f =
         do hPutStrLn h ("--close-on-end.." ++ show f)
-           hFlush h 
+           hFlush h
            closeOnEnd x f
 
 -- | Wraps a stream with logging I\/O.
 --   The first argument is a filename which is opened in @AppendMode@.
 debugStream :: (Stream a) => FilePath -> a -> IO (StreamDebugger a)
-debugStream file stream = 
+debugStream file stream =
     do h <- openFile file AppendMode
        hPutStrLn h ("File \"" ++ file ++ "\" opened for appending.")
        return (Dbg h stream)
 
 debugByteStream :: HStream ty => FilePath -> HandleStream ty -> IO (HandleStream ty)
 debugByteStream file stream = do
-   sh <- getStreamHooks stream 
+   sh <- getStreamHooks stream
    case sh of
-     Just h 
+     Just h
       | hook_name h == file -> return stream -- reuse the stream hooks.
      _ -> do
        h <- openFile file AppendMode
@@ -82,7 +82,7 @@ debugByteStream file stream = do
        return stream
 
 debugStreamHooks :: HStream ty => Handle -> String -> StreamHooks ty
-debugStreamHooks h nm = 
+debugStreamHooks h nm =
   StreamHooks
     { hook_readBlock = \ toStr n val -> do
        let eval = case val of { Left e -> Left e ; Right v -> Right $ toStr v}
