@@ -13,21 +13,21 @@ import System.Environment (getArgs)
 import System.Exit (exitFailure)
 import System.IO (hPutStrLn, stderr)
 
-main = 
+main =
     do
     args <- getArgs
-    case args of 
-	[addr] -> case parseURI addr of
-		       Nothing -> err "Could not parse URI"
-		       Just uri -> do
-				   cont <- get uri
-			           putStr cont
-	_ -> err "Usage: get <url>"
+    case args of
+        [addr] -> case parseURI addr of
+                       Nothing -> err "Could not parse URI"
+                       Just uri -> do
+                                   cont <- get uri
+                                   putStr cont
+        _ -> err "Usage: get <url>"
 
 err :: String -> IO a
-err msg = do 
-	  hPutStrLn stderr msg
-	  exitFailure
+err msg = do
+          hPutStrLn stderr msg
+          exitFailure
 
 get :: URI -> IO String
 get uri =

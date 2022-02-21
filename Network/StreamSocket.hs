@@ -18,7 +18,7 @@
 --
 -- * Changes by Simon Foster:
 --      - Split module up into to sepearate Network.[Stream,TCP,HTTP] modules
---      
+--
 -----------------------------------------------------------------------------
 module Network.StreamSocket
    ( handleSocketError
@@ -77,7 +77,7 @@ readBlockSocket sk n = (liftM Right $ fn n) `catchIO` (handleSocketError sk)
              }
 
 -- Use of the following function is discouraged.
--- The function reads in one character at a time, 
+-- The function reads in one character at a time,
 -- which causes many calls to the kernel recv()
 -- hence causes many context switches.
 readLineSocket :: Socket -> IO (Result String)
@@ -88,7 +88,7 @@ readLineSocket sk = (liftM Right $ fn "") `catchIO` (handleSocketError sk)
      if null c || c == "\n"
       then return (reverse str++c)
       else fn (head c:str)
-    
+
 writeBlockSocket :: Socket -> String -> IO (Result ())
 writeBlockSocket sk str = (liftM Right $ fn str) `catchIO` (handleSocketError sk)
   where

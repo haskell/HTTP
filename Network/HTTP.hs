@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP
 -- Copyright   :  See LICENSE file
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Ganesh Sittampalam <ganesh@earth.li>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -27,31 +27,31 @@
 -- namespace, letting you either use the default implementation here
 -- by importing @Network.HTTP@ or, for more specific uses, selectively
 -- import the modules in @Network.HTTP.*@. To wit, more than one kind of
--- representation of the bulk data that flows across a HTTP connection is 
+-- representation of the bulk data that flows across a HTTP connection is
 -- supported. (see "Network.HTTP.HandleStream".)
--- 
+--
 -- /NOTE:/ The 'Request' send actions will normalize the @Request@ prior to transmission.
 -- Normalization such as having the request path be in the expected form and, possibly,
 -- introduce a default @Host:@ header if one isn't already present.
 -- Normalization also takes the @"user:pass\@"@ portion out of the the URI,
 -- if it was supplied, and converts it into @Authorization: Basic$ header.
--- If you do not 
+-- If you do not
 -- want the requests tampered with, but sent as-is, please import and use the
 -- the "Network.HTTP.HandleStream" or "Network.HTTP.Stream" modules instead. They
--- export the same functions, but leaves construction and any normalization of 
+-- export the same functions, but leaves construction and any normalization of
 -- @Request@s to the user.
 --
 -- /NOTE:/ This package only supports HTTP; it does not support HTTPS.
 -- Attempts to use HTTPS result in an error.
 -----------------------------------------------------------------------------
-module Network.HTTP 
+module Network.HTTP
        ( module Network.HTTP.Base
        , module Network.HTTP.Headers
 
-         {- the functionality that the implementation modules, 
-	    Network.HTTP.HandleStream and Network.HTTP.Stream,
-	    exposes:
-	 -}
+         {- the functionality that the implementation modules,
+            Network.HTTP.HandleStream and Network.HTTP.Stream,
+            exposes:
+         -}
        , simpleHTTP      -- :: Request -> IO (Result Response)
        , simpleHTTP_     -- :: Stream s => s -> Request -> IO (Result Response)
        , sendHTTP        -- :: Stream s => s -> Request -> IO (Result Response)
@@ -60,12 +60,12 @@ module Network.HTTP
        , respondHTTP     -- :: Stream s => s -> Response -> IO ()
 
        , module Network.TCP
-       
+
        , getRequest      -- :: String -> Request_String
        , headRequest     -- :: String -> Request_String
        , postRequest     -- :: String -> Request_String
        , postRequestWithBody -- :: String -> String -> String -> Request_String
-       
+
        , getResponseBody -- :: Result (Request ty) -> IO ty
        , getResponseCode -- :: Result (Request ty) -> IO ResponseCode
        ) where
@@ -109,10 +109,10 @@ simpleHTTP r = do
   c <- openStream (host auth) (fromMaybe 80 (port auth))
   let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
   simpleHTTP_ c norm_r
-   
+
 -- | Identical to 'simpleHTTP', but acting on an already opened stream.
 simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-simpleHTTP_ s r = do 
+simpleHTTP_ s r = do
   let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
   S.sendHTTP s norm_r
 
@@ -121,7 +121,7 @@ simpleHTTP_ s r = do
 -- closed upon receiving the response.
 sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 sendHTTP conn rq = do
-  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq 
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq
   S.sendHTTP conn norm_r
 
 -- | @sendHTTP_notify hStream httpRequest action@ behaves like 'sendHTTP', but
@@ -134,7 +134,7 @@ sendHTTP_notify :: HStream ty
                 -> IO ()
                 -> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
-  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq 
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq
   S.sendHTTP_notify conn norm_r onSendComplete
 
 -- | @receiveHTTP hStream@ reads a 'Request' from the 'HandleStream' @hStream@
@@ -154,7 +154,7 @@ respondHTTP conn rsp = S.respondHTTP conn rsp
 getRequest
     :: String             -- ^URL to fetch
     -> Request_String     -- ^The constructed request
-getRequest urlString = 
+getRequest urlString =
   case parseURI urlString of
     Nothing -> error ("getRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest GET u
@@ -165,7 +165,7 @@ getRequest urlString =
 headRequest
     :: String             -- ^URL to fetch
     -> Request_String     -- ^The constructed request
-headRequest urlString = 
+headRequest urlString =
   case parseURI urlString of
     Nothing -> error ("headRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest HEAD u
@@ -176,7 +176,7 @@ headRequest urlString =
 postRequest
     :: String                   -- ^URL to POST to
     -> Request_String           -- ^The constructed request
-postRequest urlString = 
+postRequest urlString =
   case parseURI urlString of
     Nothing -> error ("postRequest: Not a valid URL - " ++ urlString)
     Just u  -> mkRequest POST u
@@ -193,7 +193,7 @@ postRequestWithBody
     -> String                      -- ^Content-Type of body
     -> String                      -- ^The body of the request
     -> Request_String              -- ^The constructed request
-postRequestWithBody urlString typ body = 
+postRequestWithBody urlString typ body =
   case parseURI urlString of
     Nothing -> error ("postRequestWithBody: Not a valid URL - " ++ urlString)
     Just u  -> setRequestBody (mkRequest POST u) (typ, body)
@@ -222,21 +222,21 @@ getResponseCode (Right r)  = return (rspCode r)
 --     - comm timeouts
 --     - MIME & entity stuff (happening in separate module)
 --     - support \"*\" uri-request-string for OPTIONS request method
--- 
--- 
+--
+--
 -- * Header notes:
 --
 --     [@Host@]
 --                  Required by HTTP\/1.1, if not supplied as part
 --                  of a request a default Host value is extracted
 --                  from the request-uri.
--- 
---     [@Connection@] 
+--
+--     [@Connection@]
 --                  If this header is present in any request or
 --                  response, and it's value is "close", then
---                  the current request\/response is the last 
+--                  the current request\/response is the last
 --                  to be allowed on that connection.
--- 
+--
 --     [@Expect@]
 --                  Should a request contain a body, an Expect
 --                  header will be added to the request.  The added
@@ -244,7 +244,7 @@ getResponseCode (Right r)  = return (rspCode r)
 --                  a 417 \"Expectation Failed\" response the request
 --                  is attempted again without this added Expect
 --                  header.
---                  
+--
 --     [@TransferEncoding,ContentLength,...@]
 --                  if request is inconsistent with any of these
 --                  header values then you may not receive any response
@@ -257,7 +257,7 @@ getResponseCode (Right r)  = return (rspCode r)
 --   [@1xx@]   \"100 Continue\" will cause any unsent request body to be sent.
 --             \"101 Upgrade\" will be returned.
 --             Other 1xx responses are ignored.
--- 
+--
 --   [@417@]   The reason for this code is \"Expectation failed\", indicating
 --             that the server did not like the Expect \"100-continue\" header
 --             added to a request.  Receipt of 417 will induce another

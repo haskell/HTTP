@@ -16,29 +16,29 @@ import Network.Stream
 import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
 
-main = 
+main =
     do
     args <- getArgs
-    case args of 
-	[addr0] -> 
-	  let (isLazy, isString, addr) = 
-	        case addr0 of 
-		  '+':xs -> (True,False,xs)
-		  '-':xs -> (False,True,xs)
-		  _      -> (False,False,addr0)
+    case args of
+        [addr0] ->
+          let (isLazy, isString, addr) =
+                case addr0 of
+                  '+':xs -> (True,False,xs)
+                  '-':xs -> (False,True,xs)
+                  _      -> (False,False,addr0)
           in
-	  case parseURI addr of
-		       Nothing -> err "Could not parse URI"
-		       Just uri 
-		         | isLazy    -> get uri >>= putStr . show . Lazy.length
-		         | isString  -> get uri >>= \ x -> putStr $ show (length (x::String))
-			 | otherwise -> get uri >>= putStr . show . Strict.length
-	_ -> err "Usage: get <url>"
+          case parseURI addr of
+                       Nothing -> err "Could not parse URI"
+                       Just uri
+                         | isLazy    -> get uri >>= putStr . show . Lazy.length
+                         | isString  -> get uri >>= \ x -> putStr $ show (length (x::String))
+                         | otherwise -> get uri >>= putStr . show . Strict.length
+        _ -> err "Usage: get <url>"
 
 err :: String -> IO a
-err msg = do 
-	  hPutStrLn stderr msg
-	  exitFailure
+err msg = do
+          hPutStrLn stderr msg
+          exitFailure
 
 get :: HStream ty => URI -> IO ty
 get uri = do
@@ -56,9 +56,9 @@ request uri = req
   where
    req = Request{ rqURI = uri
                 , rqMethod = GET
-		, rqHeaders = []
-		, rqBody = nullVal
-		}
+                , rqHeaders = []
+                , rqBody = nullVal
+                }
    nullVal = buf_empty bufferOps
 
 

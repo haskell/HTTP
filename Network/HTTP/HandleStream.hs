@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP.HandleStream
 -- Copyright   :  See LICENSE file
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Ganesh Sittampalam <ganesh@earth.li>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -15,16 +15,16 @@
 -- not perform any kind of normalization prior to transmission (or receipt); you are
 -- responsible for doing any such yourself, or, if you prefer, just switch to using
 -- "Network.HTTP" function instead.
--- 
+--
 -----------------------------------------------------------------------------
-module Network.HTTP.HandleStream 
+module Network.HTTP.HandleStream
        ( simpleHTTP      -- :: Request ty -> IO (Result (Response ty))
        , simpleHTTP_     -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
        , sendHTTP        -- :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
        , sendHTTP_notify -- :: HStream ty => HandleStream ty -> Request ty -> IO () -> IO (Result (Response ty))
        , receiveHTTP     -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
        , respondHTTP     -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
-       
+
        , simpleHTTP_debug -- :: FilePath -> Request DebugString -> IO (Response DebugString)
        ) where
 
@@ -52,7 +52,7 @@ import Control.Monad (when)
 
 -- | @simpleHTTP@ transmits a resource across a non-persistent connection.
 simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
-simpleHTTP r = do 
+simpleHTTP r = do
   auth <- getAuth r
   failHTTPS (rqURI r)
   c <- openStream (host auth) (fromMaybe 80 (port auth))
@@ -61,7 +61,7 @@ simpleHTTP r = do
 -- | @simpleHTTP_debug debugFile req@ behaves like 'simpleHTTP', but logs
 -- the HTTP operation via the debug file @debugFile@.
 simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
-simpleHTTP_debug httpLogFile r = do 
+simpleHTTP_debug httpLogFile r = do
   auth <- getAuth r
   failHTTPS (rqURI r)
   c0   <- openStream (host auth) (fromMaybe 80 (port auth))
@@ -138,7 +138,7 @@ switchResponse _ _ _ (Left e) _ = return (Left e)
                 -- if we attempt to use the same socket then there is an excellent
                 -- chance that the socket is not in a completely closed state.
 
-switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst = 
+switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
    case matchResponse (rqMethod rqst) cd of
      Continue
       | not bdy_sent -> do {- Time to send the body -}
@@ -159,7 +159,7 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                                      (rqBody rqst))
         rsp <- getResponseHead conn
         switchResponse conn False bdy_sent rsp rqst
-                     
+
      Done -> do
        when (findConnClose hdrs)
             (closeOnEnd conn True)
@@ -192,10 +192,10 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
        tc = lookupHeader HdrTransferEncoding hdrs
        cl = lookupHeader HdrContentLength hdrs
        bo = bufferOps
-                    
+
 -- reads and parses headers
 getResponseHead :: HStream ty => HandleStream ty -> IO (Result ResponseData)
-getResponseHead conn = 
+getResponseHead conn =
    fmapE (\es -> parseResponseHead (map (buf_toStr bufferOps) es))
          (readTillEmpty1 bufferOps (readLine conn))
 
@@ -231,7 +231,7 @@ receiveHTTP conn = getRequestHead >>= either (return . Left) processRequest
 -- the 'HandleStream' @hStream@. It could be used to implement simple web
 -- server interactions, performing the dual role to 'sendHTTP'.
 respondHTTP :: HStream ty => HandleStream ty -> Response ty -> IO ()
-respondHTTP conn rsp = do 
+respondHTTP conn rsp = do
   -- TODO: review throwing away of result
   _ <- writeBlock conn (buf_fromStr bufferOps $ show rsp)
    -- write body immediately, don't wait for 100 CONTINUE
@@ -245,7 +245,7 @@ headerName :: String -> String
 headerName x = map toLower (trim x)
 
 ifChunked :: a -> a -> String -> a
-ifChunked a b s = 
+ifChunked a b s =
   case headerName s of
     "chunked" -> a
     _ -> b

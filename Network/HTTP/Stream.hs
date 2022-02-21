@@ -3,7 +3,7 @@
 -- Module      :  Network.HTTP.Stream
 -- Copyright   :  See LICENSE file
 -- License     :  BSD
--- 
+--
 -- Maintainer  :  Ganesh Sittampalam <ganesh@earth.li>
 -- Stability   :  experimental
 -- Portability :  non-portable (not tested)
@@ -20,9 +20,9 @@
 -- not perform any kind of normalization prior to transmission (or receipt); you are
 -- responsible for doing any such yourself, or, if you prefer, just switch to using
 -- "Network.HTTP" function instead.
--- 
+--
 -----------------------------------------------------------------------------
-module Network.HTTP.Stream 
+module Network.HTTP.Stream
        ( module Network.Stream
 
        , simpleHTTP      -- :: Request_String -> IO (Result Response_String)
@@ -31,7 +31,7 @@ module Network.HTTP.Stream
        , sendHTTP_notify -- :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
        , receiveHTTP     -- :: Stream s => s -> IO (Result Request_String)
        , respondHTTP     -- :: Stream s => s -> Response_String -> IO ()
-       
+
        ) where
 
 -----------------------------------------------------------------
@@ -68,7 +68,7 @@ httpLogFile = "http-debug.log"
 
 -- | Simple way to transmit a resource across a non-persistent connection.
 simpleHTTP :: Request_String -> IO (Result Response_String)
-simpleHTTP r = do 
+simpleHTTP r = do
    auth <- getAuth r
    c    <- openTCPPort (host auth) (fromMaybe 80 (port auth))
    simpleHTTP_ c r
@@ -103,7 +103,7 @@ sendHTTP_notify conn rq onSendComplete = do
 --
 -- Since we would wait forever, I have disabled use of 100-continue for now.
 sendMain :: Stream s => s -> Request_String -> IO () -> IO (Result Response_String)
-sendMain conn rqst onSendComplete =  do 
+sendMain conn rqst onSendComplete =  do
     --let str = if null (rqBody rqst)
     --              then show rqst
     --              else show (insertHeader HdrExpect "100-continue" rqst)
@@ -115,7 +115,7 @@ sendMain conn rqst onSendComplete =  do
    onSendComplete
    rsp <- getResponseHead conn
    switchResponse conn True False rsp rqst
-        
+
 -- reads and parses headers
 getResponseHead :: Stream s => s -> IO (Result ResponseData)
 getResponseHead conn = do
@@ -150,7 +150,7 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                            }
                     | otherwise -> {- keep waiting -}
                         do { rsp <- getResponseHead conn
-                           ; switchResponse conn allow_retry bdy_sent rsp rqst                           
+                           ; switchResponse conn allow_retry bdy_sent rsp rqst
                            }
 
                 Retry -> {- Request with "Expect" header failed.
@@ -160,8 +160,8 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                          _ <- writeBlock conn (show rqst ++ rqBody rqst)
                        ; rsp <- getResponseHead conn
                        ; switchResponse conn False bdy_sent rsp rqst
-                       }   
-                     
+                       }
+
                 Done -> do
                     when (findConnClose hdrs)
                          (closeOnEnd conn True)
@@ -176,11 +176,11 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                         cl = lookupHeader HdrContentLength hdrs
                     in
                     do { rslt <- case tc of
-                          Nothing -> 
+                          Nothing ->
                               case cl of
                                   Just x  -> linearTransfer (readBlock conn) (read x :: Int)
                                   Nothing -> hopefulTransfer stringBufferOp {-null (++) []-} (readLine conn) []
-                          Just x  -> 
+                          Just x  ->
                               case map toLower (trim x) of
                                   "chunked" -> chunkedTransfer stringBufferOp
                                                                (readLine conn) (readBlock conn)
@@ -193,7 +193,7 @@ switchResponse conn allow_retry bdy_sent (Right (cd,rn,hdrs)) rqst =
                             return (Right (Response cd rn (hdrs++ftrs) bdy))
                        }
 
--- | Receive and parse a HTTP request from the given Stream. Should be used 
+-- | Receive and parse a HTTP request from the given Stream. Should be used
 --   for server side interactions.
 receiveHTTP :: Stream s => s -> IO (Result Request_String)
 receiveHTTP conn = getRequestHead >>= processRequest
@@ -220,12 +220,12 @@ receiveHTTP conn = getRequestHead >>= processRequest
                                   "chunked" -> chunkedTransfer stringBufferOp
                                                                (readLine conn) (readBlock conn)
                                   _         -> uglyDeathTransfer "receiveHTTP"
-               
+
                return $ do
                   (ftrs,bdy) <- rslt
                   return (Request uri rm (hdrs++ftrs) bdy)
 
--- | Very simple function, send a HTTP response over the given stream. This 
+-- | Very simple function, send a HTTP response over the given stream. This
 --   could be improved on to use different transfer types.
 respondHTTP :: Stream s => s -> Response_String -> IO ()
 respondHTTP conn rsp = do -- TODO review throwing away of result

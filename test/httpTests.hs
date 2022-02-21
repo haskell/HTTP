@@ -139,7 +139,7 @@ browserExample = do
   result <-
     -- sample code from Network.Browser haddock, with URL changed
     -- Note there's also a copy of the example in the .cabal file
-    do 
+    do
       (_, rsp)
          <- Network.Browser.browse $ do
                setAllowRedirects True -- handle HTTP redirects
@@ -453,7 +453,7 @@ processRequest :: (?testUrl :: ServerAddress, ?secureTestUrl :: ServerAddress)
                => Httpd.Request
                -> IO Httpd.Response
 processRequest req = do
-  case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
+  case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of
     ("GET", "/basic/get") -> return $ Httpd.mkResponse 200 [] "It works."
     ("GET", "/basic/get2") -> return $ Httpd.mkResponse 200 [] "It works (2)."
     ("GET", "/basic/head") -> return $ Httpd.mkResponse 200 [] "Body for /basic/head."
@@ -520,7 +520,7 @@ processRequest req = do
 
 altProcessRequest :: Httpd.Request -> IO Httpd.Response
 altProcessRequest req = do
-  case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of 
+  case (Httpd.reqMethod req, Network.URI.uriPath (Httpd.reqURI req)) of
     ("GET", "/basic/get") -> return $ Httpd.mkResponse 200 [] "This is the alternate server."
     ("GET", "/basic/get2") -> return $ Httpd.mkResponse 200 [] "This is the alternate server (2)."
     _                     -> return $ Httpd.mkResponse 500 [] "Unknown request"
