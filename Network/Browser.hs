@@ -140,13 +140,18 @@ import Control.Monad.Fail
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (Applicative (..), (<$>))
+#endif
 #ifdef MTL1
 import Control.Monad (filterM, forM_, when, ap)
 #else
 import Control.Monad (filterM, forM_, when)
 #endif
-import Control.Monad.State (StateT (..), MonadIO (..), modify, gets, withStateT, evalStateT, MonadState (..))
+import Control.Monad.IO.Class
+   ( MonadIO (..) )
+import Control.Monad.State
+   ( MonadState(..), gets, modify, StateT (..), evalStateT, withStateT )
 
 import qualified System.IO
    ( hSetBuffering, hPutStr, stdout, stdin, hGetChar
