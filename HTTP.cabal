@@ -66,10 +66,6 @@ Source-Repository head
   type: git
   location: https://github.com/haskell/HTTP.git
 
-Flag mtl1
-  description: Use the old mtl version 1.
-  default: False
-
 Flag warn-as-error
   default:     False
   description: Build with warnings-as-errors
@@ -123,17 +119,11 @@ Library
         -- transformers-0.2.0.0 is the first to have Control.Monad.IO.Class
     -- The following dependencies are refined by flags, but they should
     -- still be mentioned here on the top-level.
-    , mtl           >= 1.1.1.0   && < 2.3
+    , mtl           >= 2.0.0.0   && < 2.3
     , network       >= 2.4       && < 3.2
 
   default-language: Haskell98
   default-extensions: FlexibleInstances
-
-  if flag(mtl1)
-    Build-depends: mtl < 1.2
-    CPP-Options: -DMTL1
-  else
-    Build-depends: mtl >= 2.0
 
   if flag(network-uri)
     Build-depends: network-uri == 2.6.*, network >= 2.6
