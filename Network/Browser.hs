@@ -140,13 +140,14 @@ import Control.Monad.Fail
 import Data.Char (toLower)
 import Data.List (isPrefixOf)
 import Data.Maybe (fromMaybe, listToMaybe, catMaybes )
+#if !MIN_VERSION_base(4,8,0)
 import Control.Applicative (Applicative (..), (<$>))
-#ifdef MTL1
-import Control.Monad (filterM, forM_, when, ap)
-#else
-import Control.Monad (filterM, forM_, when)
 #endif
-import Control.Monad.State (StateT (..), MonadIO (..), modify, gets, withStateT, evalStateT, MonadState (..))
+import Control.Monad (filterM, forM_, when)
+import Control.Monad.IO.Class
+   ( MonadIO (..) )
+import Control.Monad.State
+   ( MonadState(..), gets, modify, StateT (..), evalStateT, withStateT )
 
 import qualified System.IO
    ( hSetBuffering, hPutStr, stdout, stdin, hGetChar
@@ -418,20 +419,12 @@ instance Show (BrowserState t) where
 -- | @BrowserAction@ is the IO monad, but carrying along a 'BrowserState'.
 newtype BrowserAction conn a
  = BA { unBA :: StateT (BrowserState conn) IO a }
-#ifdef MTL1
- deriving (Functor, Monad, MonadIO, MonadState (BrowserState conn))
-
-instance Applicative (BrowserAction conn) where
-  pure  = return
-  (<*>) = ap
-#else
  deriving
  ( Functor, Applicative, Monad, MonadIO, MonadState (BrowserState conn)
 #if MIN_VERSION_base(4,9,0)
  , MonadFail
 #endif
  )
-#endif
 
 runBA :: BrowserState conn -> BrowserAction conn a -> IO a
 runBA bs = flip evalStateT bs . unBA
