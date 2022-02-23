@@ -1,7 +1,6 @@
 Cabal-Version: >= 1.10
 Name: HTTP
-Version: 4000.3.16
-x-revision: 1
+Version: 4000.4.0
 Build-type: Simple
 License: BSD3
 License-file: LICENSE

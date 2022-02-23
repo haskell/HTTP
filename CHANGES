@@ -1,3 +1,10 @@
+Version 4000.4.0: release 2022-02-22
+ * Restrict to GHC >=7.6 and associated cleanups (Andreas Abel)
+ * Drop deprecated instance Error (Andreas Abel)
+ * Preparation for mtl-2.3 (Andreas Abel)
+ * General tidying (Andreas Abel)
+ * Support GHC 9.2 (Bodigrim)
+
 Version 4000.3.16: release 2021-03-20
  * Support GHC-9.0 (Oleg Genrus)
  * Various dependency bumps (multiple people)
