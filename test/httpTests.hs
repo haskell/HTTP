@@ -147,7 +147,7 @@ browserExample = do
       return (take 100 (rspBody rsp))
   assertEqual "Receiving expected response" (take 100 haskellOrgText) result
 
--- A vanilla HTTP request using Browser shouln't send a cookie header
+-- A vanilla HTTP request using Browser shouldn't send a cookie header
 browserNoCookie :: (?testUrl :: ServerAddress) => Assertion
 browserNoCookie = do
   (_, response) <- browse $ do

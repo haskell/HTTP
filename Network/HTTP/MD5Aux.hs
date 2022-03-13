@@ -106,7 +106,7 @@ md5 :: (MD5 a) => a -> ABCD
 md5 m = md5_main False 0 magic_numbers m
 
 
--- Returns a hex number ala the md5sum program
+-- Returns a hex number à la md5sum program
 
 md5s :: (MD5 a) => a -> String
 md5s = abcd_to_string . md5

@@ -17,7 +17,7 @@
 --      - Created separate module for instance Stream Socket.
 --
 -- * Changes by Simon Foster:
---      - Split module up into to sepearate Network.[Stream,TCP,HTTP] modules
+--      - Split module up into to separate Network.[Stream,TCP,HTTP] modules
 --
 -----------------------------------------------------------------------------
 module Network.StreamSocket
