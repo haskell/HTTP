@@ -332,7 +332,7 @@ type ResponseCode  = (Int,Int,Int)
 type ResponseData  = (ResponseCode,String,[Header])
 
 -- | @RequestData@ contains the head of a HTTP request; method,
--- its URL along with the auxillary/supporting header data.
+-- its URL along with the auxiliary/supporting header data.
 type RequestData   = (RequestMethod,URI,[Header])
 
 -- | An HTTP Response.
@@ -792,7 +792,7 @@ normalizeUserAgent opts req =
        _ -> replaceHeader HdrUserAgent ua req
 
 -- | @normalizeConnectionClose opts req@ sets the header @Connection: close@
--- to indicate one-shot behavior iff @normDoClose@ is @True@. i.e., it then
+-- to indicate one-shot behavior if @normDoClose@ is @True@. i.e., it then
 -- _replaces_ any an existing @Connection:@ header in @req@.
 normalizeConnectionClose :: RequestNormalizer ty
 normalizeConnectionClose opts req

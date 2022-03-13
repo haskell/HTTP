@@ -1,4 +1,4 @@
--- A simple test program which takes a url on the commandline
+-- A simple test program which takes a url on the command line
 -- and outputs the contents to stdout.
 
 -- ghc --make -package HTTP get.hs -o get

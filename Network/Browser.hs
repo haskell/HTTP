@@ -307,7 +307,7 @@ getAllowBasicAuth :: BrowserAction t Bool
 getAllowBasicAuth = gets bsAllowBasicAuth
 
 -- | @setMaxAuthAttempts mbMax@ sets the maximum number of authentication attempts
--- to do. If @Nothing@, rever to default max.
+-- to do. If @Nothing@, revert to default max.
 setMaxAuthAttempts :: Maybe Int -> BrowserAction t ()
 setMaxAuthAttempts mb
  | fromMaybe 0 mb < 0 = return ()
@@ -515,7 +515,7 @@ setAllowRedirects bl = modify (\b -> b {bsAllowRedirects=bl})
 getAllowRedirects :: BrowserAction t Bool
 getAllowRedirects = gets bsAllowRedirects
 
--- | @setMaxRedirects maxCount@ sets the maxiumum number of forwarding hops
+-- | @setMaxRedirects maxCount@ sets the maximum number of forwarding hops
 -- we are willing to jump through. A no-op if the count is negative; if zero,
 -- the max is set to whatever default applies. Notice that setting the max
 -- redirects count does /not/ enable following of redirects itself; use
@@ -587,7 +587,7 @@ setCheckForProxy flg = modify (\ b -> b{bsCheckProxy=flg})
 getCheckForProxy :: BrowserAction t Bool
 getCheckForProxy = gets bsCheckProxy
 
--- | @setDebugLog mbFile@ turns off debug logging iff @mbFile@
+-- | @setDebugLog mbFile@ turns off debug logging if @mbFile@
 -- is @Nothing@. If set to @Just fStem@, logs of browser activity
 -- is appended to files of the form @fStem-url-authority@, i.e.,
 -- @fStem@ is just the prefix for a set of log files, one per host/authority.
@@ -600,7 +600,7 @@ setDebugLog v = modify (\b -> b {bsDebug=v})
 -- A common form of user agent string is @\"name\/version (details)\"@. For
 -- example @\"cabal-install/0.10.2 (HTTP 4000.1.2)\"@. Including the version
 -- of this HTTP package can be helpful if you ever need to track down HTTP
--- compatability quirks. This version is available via 'httpPackageVersion'.
+-- compatibility quirks. This version is available via 'httpPackageVersion'.
 -- For more info see <http://en.wikipedia.org/wiki/User_agent>.
 --
 setUserAgent :: String -> BrowserAction t ()
