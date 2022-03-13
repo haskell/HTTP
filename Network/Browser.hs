@@ -587,7 +587,7 @@ setCheckForProxy flg = modify (\ b -> b{bsCheckProxy=flg})
 getCheckForProxy :: BrowserAction t Bool
 getCheckForProxy = gets bsCheckProxy
 
--- | @setDebugLog mbFile@ turns off debug logging if @mbFile@
+-- | @setDebugLog mbFile@ turns off debug logging iif @mbFile@
 -- is @Nothing@. If set to @Just fStem@, logs of browser activity
 -- is appended to files of the form @fStem-url-authority@, i.e.,
 -- @fStem@ is just the prefix for a set of log files, one per host/authority.

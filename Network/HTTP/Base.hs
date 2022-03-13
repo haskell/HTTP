@@ -792,7 +792,7 @@ normalizeUserAgent opts req =
        _ -> replaceHeader HdrUserAgent ua req
 
 -- | @normalizeConnectionClose opts req@ sets the header @Connection: close@
--- to indicate one-shot behavior if @normDoClose@ is @True@. i.e., it then
+-- to indicate one-shot behavior iif @normDoClose@ is @True@. i.e., it then
 -- _replaces_ any an existing @Connection:@ header in @req@.
 normalizeConnectionClose :: RequestNormalizer ty
 normalizeConnectionClose opts req
