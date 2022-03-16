@@ -332,7 +332,7 @@ type ResponseCode  = (Int,Int,Int)
 type ResponseData  = (ResponseCode,String,[Header])
 
 -- | @RequestData@ contains the head of a HTTP request; method,
--- its URL along with the auxillary/supporting header data.
+-- its URL along with the auxiliary/supporting header data.
 type RequestData   = (RequestMethod,URI,[Header])
 
 -- | An HTTP Response.
