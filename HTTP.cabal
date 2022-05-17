@@ -118,7 +118,7 @@ Library
         -- transformers-0.2.0.0 is the first to have Control.Monad.IO.Class
     -- The following dependencies are refined by flags, but they should
     -- still be mentioned here on the top-level.
-    , mtl           >= 2.0.0.0   && < 2.3
+    , mtl           >= 2.0.0.0   && < 2.4
     , network       >= 2.4       && < 3.2
 
   default-language: Haskell98
