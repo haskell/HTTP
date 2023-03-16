@@ -109,7 +109,7 @@ Library
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
   build-depends:
-      base          >= 4.6.0.0   && < 4.18
+      base          >= 4.6.0.0   && < 4.19
     , array         >= 0.3.0.2   && < 0.6
     , bytestring    >= 0.9.1.5   && < 0.12
     , parsec        >= 2.0       && < 3.2
