@@ -1,23 +1,10 @@
-DESCRIPTION
-
-This is the Haskell HTTP and Browser module package. It was originally
-written by Warrick Gray and the original version is still available
-from: http://homepages.paradise.net.nz/warrickg/haskell/http/
+A Haskell HTTP and Browser module package, originally written by Warrick Gray.
 
 The version 4 rewrite to have the user be able to control how the
 requests and response payloads are represented, incl. the accommodation
-of the use of @ByteString@s (lazy and strict) was inspired in part by
-Jonas Aadahl et al's experimental work on @ByteString@'ifying the HTTP 
+of the use of @ByteString@s (lazy and strict), was inspired in part by
+Jonas Aadahl et al's experimental work on @ByteString@'ifying the HTTP
 package a couple of years ago.
 
 This only supports HTTP; it does not support HTTPS. Attempts to use
 HTTPS result in an error.
-
-REQUIREMENTS
-
-* A Haskell implementation such as GHC (http://www.haskell.org/ghc/)
-or Hugs (http://www.haskell.org/hugs/) with support for Cabal.
-
-INSTALLATION
-
-To install from source, run "cabal install".
