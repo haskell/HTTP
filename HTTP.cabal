@@ -58,9 +58,22 @@ Description:
 Extra-Source-Files: CHANGES
 
 tested-with:
-  GHC==9.2.1, GHC==9.0.1,
-  GHC==8.10.7, GHC==8.8.4, GHC==8.6.5, GHC==8.4.4, GHC==8.2.2, GHC==8.0.2,
-  GHC==7.10.3, GHC==7.8.4, GHC==7.6.3
+  GHC == 9.8.0
+  GHC == 9.6.3
+  GHC == 9.4.7
+  GHC == 9.2.8
+  GHC == 9.0.2
+  GHC == 8.10.7
+  GHC == 8.8.4
+  GHC == 8.6.5
+  GHC == 8.4.4
+  GHC == 8.2.2
+  GHC == 8.0.2
+  GHC == 7.10.3
+  -- 2023-10-04: Dropping GHC < 7.10 from CI
+  -- because they need the ubuntu-18.04 image incompatible with latest 'node'
+  -- GHC == 7.8.4
+  -- GHC == 7.6.3
 
 Source-Repository head
   type: git
@@ -110,9 +123,9 @@ Library
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
   build-depends:
-      base          >= 4.6.0.0   && < 4.19
+      base          >= 4.6.0.0   && < 4.20
     , array         >= 0.3.0.2   && < 0.6
-    , bytestring    >= 0.9.1.5   && < 0.12
+    , bytestring    >= 0.9.1.5   && < 0.13
     , parsec        >= 2.0       && < 3.2
     , time          >= 1.1.2.3   && < 1.13
     , transformers  >= 0.2.0.0   && < 0.7
@@ -157,7 +170,7 @@ Test-Suite test
     , mtl
     , network
     -- extra dependencies
-    , deepseq               >= 1.3.0.0  && < 1.5
+    , deepseq               >= 1.3.0.0  && < 1.6
     , httpd-shed            >= 0.4      && < 0.5
     , HUnit                 >= 1.2.0.1  && < 1.7
     , pureMD5               >= 0.2.4    && < 2.2
