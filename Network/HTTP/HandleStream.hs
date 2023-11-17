@@ -16,6 +16,8 @@
 -- responsible for doing any such yourself, or, if you prefer, just switch to using
 -- "Network.HTTP" function instead.
 --
+-- /NOTE:/ This package only supports HTTP; it does not support HTTPS.
+-- Attempts to use HTTPS result in an error.
 -----------------------------------------------------------------------------
 module Network.HTTP.HandleStream
        ( simpleHTTP      -- :: Request ty -> IO (Result (Response ty))
@@ -25,7 +27,7 @@ module Network.HTTP.HandleStream
        , receiveHTTP     -- :: HStream ty => HandleStream ty -> IO (Result (Request ty))
        , respondHTTP     -- :: HStream ty => HandleStream ty -> Response ty -> IO ()
 
-       , simpleHTTP_debug -- :: FilePath -> Request DebugString -> IO (Response DebugString)
+       , tryE            -- :: IO a -> IO (Either IOException a)
        ) where
 
 -----------------------------------------------------------------
@@ -33,7 +35,7 @@ module Network.HTTP.HandleStream
 -----------------------------------------------------------------
 
 import Network.BufferType
-import Network.Stream ( fmapE, Result )
+import Network.Stream ( Result, failWith, failMisc )
 import Network.StreamDebugger ( debugByteStream )
 import Network.TCP (HStream(..), HandleStream )
 
@@ -43,45 +45,59 @@ import Network.HTTP.Utils ( trim, readsOne )
 
 import Data.Char (toLower)
 import Data.Maybe (fromMaybe)
-import Control.Exception (onException)
+import Control.Exception ( IOException, try ) -- Import tryE from Control.Exception
 import Control.Monad (when)
 
 -----------------------------------------------------------------
 ------------------ Misc -----------------------------------------
 -----------------------------------------------------------------
 
--- | @simpleHTTP@ transmits a resource across a non-persistent connection.
-simpleHTTP :: HStream ty => Request ty -> IO (Result (Response ty))
+-- | @simpleHTTP req@ transmits the 'Request' @req@ by opening a /direct/, non-persistent
+-- connection to the HTTP server that @req@ is destined for, followed by transmitting
+-- it and gathering up the response as a 'Result'. Prior to sending the request,
+-- it is normalized (via 'normalizeRequest'). If you have to mediate the request
+-- via an HTTP proxy, you will have to normalize the request yourself. Or switch to
+-- using 'Network.Browser' instead.
+--
+-- Examples:
+--
+-- > simpleHTTP (getRequest "http://hackage.haskell.org/")
+-- > simpleHTTP (getRequest "http://hackage.haskell.org:8012/")
+--
+-- If an exception occurs during the transmission, the function returns 'Left (ErrorMisc msg)'
+-- where 'msg' is the exception message.
+simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do
   auth <- getAuth r
   failHTTPS (rqURI r)
   c <- openStream (host auth) (fromMaybe 80 (port auth))
-  simpleHTTP_ c r
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
+  simpleHTTP_ c norm_r
 
--- | @simpleHTTP_debug debugFile req@ behaves like 'simpleHTTP', but logs
--- the HTTP operation via the debug file @debugFile@.
-simpleHTTP_debug :: HStream ty => FilePath -> Request ty -> IO (Result (Response ty))
-simpleHTTP_debug httpLogFile r = do
-  auth <- getAuth r
-  failHTTPS (rqURI r)
-  c0   <- openStream (host auth) (fromMaybe 80 (port auth))
-  c    <- debugByteStream httpLogFile c0
-  simpleHTTP_ c r
-
--- | Like 'simpleHTTP', but acting on an already opened stream.
+-- | Identical to 'simpleHTTP', but acting on an already opened stream.
 simpleHTTP_ :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-simpleHTTP_ s r = sendHTTP s r
+simpleHTTP_ s r = do
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions{normDoClose=True} r
+  sendHTTP s norm_r
 
--- | @sendHTTP hStream httpRequest@ transmits @httpRequest@ over
+-- | @sendHTTP hStream httpRequest@ transmits @httpRequest@ (after normalization) over
 -- @hStream@, but does not alter the status of the connection, nor request it to be
 -- closed upon receiving the response.
+--
+-- If an exception occurs during the transmission, the function returns 'Left (ErrorMisc msg)'
+-- where 'msg' is the exception message.
 sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
-sendHTTP conn rq = sendHTTP_notify conn rq (return ())
+sendHTTP conn rq = do
+  let norm_r = normalizeRequest defaultNormalizeRequestOptions rq
+  sendHTTP_notify conn norm_r (return ())
 
 -- | @sendHTTP_notify hStream httpRequest action@ behaves like 'sendHTTP', but
 -- lets you supply an IO @action@ to execute once the request has been successfully
 -- transmitted over the connection. Useful when you want to set up tracing of
 -- request transmission and its performance.
+--
+-- If an exception occurs during the transmission, the function returns 'Left (ErrorMisc msg)'
+-- where 'msg' is the exception message.
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
                 -> Request ty
@@ -89,8 +105,8 @@ sendHTTP_notify :: HStream ty
                 -> IO (Result (Response ty))
 sendHTTP_notify conn rq onSendComplete = do
   when providedClose $ (closeOnEnd conn True)
-  onException (sendMain conn rq onSendComplete)
-              (close conn)
+  -- Use tryE to catch any exceptions from sendMain
+  tryE (sendMain conn rq onSendComplete) >>= either (return . failMisc . show) return
  where
   providedClose = findConnClose (rqHeaders rq)
 
@@ -250,3 +266,6 @@ ifChunked a b s =
     "chunked" -> a
     _ -> b
 
+-- | A convenience function for catching exceptions from IO actions
+tryE :: IO a -> IO (Either IOException a)
+tryE = try

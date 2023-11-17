@@ -79,7 +79,7 @@ import Network.HTTP.Base
 import qualified Network.HTTP.HandleStream as S
 -- old implementation: import Network.HTTP.Stream
 import Network.TCP
-import Network.Stream ( Result )
+import Network.Stream ( Result, failWith, failMisc )
 import Network.URI    ( parseURI )
 
 import Data.Maybe ( fromMaybe )
@@ -101,7 +101,9 @@ import Data.Maybe ( fromMaybe )
 --
 -- > simpleHTTP (getRequest "http://hackage.haskell.org/")
 -- > simpleHTTP (getRequest "http://hackage.haskell.org:8012/")
-
+--
+-- If an exception occurs during the transmission, the function returns 'Left (ErrorMisc msg)'
+-- where 'msg' is the exception message.
 simpleHTTP :: (HStream ty) => Request ty -> IO (Result (Response ty))
 simpleHTTP r = do
   auth <- getAuth r
@@ -119,6 +121,9 @@ simpleHTTP_ s r = do
 -- | @sendHTTP hStream httpRequest@ transmits @httpRequest@ (after normalization) over
 -- @hStream@, but does not alter the status of the connection, nor request it to be
 -- closed upon receiving the response.
+--
+-- If an exception occurs during the transmission, the function returns 'Left (ErrorMisc msg)'
+-- where 'msg' is the exception message.
 sendHTTP :: HStream ty => HandleStream ty -> Request ty -> IO (Result (Response ty))
 sendHTTP conn rq = do
   let norm_r = normalizeRequest defaultNormalizeRequestOptions rq
@@ -128,6 +133,9 @@ sendHTTP conn rq = do
 -- lets you supply an IO @action@ to execute once the request has been successfully
 -- transmitted over the connection. Useful when you want to set up tracing of
 -- request transmission and its performance.
+--
+-- If an exception occurs during the transmission, the function returns 'Left (ErrorMisc msg)'
+-- where 'msg' is the exception message.
 sendHTTP_notify :: HStream ty
                 => HandleStream ty
                 -> Request ty
