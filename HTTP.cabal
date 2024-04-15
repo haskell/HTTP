@@ -1,7 +1,7 @@
 Cabal-Version: >= 1.10
 Name: HTTP
 Version: 4000.4.1
-x-revision: 3
+x-revision: 4
 Build-type: Simple
 License: BSD3
 License-file: LICENSE
@@ -58,9 +58,10 @@ Description:
 Extra-Source-Files: CHANGES
 
 tested-with:
-  GHC == 9.8.0
-  GHC == 9.6.3
-  GHC == 9.4.7
+  GHC == 9.10.0
+  GHC == 9.8.2
+  GHC == 9.6.4
+  GHC == 9.4.8
   GHC == 9.2.8
   GHC == 9.0.2
   GHC == 8.10.7
@@ -69,7 +70,8 @@ tested-with:
   GHC == 8.4.4
   GHC == 8.2.2
   GHC == 8.0.2
-  GHC == 7.10.3
+  -- 2024-04-15: Dropping GHC 7.10 from CI because it does not install with ghcup on ubuntu-22.04
+  -- GHC == 7.10.3
   -- 2023-10-04: Dropping GHC < 7.10 from CI
   -- because they need the ubuntu-18.04 image incompatible with latest 'node'
   -- GHC == 7.8.4
@@ -123,17 +125,17 @@ Library
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
   build-depends:
-      base          >= 4.6.0.0   && < 4.20
+      base          >= 4.6.0.0   && < 4.21
     , array         >= 0.3.0.2   && < 0.6
     , bytestring    >= 0.9.1.5   && < 0.13
     , parsec        >= 2.0       && < 3.2
-    , time          >= 1.1.2.3   && < 1.13
+    , time          >= 1.1.2.3   && < 1.15
     , transformers  >= 0.2.0.0   && < 0.7
         -- transformers-0.2.0.0 is the first to have Control.Monad.IO.Class
     -- The following dependencies are refined by flags, but they should
     -- still be mentioned here on the top-level.
     , mtl           >= 2.0.0.0   && < 2.4
-    , network       >= 2.4       && < 3.2
+    , network       >= 2.4       && < 3.3
 
   default-language: Haskell98
   default-extensions: FlexibleInstances
