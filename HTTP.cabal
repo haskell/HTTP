@@ -69,7 +69,8 @@ tested-with:
   GHC == 8.6.5
   GHC == 8.4.4
   GHC == 8.2.2
-  GHC == 8.0.2
+  -- CI failing for GHC 8.0 because of https://github.com/haskell/cabal/issues/10379
+  -- GHC == 8.0.2
 
 Source-Repository head
   type: git
