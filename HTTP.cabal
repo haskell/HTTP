@@ -1,7 +1,7 @@
 Cabal-Version: >= 1.10
 Name: HTTP
 Version: 4000.4.1
-x-revision: 4
+x-revision: 5
 Build-type: Simple
 License: BSD3
 License-file: LICENSE
@@ -58,8 +58,9 @@ Description:
 Extra-Source-Files: CHANGES
 
 tested-with:
+  GHC == 9.12.1
   GHC == 9.10.1
-  GHC == 9.8.2
+  GHC == 9.8.4
   GHC == 9.6.6
   GHC == 9.4.8
   GHC == 9.2.8
@@ -120,7 +121,7 @@ Library
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
   build-depends:
-      base          >= 4.6.0.0   && < 4.21
+      base          >= 4.6.0.0   && < 4.22
     , array         >= 0.3.0.2   && < 0.6
     , bytestring    >= 0.9.1.5   && < 0.13
     , parsec        >= 2.0       && < 3.2
