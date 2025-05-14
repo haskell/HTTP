@@ -145,7 +145,7 @@ Library
     ghc-options:      -Werror
 
   if os(windows)
-    Build-depends: Win32 >= 2.2.0.0 && < 2.14
+    Build-depends: Win32 >= 2.2.0.0 && < 2.15
 
 Test-Suite test
   type: exitcode-stdio-1.0
