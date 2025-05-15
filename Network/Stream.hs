@@ -37,6 +37,7 @@ data ConnError
  | ErrorClosed
  | ErrorParse String
  | ErrorMisc String
+ | ErrorProxyConnection String -- Added ErrorProxyConnection variant for proxy connection errors
    deriving(Show,Eq)
 
 -- in GHC 7.0 the Monad instance for Error no longer

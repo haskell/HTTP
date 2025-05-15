@@ -26,7 +26,7 @@ module Network.StreamSocket
    ) where
 
 import Network.Stream
-   ( Stream(..), ConnError(ErrorReset, ErrorMisc), Result
+   ( Stream(..), ConnError(ErrorReset, ErrorMisc, ErrorProxyConnection), Result
    )
 import Network.Socket
    ( Socket, getSocketOption, shutdown
@@ -49,6 +49,8 @@ handleSocketError sk e =
        case se of
           0     -> ioError e
           10054 -> return $ Left ErrorReset  -- reset
+          -- Enhanced error handling for proxy connection issues
+          10061 -> return $ Left $ ErrorProxyConnection "Proxy connection failed"
           _     -> return $ Left $ ErrorMisc $ show se
 
 myrecv :: Socket -> Int -> IO String
@@ -94,4 +96,3 @@ writeBlockSocket sk str = (liftM Right $ fn str) `catchIO` (handleSocketError sk
   where
    fn [] = return ()
    fn x  = send sk (toUTF8BS x) >>= \i -> fn (drop i x)
-
