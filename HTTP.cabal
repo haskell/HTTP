@@ -1,9 +1,9 @@
-Cabal-Version: >= 1.10
+Cabal-Version: 3.0
 Name: HTTP
 Version: 4000.4.1
 x-revision: 5
 Build-type: Simple
-License: BSD3
+License: BSD-3-Clause
 License-file: LICENSE
 Author: Warrick Gray <warrick.gray@hotmail.com>
 Maintainer: Ganesh Sittampalam <ganesh@earth.li>
@@ -91,11 +91,8 @@ Flag warp-tests
   default:     False
   manual:      True
 
-flag network-uri
-  description: Get Network.URI from the network-uri package
-  default: True
-
 Library
+  Autogen-modules: Paths_HTTP
   Exposed-modules:
                  Network.BufferType,
                  Network.Stream,
@@ -114,7 +111,7 @@ Library
   Other-modules:
                  Network.HTTP.Base64,
                  Network.HTTP.MD5Aux,
-                 Network.HTTP.Utils
+                 Network.HTTP.Utils,
                  Paths_HTTP
   GHC-options: -fwarn-missing-signatures -Wall
 
@@ -131,15 +128,11 @@ Library
     -- The following dependencies are refined by flags, but they should
     -- still be mentioned here on the top-level.
     , mtl           >= 2.0.0.0   && < 2.4
-    , network       >= 2.4       && < 3.3
+    , network       >= 2.6       && < 3.3
+    , network-uri   >= 2.6       && < 2.7
 
   default-language: Haskell98
   default-extensions: FlexibleInstances
-
-  if flag(network-uri)
-    Build-depends: network-uri == 2.6.*, network >= 2.6
-  else
-    Build-depends: network < 2.6
 
   if flag(warn-as-error)
     ghc-options:      -Werror
@@ -167,6 +160,7 @@ Test-Suite test
     , bytestring
     , mtl
     , network
+    , network-uri
     -- extra dependencies
     , deepseq               >= 1.3.0.0  && < 1.6
     , httpd-shed            >= 0.4      && < 0.5
@@ -175,11 +169,6 @@ Test-Suite test
     , split                 >= 0.1.3    && < 0.3
     , test-framework        >= 0.2.0    && < 0.9
     , test-framework-hunit  >= 0.3.0    && < 0.4
-
-  if flag(network-uri)
-    Build-depends: network-uri == 2.6.*, network >= 2.6
-  else
-    Build-depends: network < 2.6
 
   if flag(warp-tests)
     CPP-Options: -DWARP_TESTS
