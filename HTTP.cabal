@@ -1,6 +1,7 @@
 Cabal-Version: 3.0
 Name: HTTP
 Version: 4000.5.0
+x-revision: 1
 Build-type: Simple
 License: BSD-3-Clause
 License-file: LICENSE
@@ -57,6 +58,7 @@ Description:
 Extra-Source-Files: CHANGES
 
 tested-with:
+  GHC == 9.14.1
   GHC == 9.12.2
   GHC == 9.10.3
   GHC == 9.8.4
@@ -117,11 +119,11 @@ Library
   -- note the test harness constraints should be kept in sync with these
   -- where dependencies are shared
   build-depends:
-      base          >= 4.6.0.0   && < 4.22
+      base          >= 4.6.0.0   && < 4.23
     , array         >= 0.3.0.2   && < 0.6
     , bytestring    >= 0.9.1.5   && < 0.13
     , parsec        >= 2.0       && < 3.2
-    , time          >= 1.1.2.3   && < 1.15
+    , time          >= 1.1.2.3   && < 1.16
     , transformers  >= 0.2.0.0   && < 0.7
         -- transformers-0.2.0.0 is the first to have Control.Monad.IO.Class
     -- The following dependencies are refined by flags, but they should
