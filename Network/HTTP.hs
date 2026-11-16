@@ -79,7 +79,7 @@ import Network.HTTP.Base
 import qualified Network.HTTP.HandleStream as S
 -- old implementation: import Network.HTTP.Stream
 import Network.TCP
-import Network.Stream ( Result )
+import Network.Stream ( Result, ConnError(ErrorProxyConnection) )
 import Network.URI    ( parseURI )
 
 import Data.Maybe ( fromMaybe )
